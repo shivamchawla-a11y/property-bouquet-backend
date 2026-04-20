@@ -26,10 +26,16 @@ exports.login = async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    res.json({
-      success: true,
-      token,
-    });
+    res
+  .cookie("token", token, {
+    httpOnly: true,
+    secure: false, // true in production
+    sameSite: "lax",
+  })
+  .json({
+    success: true,
+    message: "Login successful",
+  });
 
   } catch (err) {
     res.status(500).json({ message: err.message });
