@@ -7,6 +7,7 @@ const authRoutes = require("./routes/authRoutes");
 const locationRoutes = require("./routes/locationRoutes");
 const builderRoutes = require("./routes/builderRoutes");
 const propertyTypeRoutes = require("./routes/propertyTypeRoutes");
+const uploadRoutes = require("./routes/uploadRoutes");
 
 
 // 🔥 Import Models (important for Task 2)
@@ -24,6 +25,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/locations", locationRoutes);
 app.use("/api/builders", builderRoutes);
 app.use("/api/property-types", propertyTypeRoutes);
+app.use("/api/upload", uploadRoutes);
 
 // Test Route
 app.get("/", (req, res) => {

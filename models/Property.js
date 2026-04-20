@@ -4,7 +4,10 @@ const propertySchema = new mongoose.Schema({
   title: String,
   slug: { type: String, unique: true },
 
-  price: Number,
+  price: {
+    type: Number,
+    required: true, // 🔥 important for validation
+  },
 
   location: {
     type: mongoose.Schema.Types.ObjectId,
@@ -17,7 +20,11 @@ const propertySchema = new mongoose.Schema({
     required: true,
   },
 
-  // 🔥 Microsite Structure
+  isActive: {
+    type: Boolean,
+    default: true, // 🔥 soft delete flag
+  },
+
   heroSection: {
     title: String,
     subtitle: String,
@@ -51,5 +58,6 @@ const propertySchema = new mongoose.Schema({
   }
 
 }, { timestamps: true });
+
 
 module.exports = mongoose.model("Property", propertySchema);
