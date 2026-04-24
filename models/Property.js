@@ -1,18 +1,9 @@
 const mongoose = require("mongoose");
 
 const propertySchema = new mongoose.Schema({
-  title: String,
-  slug: { type: String, unique: true },
 
-  price: {
-    type: Number,
-    required: true, // 🔥 important for validation
-  },
-
-  location: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Location",
-  },
+  // 🔥 BASIC INFO
+  slug: { type: String, unique: true, required: true },
 
   marketType: {
     type: String,
@@ -22,34 +13,106 @@ const propertySchema = new mongoose.Schema({
 
   isActive: {
     type: Boolean,
-    default: true, // 🔥 soft delete flag
+    default: true,
   },
 
-  heroSection: {
-    title: String,
-    subtitle: String,
-    images: [String],
+  // ================= CORE DETAILS =================
+  coreDetails: {
+    title: { type: String, required: true },
+    developerRef: String,
+
+    startingPrice: Number,
+    maxPrice: Number,
   },
 
+  // ================= KEY METRICS =================
+  keyMetrics: {
+    landArea: String,         // e.g. 12 Acres
+    possession: String,       // e.g. Dec 2028
+    status: String,           // New Launch / Ready
+    totalUnits: Number,
+    totalTowers: Number,
+    floors: String,
+    reraNumber: String,
+  },
+
+  // ================= OVERVIEW =================
   overview: {
     description: String,
-    highlights: [String],
+    aboutImageUrl: String,
+
+    highlights: [String],   // 🔥 moved inside overview
   },
 
-  floorPlans: [
+  // ================= UNIT CONFIGURATIONS =================
+  unitConfigurations: [
     {
-      title: String,
-      image: String,
-      price: Number,
+      unitType: String,       // 3 BHK
+      area: String,           // 1200 sq ft
+      price: String,          // ₹ 5 Cr
+      paymentPlan: String,    // 30:70 / CLP
     }
   ],
 
+  // ================= MEDIA =================
+  media: {
+    heroImageUrl: String,
+    gallery: [String],
+
+    walkthroughUrl: String,   // YouTube / video link
+  },
+
+  // ================= LOCATION DATA =================
+  locationData: {
+    address: String,
+
+    mapEmbedUrl: String,   // iframe URL
+
+    landmarks: [
+      {
+        name: String,
+        distance: String,  // e.g. "5 mins"
+      }
+    ]
+  },
+
+  // ================= GATED CONTENT =================
   gatedContent: {
-    brochureUrl: String,
+    brochurePdfUrl: String,
+
+    floorPlans: [
+      {
+        title: String,
+        image: String,
+      }
+    ],
+
     requireLogin: {
       type: Boolean,
       default: true,
     },
+  },
+
+  // ================= SEO ENGINE =================
+  seoEngine: {
+    metaTitle: String,
+    metaDescription: String,
+    keywords: [String],
+  },
+
+  // ================= FAQ =================
+  faqs: [
+    {
+      question: String,
+      answer: String,
+    }
+  ],
+
+  // ================= CTA =================
+  cta: {
+    title: String,
+    subtitle: String,
+    buttonText: String,
   },
 
   createdBy: {
@@ -58,6 +121,5 @@ const propertySchema = new mongoose.Schema({
   }
 
 }, { timestamps: true });
-
 
 module.exports = mongoose.model("Property", propertySchema);
