@@ -21,7 +21,10 @@ const app = express();
 
 // ✅ 1. CORS (VERY IMPORTANT FIX)
 app.use(cors({
-  origin: "http://localhost:3000",
+  origin: [
+    "http://localhost:3000",
+    "https://property-bouquet-frontend.vercel.app"
+  ],
   credentials: true
 }));
 
