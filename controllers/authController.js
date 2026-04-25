@@ -44,3 +44,24 @@ exports.login = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+// 🔐 GET CURRENT USER
+exports.me = (req, res) => {
+  res.status(200).json({
+    success: true,
+    user: req.user,
+  });
+};
+
+// 🔓 LOGOUT
+exports.logout = (req, res) => {
+  res.cookie("token", "", {
+    httpOnly: true,
+    secure: true,
+    sameSite: "None",
+    expires: new Date(0),
+    path: "/",
+  });
+
+  res.json({ success: true });
+};
