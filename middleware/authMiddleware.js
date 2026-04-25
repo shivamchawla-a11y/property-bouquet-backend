@@ -2,7 +2,7 @@ const jwt = require("jsonwebtoken");
 
 exports.protect = (req, res, next) => {
   try {
-    const token = req.headers.authorization;
+    const token = req.cookies.token; // 🔥 FIXED
 
     if (!token) {
       return res.status(401).json({ message: "Not authorized" });
@@ -10,7 +10,7 @@ exports.protect = (req, res, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    req.user = decoded; // { id, role }
+    req.user = decoded;
 
     next();
   } catch (err) {
