@@ -28,11 +28,12 @@ exports.login = async (req, res) => {
 
     // 🔥 FIXED COOKIE CONFIG
     res.cookie("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+  httpOnly: true,
+  secure: true,         // 🔥 MUST for HTTPS
+  sameSite: "None",     // 🔥 MUST for cross-domain
+  path: "/",            // 🔥 IMPORTANT
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+});
 
     res.status(200).json({
       success: true,
