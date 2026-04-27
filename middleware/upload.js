@@ -1,6 +1,7 @@
 const multer = require("multer");
 
-const storage = multer.diskStorage({});
+// 🔥 Use memory storage (BEST for cloud upload)
+const storage = multer.memoryStorage();
 
 const upload = multer({ storage });
 

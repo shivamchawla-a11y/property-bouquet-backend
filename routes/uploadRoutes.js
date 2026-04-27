@@ -4,6 +4,7 @@ const router = express.Router();
 const upload = require("../middleware/upload");
 const { uploadImage } = require("../controllers/uploadController");
 
-router.post("/", upload.single("image"), uploadImage);
+// 🔥 MUST MATCH frontend: "file"
+router.post("/", upload.single("file"), uploadImage);
 
 module.exports = router;
