@@ -49,17 +49,18 @@ exports.createProperty = async (req, res) => {
 };
 
 
-// ✅ GET ONLY ACTIVE PROPERTIES (🔥 STEP 5 FIX)
+// ✅ GET ONLY ACTIVE PROPERTIES (FIXED)
 exports.getProperties = async (req, res) => {
   try {
     const properties = await Property
-      .find({ isActive: true }) // 🔥 IMPORTANT FILTER
-      .populate("location createdBy");
+      .find({ isActive: true })
+      .populate("createdBy"); // ✅ ONLY THIS
 
     res.status(200).json({
       success: true,
       data: properties,
     });
+
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -78,7 +79,6 @@ exports.deleteProperty = async (req, res) => {
       return res.status(404).json({ message: "Property not found" });
     }
 
-    // 🔥 SOFT DELETE
     property.isActive = false;
     await property.save();
 
