@@ -6,7 +6,8 @@ const { protect, authorize } = require("../middleware/authMiddleware");
 const {
   createProperty,
   getProperties,
-  deleteProperty
+  deleteProperty,
+  restoreProperty
 } = require("../controllers/propertyController");
 
 // ✅ GET
