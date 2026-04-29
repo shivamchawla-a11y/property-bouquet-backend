@@ -3,20 +3,30 @@ const Property = require("../models/Property");
 // ✅ CREATE PROPERTY
 exports.createProperty = async (req, res) => {
   try {
-    const { title, price, marketType } = req.body;
-
-    // 🔥 VALIDATION
-    if (!price) {
-      return res.status(400).json({
-        success: false,
-        message: "Price is required",
-      });
-    }
+    const { marketType, coreDetails, unitConfigurations } = req.body;
 
     if (!marketType) {
       return res.status(400).json({
         success: false,
         message: "Market type is required",
+      });
+    }
+
+    if (!coreDetails?.startingPrice) {
+      return res.status(400).json({
+        success: false,
+        message: "Starting price is required",
+      });
+    }
+
+    const hasValidConfig = unitConfigurations?.some(
+      (u) => u.price && u.price.trim() !== ""
+    );
+
+    if (!hasValidConfig) {
+      return res.status(400).json({
+        success: false,
+        message: "At least one configuration price is required",
       });
     }
 
