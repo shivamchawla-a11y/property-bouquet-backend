@@ -52,9 +52,13 @@ exports.createProperty = async (req, res) => {
 // ✅ GET ONLY ACTIVE PROPERTIES (FIXED)
 exports.getProperties = async (req, res) => {
   try {
+    const showAll = req.query.all === "true";
+
+    const filter = showAll ? {} : { isActive: true };
+
     const properties = await Property
-      .find({ isActive: true })
-      .populate("createdBy"); // ✅ ONLY THIS
+      .find(filter)
+      .populate("createdBy");
 
     res.status(200).json({
       success: true,
