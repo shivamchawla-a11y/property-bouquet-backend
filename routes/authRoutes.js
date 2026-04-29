@@ -5,17 +5,23 @@ const {
   login,
   me,
   logout,
+  createUser,
+  getUsers,
+  toggleUserAccess,
 } = require("../controllers/authController");
 
-const { protect } = require("../middleware/authMiddleware");
+const { protect, authorize } = require("../middleware/authMiddleware");
 
 // LOGIN
 router.post("/login", login);
 
-// 🔐 CHECK AUTH
+// AUTH
 router.get("/me", protect, me);
-
-// 🔓 LOGOUT
 router.post("/logout", logout);
+
+// 🔥 TEAM MANAGEMENT (SUPER ADMIN ONLY)
+router.post("/users", protect, authorize("SuperAdmin"), createUser);
+router.get("/users", protect, authorize("SuperAdmin"), getUsers);
+router.patch("/users/:id/toggle", protect, authorize("SuperAdmin"), toggleUserAccess);
 
 module.exports = router;
