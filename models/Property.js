@@ -27,9 +27,9 @@ const propertySchema = new mongoose.Schema({
 
   // ================= KEY METRICS =================
   keyMetrics: {
-    landArea: String,         // e.g. 12 Acres
-    possession: String,       // e.g. Dec 2028
-    status: String,           // New Launch / Ready
+    landArea: String,
+    possession: String,
+    status: String,
     totalUnits: Number,
     totalTowers: Number,
     floors: String,
@@ -40,17 +40,16 @@ const propertySchema = new mongoose.Schema({
   overview: {
     description: String,
     aboutImageUrl: String,
-
-    highlights: [String],   // 🔥 moved inside overview
+    highlights: [String],
   },
 
   // ================= UNIT CONFIGURATIONS =================
   unitConfigurations: [
     {
-      unitType: String,       // 3 BHK
-      area: String,           // 1200 sq ft
-      price: String,          // ₹ 5 Cr
-      paymentPlan: String,    // 30:70 / CLP
+      unitType: String,
+      area: String,
+      price: String,
+      paymentPlan: String,
     }
   ],
 
@@ -58,20 +57,18 @@ const propertySchema = new mongoose.Schema({
   media: {
     heroImageUrl: String,
     gallery: [String],
-
-    walkthroughUrl: String,   // YouTube / video link
+    walkthroughUrl: String,
   },
 
   // ================= LOCATION DATA =================
   locationData: {
     address: String,
-
-    mapEmbedUrl: String,   // iframe URL
+    mapEmbedUrl: String,
 
     landmarks: [
       {
         name: String,
-        distance: String,  // e.g. "5 mins"
+        distance: String,
       }
     ]
   },
@@ -80,10 +77,14 @@ const propertySchema = new mongoose.Schema({
   gatedContent: {
     brochurePdfUrl: String,
 
+    // ✅ UPDATED FLOOR PLANS (IMPORTANT)
     floorPlans: [
       {
-        title: String,
-        image: String,
+        unitType: String,     // 3 BHK
+        area: String,         // 3000 sq ft
+        price: String,        // ₹ 5 Cr
+        paymentPlan: String,  // 30:70
+        image: String,        // floor plan image
       }
     ],
 
