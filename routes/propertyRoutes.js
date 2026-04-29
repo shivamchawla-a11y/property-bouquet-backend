@@ -18,4 +18,6 @@ router.post("/", protect, authorize("admin"), createProperty);
 // ✅ DELETE (SOFT DELETE - ADMIN ONLY)
 router.delete("/:id", protect, authorize("admin"), deleteProperty);
 
+router.patch("/properties/:id/restore", restoreProperty);
+
 module.exports = router;

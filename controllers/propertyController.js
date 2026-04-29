@@ -91,3 +91,23 @@ exports.deleteProperty = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+exports.restoreProperty = async (req, res) => {
+  try {
+    const property = await Property.findById(req.params.id);
+
+    if (!property) {
+      return res.status(404).json({ message: "Property not found" });
+    }
+
+    property.isActive = true;
+    await property.save();
+
+    res.json({
+      success: true,
+      message: "Property restored",
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
