@@ -40,6 +40,7 @@ app.use("/api/builders", builderRoutes);
 app.use("/api/property-types", propertyTypeRoutes);
 app.use("/api/upload", uploadRoutes);
 
+console.log("AUTH ROUTES LOADED");
 // Test Route
 app.get("/", (req, res) => {
   res.send("Property Bouquet API running...");
