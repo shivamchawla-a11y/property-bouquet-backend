@@ -14,11 +14,10 @@ const {
 router.get("/", getProperties);
 
 // ✅ CREATE (ADMIN ONLY)
-router.post("/", protect, authorize("admin"), createProperty);
+router.post("/", protect, authorize("SuperAdmin"), createProperty);
 
 // ✅ DELETE (SOFT DELETE - ADMIN ONLY)
-router.delete("/:id", protect, authorize("admin"), deleteProperty);
-
-router.patch("/:id/restore", protect, authorize("admin"), restoreProperty);
+router.delete("/:id", protect, authorize("SuperAdmin"), deleteProperty);
+router.patch("/:id/restore", protect, authorize("SuperAdmin"), restoreProperty);
 
 module.exports = router;
