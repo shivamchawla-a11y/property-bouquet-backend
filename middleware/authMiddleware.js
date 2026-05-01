@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 
 exports.protect = (req, res, next) => {
+  console.log("🔥 PROTECT MIDDLEWARE HIT");
   try {
     let token;
 
@@ -32,7 +33,8 @@ exports.protect = (req, res, next) => {
   }
 };
 
-exports.authorize = (...roles) => {
+return (req, res, next) => {
+  console.log("🔥 AUTHORIZE HIT", req.user);
   return (req, res, next) => {
 
     if (!req.user) {
