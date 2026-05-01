@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 
-const { protect, authorize } = require("../middleware/authMiddleware");
+const { protect, authorize } = require("../middleware/authMiddleware"); // ✅ FIX
 
 const {
   createProperty,
@@ -10,14 +10,14 @@ const {
   restoreProperty
 } = require("../controllers/propertyController");
 
-// ✅ GET
+// PUBLIC
 router.get("/", getProperties);
 
-// ✅ CREATE (ADMIN ONLY)
+// ADMIN
 router.post("/", protect, authorize("SuperAdmin"), createProperty);
 
-// ✅ DELETE (SOFT DELETE - ADMIN ONLY)
 router.delete("/:id", protect, authorize("SuperAdmin"), deleteProperty);
+
 router.patch("/:id/restore", protect, authorize("SuperAdmin"), restoreProperty);
 
 module.exports = router;

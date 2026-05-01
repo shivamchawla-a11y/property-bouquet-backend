@@ -1,11 +1,13 @@
 const jwt = require("jsonwebtoken");
 
+// 🔐 PROTECT
 exports.protect = (req, res, next) => {
   console.log("🔥 PROTECT MIDDLEWARE HIT");
+
   try {
     let token;
 
-    // ✅ 1. FROM HEADER (PRIMARY)
+    // FROM HEADER
     if (
       req.headers.authorization &&
       req.headers.authorization.startsWith("Bearer")
@@ -13,7 +15,7 @@ exports.protect = (req, res, next) => {
       token = req.headers.authorization.split(" ")[1];
     }
 
-    // ✅ 2. OPTIONAL FALLBACK (cookie)
+    // FROM COOKIE
     else if (req.cookies.token) {
       token = req.cookies.token;
     }
@@ -33,9 +35,11 @@ exports.protect = (req, res, next) => {
   }
 };
 
-return (req, res, next) => {
-  console.log("🔥 AUTHORIZE HIT", req.user);
+
+// 🔐 AUTHORIZE (FIXED)
+exports.authorize = (...roles) => {
   return (req, res, next) => {
+    console.log("🔥 AUTHORIZE HIT", req.user);
 
     if (!req.user) {
       return res.status(401).json({ message: "Not authenticated" });
