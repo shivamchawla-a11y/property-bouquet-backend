@@ -21,7 +21,7 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
       minlength: 6,
-      select: false, // 🔥 VERY IMPORTANT (hide by default)
+      select: false,
     },
 
     role: {
@@ -38,20 +38,21 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-
-// 🔐 AUTO HASH PASSWORD (SAFETY LAYER)
+// 🔐 AUTO HASH PASSWORD (FIXED)
 userSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) return next();
+  try {
+    if (!this.isModified("password")) return next();
 
-  this.password = await bcrypt.hash(this.password, 10);
-  next();
+    this.password = await bcrypt.hash(this.password, 10);
+    next();
+  } catch (err) {
+    next(err); // 🔥 VERY IMPORTANT
+  }
 });
 
-
-// 🔐 PASSWORD COMPARE METHOD (clean usage)
+// 🔐 PASSWORD COMPARE METHOD
 userSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
-
 
 module.exports = mongoose.model("User", userSchema);
