@@ -39,14 +39,14 @@ const userSchema = new mongoose.Schema(
 );
 
 // 🔐 AUTO HASH PASSWORD (FIXED)
-// userSchema.pre("save", async function (next) {
-//   console.log("🔥 PRE SAVE HOOK RUNNING");
+userSchema.pre("save", async function (next) {
+  console.log("🔥 PRE SAVE HOOK RUNNING");
 
-//   if (!this.isModified("password")) return next();
+  if (!this.isModified("password")) return next();
 
-//   this.password = await bcrypt.hash(this.password, 10);
-//   next();
-// });
+  this.password = await bcrypt.hash(this.password, 10);
+  next();
+});
 
 // 🔐 PASSWORD COMPARE METHOD
 userSchema.methods.matchPassword = async function (enteredPassword) {
