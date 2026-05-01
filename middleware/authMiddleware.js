@@ -7,16 +7,12 @@ exports.protect = (req, res, next) => {
   try {
     let token;
 
-    // FROM HEADER
     if (
       req.headers.authorization &&
       req.headers.authorization.startsWith("Bearer")
     ) {
       token = req.headers.authorization.split(" ")[1];
-    }
-
-    // FROM COOKIE
-    else if (req.cookies.token) {
+    } else if (req.cookies.token) {
       token = req.cookies.token;
     }
 
@@ -35,8 +31,7 @@ exports.protect = (req, res, next) => {
   }
 };
 
-
-// 🔐 AUTHORIZE (FIXED)
+// 🔐 AUTHORIZE (✅ FIXED PROPER EXPORT)
 exports.authorize = (...roles) => {
   return (req, res, next) => {
     console.log("🔥 AUTHORIZE HIT", req.user);
