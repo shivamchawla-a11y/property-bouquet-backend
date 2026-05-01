@@ -39,13 +39,12 @@ const userSchema = new mongoose.Schema(
 );
 
 // 🔐 AUTO HASH PASSWORD (FIXED)
-userSchema.pre("save", async function (next) {
+userSchema.pre("save", async function () {
   console.log("🔥 PRE SAVE HOOK RUNNING");
 
-  if (!this.isModified("password")) return next();
+  if (!this.isModified("password")) return;
 
   this.password = await bcrypt.hash(this.password, 10);
-  next();
 });
 
 // 🔐 PASSWORD COMPARE METHOD
