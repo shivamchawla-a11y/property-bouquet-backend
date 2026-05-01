@@ -11,11 +11,13 @@ const locationRoutes = require("./routes/locationRoutes");
 const builderRoutes = require("./routes/builderRoutes");
 const propertyTypeRoutes = require("./routes/propertyTypeRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
+const leadRoutes = require("./routes/leadRoutes");
 
 // 🔥 Import Models
 require("./models/Location");
 require("./models/User");
 require("./models/Property");
+require("./models/Lead");
 
 const app = express();
 
@@ -39,6 +41,7 @@ app.use("/api/locations", locationRoutes);
 app.use("/api/builders", builderRoutes);
 app.use("/api/property-types", propertyTypeRoutes);
 app.use("/api/upload", uploadRoutes);
+app.use("/api/leads", leadRoutes);
 
 console.log("AUTH ROUTES LOADED");
 // Test Route
