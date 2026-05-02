@@ -3,22 +3,38 @@ const Property = require("../models/Property");
 // ✅ CREATE PROPERTY
 exports.createProperty = async (req, res) => {
   try {
-    const { marketType, coreDetails, unitConfigurations } = req.body;
+    const { marketType, coreDetails, unitConfigurations, slug } = req.body;
+
+    // ================= VALIDATION =================
+    if (!slug) {
+      return res.status(400).json({
+        success: false,
+        message: "Slug is required ❌",
+      });
+    }
 
     if (!marketType) {
       return res.status(400).json({
         success: false,
-        message: "Market type is required",
+        message: "Market type is required ❌",
+      });
+    }
+
+    if (!coreDetails?.title) {
+      return res.status(400).json({
+        success: false,
+        message: "Title is required ❌",
       });
     }
 
     if (!coreDetails?.startingPrice) {
       return res.status(400).json({
         success: false,
-        message: "Starting price is required",
+        message: "Starting price is required ❌",
       });
     }
 
+    // ================= CONFIG VALIDATION =================
     const hasValidConfig = unitConfigurations?.some(
       (u) => u.price && u.price.trim() !== ""
     );
@@ -26,12 +42,42 @@ exports.createProperty = async (req, res) => {
     if (!hasValidConfig) {
       return res.status(400).json({
         success: false,
-        message: "At least one configuration price is required",
+        message: "At least one configuration price is required ❌",
       });
     }
 
+    // ================= DUPLICATE SLUG CHECK =================
+    const existing = await Property.findOne({ slug });
+
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message: "Slug already exists ❌",
+      });
+    }
+
+    // ================= 🔥 DEVELOPER LOGIC =================
+    let developerData = {};
+
+    if (coreDetails?.developerRef) {
+      developerData = {
+        developerRef: coreDetails.developerRef,
+        developerName: "",
+      };
+    } else if (coreDetails?.developerName) {
+      developerData = {
+        developerRef: null,
+        developerName: coreDetails.developerName,
+      };
+    }
+
+    // ================= CREATE =================
     const property = await Property.create({
       ...req.body,
+      coreDetails: {
+        ...coreDetails,
+        ...developerData,
+      },
       createdBy: req.user?.id,
     });
 
@@ -41,15 +87,17 @@ exports.createProperty = async (req, res) => {
     });
 
   } catch (err) {
+    console.error("CREATE PROPERTY ERROR:", err);
+
     res.status(500).json({
       success: false,
-      message: err.message,
+      message: err.message || "Server error ❌",
     });
   }
 };
 
 
-// ✅ GET ONLY ACTIVE PROPERTIES (FIXED)
+// ✅ GET PROPERTIES
 exports.getProperties = async (req, res) => {
   try {
     const showAll = req.query.all === "true";
@@ -58,7 +106,8 @@ exports.getProperties = async (req, res) => {
 
     const properties = await Property
       .find(filter)
-      .populate("createdBy");
+      .populate("createdBy")
+      .populate("coreDetails.developerRef", "name logo"); // 🔥 IMPORTANT
 
     res.status(200).json({
       success: true,
@@ -66,6 +115,8 @@ exports.getProperties = async (req, res) => {
     });
 
   } catch (error) {
+    console.error("GET PROPERTIES ERROR:", error);
+
     res.status(500).json({
       success: false,
       message: error.message,
@@ -80,7 +131,10 @@ exports.deleteProperty = async (req, res) => {
     const property = await Property.findById(req.params.id);
 
     if (!property) {
-      return res.status(404).json({ message: "Property not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Property not found ❌",
+      });
     }
 
     property.isActive = false;
@@ -88,20 +142,30 @@ exports.deleteProperty = async (req, res) => {
 
     res.json({
       success: true,
-      message: "Property soft deleted",
+      message: "Property soft deleted ✅",
     });
 
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("DELETE ERROR:", err);
+
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
   }
 };
 
+
+// ✅ RESTORE PROPERTY
 exports.restoreProperty = async (req, res) => {
   try {
     const property = await Property.findById(req.params.id);
 
     if (!property) {
-      return res.status(404).json({ message: "Property not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Property not found ❌",
+      });
     }
 
     property.isActive = true;
@@ -109,9 +173,15 @@ exports.restoreProperty = async (req, res) => {
 
     res.json({
       success: true,
-      message: "Property restored",
+      message: "Property restored ✅",
     });
+
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("RESTORE ERROR:", err);
+
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
   }
 };

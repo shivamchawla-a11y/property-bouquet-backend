@@ -18,12 +18,24 @@ const propertySchema = new mongoose.Schema({
 
   // ================= CORE DETAILS =================
   coreDetails: {
-    title: { type: String, required: true },
-    developerRef: String,
+  title: { type: String, required: true },
 
-    startingPrice: Number,
-    maxPrice: Number,
+  // 🔥 PROPER RELATION
+  developerRef: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Developer",
+    default: null,
   },
+
+  // 🔥 CUSTOM INPUT SUPPORT
+  developerName: {
+    type: String,
+    default: "",
+  },
+
+  startingPrice: Number,
+  maxPrice: Number,
+},
 
   // ================= KEY METRICS =================
   keyMetrics: {
