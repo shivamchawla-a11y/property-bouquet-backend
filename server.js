@@ -12,6 +12,7 @@ const builderRoutes = require("./routes/builderRoutes");
 const propertyTypeRoutes = require("./routes/propertyTypeRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
 const leadRoutes = require("./routes/leadRoutes");
+const developerRoutes = require("./routes/developerRoutes");
 
 // 🔥 Import Models
 require("./models/Location");
@@ -42,6 +43,7 @@ app.use("/api/builders", builderRoutes);
 app.use("/api/property-types", propertyTypeRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/leads", leadRoutes);
+app.use("/api/developers", developerRoutes);
 
 console.log("AUTH ROUTES LOADED");
 // Test Route
