@@ -20,6 +20,7 @@ require("./models/Location");
 require("./models/User");
 require("./models/Property");
 require("./models/Lead");
+require("./models/Category");
 
 const app = express();
 

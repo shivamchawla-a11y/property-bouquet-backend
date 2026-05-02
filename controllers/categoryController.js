@@ -3,16 +3,21 @@ const Category = require("../models/Category");
 // ✅ CREATE
 exports.createCategory = async (req, res) => {
   try {
-    const { name } = req.body;
+    let { name } = req.body;
 
-    if (!name) {
+    if (!name || !name.trim()) {
       return res.status(400).json({
         success: false,
         message: "Category name required",
       });
     }
 
-    const exists = await Category.findOne({ name });
+    name = name.trim();
+
+    // 🔥 CASE-INSENSITIVE CHECK
+    const exists = await Category.findOne({
+      name: { $regex: new RegExp(`^${name}$`, "i") },
+    });
 
     if (exists) {
       return res.status(400).json({
@@ -29,13 +34,22 @@ exports.createCategory = async (req, res) => {
     });
 
   } catch (err) {
+    console.error("CATEGORY ERROR:", err);
+
+    // 🔥 HANDLE DUPLICATE KEY ERROR (IMPORTANT)
+    if (err.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: "Category already exists",
+      });
+    }
+
     res.status(500).json({
       success: false,
-      message: err.message,
+      message: "Server error",
     });
   }
 };
-
 // ✅ GET ALL
 exports.getCategories = async (req, res) => {
   try {

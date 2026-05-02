@@ -4,11 +4,12 @@ const slugify = require("slugify");
 const categorySchema = new mongoose.Schema(
   {
     name: {
-      type: String,
-      required: true,
-      unique: true,
-      trim: true,
-    },
+  type: String,
+  required: true,
+  unique: true,
+  trim: true,
+  lowercase: true, // 🔥 IMPORTANT
+},
 
     slug: {
       type: String,
