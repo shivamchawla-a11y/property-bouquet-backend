@@ -7,13 +7,13 @@ exports.createLocation = async (req, res) => {
   try {
     const { name, parent } = req.body;
 
-    if (!name) {
+    if (!name || !name.trim()) {
       return res.status(400).json({
         message: "Name is required ❌",
       });
     }
 
-    // ✅ CHECK PARENT EXISTS (if provided)
+    // ✅ CHECK PARENT EXISTS
     if (parent) {
       const parentExists = await Location.findById(parent);
       if (!parentExists) {
@@ -23,9 +23,11 @@ exports.createLocation = async (req, res) => {
       }
     }
 
+    const trimmedName = name.trim();
+
     // ✅ PREVENT DUPLICATE UNDER SAME PARENT
     const existing = await Location.findOne({
-      name: name.trim(),
+      name: trimmedName,
       parent: parent || null,
     });
 
@@ -36,8 +38,8 @@ exports.createLocation = async (req, res) => {
     }
 
     const location = await Location.create({
-      name: name.trim(),
-      slug: slugify(name),
+      name: trimmedName,
+      slug: slugify(trimmedName),
       parent: parent || null,
     });
 
@@ -48,13 +50,22 @@ exports.createLocation = async (req, res) => {
 
   } catch (err) {
     console.error("CREATE LOCATION ERROR:", err);
+
+    // ✅ HANDLE DUPLICATE KEY ERROR (Mongo)
+    if (err.code === 11000) {
+      return res.status(400).json({
+        message: "Duplicate value detected ❌",
+        error: err.keyValue,
+      });
+    }
+
     res.status(500).json({
-      message: "Server error ❌",
+      message: err.message || "Server error ❌",
     });
   }
 };
 
-// ================= GET ALL (FLAT) =================
+// ================= GET ALL =================
 exports.getLocations = async (req, res) => {
   try {
     const locations = await Location.find().populate("parent");
@@ -66,7 +77,7 @@ exports.getLocations = async (req, res) => {
   } catch (err) {
     console.error("GET LOCATIONS ERROR:", err);
     res.status(500).json({
-      message: "Server error ❌",
+      message: err.message || "Server error ❌",
     });
   }
 };
@@ -103,7 +114,7 @@ exports.getLocationsTree = async (req, res) => {
   } catch (err) {
     console.error("TREE ERROR:", err);
     res.status(500).json({
-      message: "Server error ❌",
+      message: err.message || "Server error ❌",
     });
   }
 };
@@ -143,7 +154,7 @@ exports.deleteLocation = async (req, res) => {
   } catch (err) {
     console.error("DELETE ERROR:", err);
     res.status(500).json({
-      message: "Server error ❌",
+      message: err.message || "Server error ❌",
     });
   }
 };
@@ -169,9 +180,11 @@ exports.updateLocation = async (req, res) => {
       });
     }
 
+    const trimmedName = name.trim();
+
     // ❌ PREVENT DUPLICATE UNDER SAME PARENT
     const existing = await Location.findOne({
-      name: name.trim(),
+      name: trimmedName,
       parent: location.parent || null,
       _id: { $ne: locationId },
     });
@@ -182,8 +195,8 @@ exports.updateLocation = async (req, res) => {
       });
     }
 
-    location.name = name.trim();
-    location.slug = slugify(name);
+    location.name = trimmedName;
+    location.slug = slugify(trimmedName);
 
     await location.save();
 
@@ -194,8 +207,15 @@ exports.updateLocation = async (req, res) => {
 
   } catch (err) {
     console.error("UPDATE LOCATION ERROR:", err);
+
+    if (err.code === 11000) {
+      return res.status(400).json({
+        message: "Duplicate value detected ❌",
+      });
+    }
+
     res.status(500).json({
-      message: "Server error ❌",
+      message: err.message || "Server error ❌",
     });
   }
 };
