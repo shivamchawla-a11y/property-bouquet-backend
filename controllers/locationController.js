@@ -5,37 +5,39 @@ const slugify = require("../utils/slugify");
 // ================= CREATE =================
 exports.createLocation = async (req, res) => {
   try {
-    const { name, parent, type } = req.body;
+    const { name, parent } = req.body;
 
-    if (!name || !type) {
+    if (!name) {
       return res.status(400).json({
-        message: "Name and type are required ❌",
+        message: "Name is required ❌",
       });
     }
 
-    // ❌ VALIDATION RULES
-    if (type !== "City" && !parent) {
-      return res.status(400).json({
-        message: "Parent required for Zone/Locality ❌",
-      });
+    // ✅ CHECK PARENT EXISTS (if provided)
+    if (parent) {
+      const parentExists = await Location.findById(parent);
+      if (!parentExists) {
+        return res.status(400).json({
+          message: "Parent not found ❌",
+        });
+      }
     }
 
-    // ❌ PREVENT DUPLICATES UNDER SAME PARENT
+    // ✅ PREVENT DUPLICATE UNDER SAME PARENT
     const existing = await Location.findOne({
-      name,
+      name: name.trim(),
       parent: parent || null,
     });
 
     if (existing) {
       return res.status(400).json({
-        message: "Location already exists ❌",
+        message: "Location already exists under same parent ❌",
       });
     }
 
     const location = await Location.create({
-      name,
+      name: name.trim(),
       slug: slugify(name),
-      type,
       parent: parent || null,
     });
 
@@ -69,20 +71,17 @@ exports.getLocations = async (req, res) => {
   }
 };
 
-// ================= GET TREE (🔥 IMPORTANT) =================
+// ================= GET TREE =================
 exports.getLocationsTree = async (req, res) => {
   try {
-    const locations = await Location.find();
+    const locations = await Location.find().lean();
 
     const map = {};
     const tree = [];
 
-    // 🧠 MAP ALL
+    // 🧠 CREATE MAP
     locations.forEach((loc) => {
-      map[loc._id] = {
-        ...loc._doc,
-        children: [],
-      };
+      map[loc._id] = { ...loc, children: [] };
     });
 
     // 🌳 BUILD TREE
@@ -143,6 +142,58 @@ exports.deleteLocation = async (req, res) => {
 
   } catch (err) {
     console.error("DELETE ERROR:", err);
+    res.status(500).json({
+      message: "Server error ❌",
+    });
+  }
+};
+
+// ================= UPDATE =================
+exports.updateLocation = async (req, res) => {
+  try {
+    const { name } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({
+        message: "Name is required ❌",
+      });
+    }
+
+    const locationId = req.params.id;
+
+    // ❌ CHECK IF EXISTS
+    const location = await Location.findById(locationId);
+    if (!location) {
+      return res.status(404).json({
+        message: "Location not found ❌",
+      });
+    }
+
+    // ❌ PREVENT DUPLICATE UNDER SAME PARENT
+    const existing = await Location.findOne({
+      name: name.trim(),
+      parent: location.parent || null,
+      _id: { $ne: locationId },
+    });
+
+    if (existing) {
+      return res.status(400).json({
+        message: "Duplicate name under same parent ❌",
+      });
+    }
+
+    location.name = name.trim();
+    location.slug = slugify(name);
+
+    await location.save();
+
+    res.json({
+      success: true,
+      data: location,
+    });
+
+  } catch (err) {
+    console.error("UPDATE LOCATION ERROR:", err);
     res.status(500).json({
       message: "Server error ❌",
     });

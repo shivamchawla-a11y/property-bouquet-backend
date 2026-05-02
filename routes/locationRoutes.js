@@ -6,18 +6,20 @@ const {
   getLocations,
   getLocationsTree,
   deleteLocation,
+  updateLocation, // ✅ ADD THIS
 } = require("../controllers/locationController");
-
-// 🔥 ROUTES
 
 // CREATE
 router.post("/", createLocation);
 
-// GET FLAT LIST
+// GET FLAT
 router.get("/", getLocations);
 
-// GET TREE (IMPORTANT FOR UI)
+// TREE
 router.get("/tree", getLocationsTree);
+
+// UPDATE ✅
+router.patch("/:id", updateLocation);
 
 // DELETE
 router.delete("/:id", deleteLocation);
