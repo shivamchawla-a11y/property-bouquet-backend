@@ -18,24 +18,41 @@ const propertySchema = new mongoose.Schema({
 
   // ================= CORE DETAILS =================
   coreDetails: {
-  title: { type: String, required: true },
+    title: { type: String, required: true },
 
-  // 🔥 PROPER RELATION
-  developerRef: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Developer",
-    default: null,
+    // 🔥 DEVELOPER RELATION
+    developerRef: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Developer",
+      default: null,
+    },
+
+    // 🔥 CUSTOM DEVELOPER
+    developerName: {
+      type: String,
+      default: "",
+    },
+
+    startingPrice: Number,
+    maxPrice: Number,
   },
 
-  // 🔥 CUSTOM INPUT SUPPORT
-  developerName: {
-    type: String,
-    default: "",
-  },
+  // ================= CATEGORY (🔥 NEW) =================
+  categoryData: {
 
-  startingPrice: Number,
-  maxPrice: Number,
-},
+    // 🔥 CATEGORY RELATION
+    categoryRef: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Category",
+      default: null,
+    },
+
+    // 🔥 STORE NAME FOR FAST ACCESS / SEO
+    categoryName: {
+      type: String,
+      default: "",
+    },
+  },
 
   // ================= KEY METRICS =================
   keyMetrics: {
@@ -72,8 +89,28 @@ const propertySchema = new mongoose.Schema({
     walkthroughUrl: String,
   },
 
-  // ================= LOCATION DATA =================
+  // ================= LOCATION DATA (🔥 UPDATED) =================
   locationData: {
+
+    // 🔥 LOCATION RELATION
+    locationRef: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Location",
+      default: null,
+    },
+
+    // 🔥 STORE FULL LABEL (Gurgaon > Sector 65 > etc)
+    locationName: {
+      type: String,
+      default: "",
+    },
+
+    // 🔥 CUSTOM LOCATION
+    customLocation: {
+      type: String,
+      default: "",
+    },
+
     address: String,
     mapEmbedUrl: String,
 
@@ -89,14 +126,13 @@ const propertySchema = new mongoose.Schema({
   gatedContent: {
     brochurePdfUrl: String,
 
-    // ✅ UPDATED FLOOR PLANS (IMPORTANT)
     floorPlans: [
       {
-        unitType: String,     // 3 BHK
-        area: String,         // 3000 sq ft
-        price: String,        // ₹ 5 Cr
-        paymentPlan: String,  // 30:70
-        image: String,        // floor plan image
+        unitType: String,
+        area: String,
+        price: String,
+        paymentPlan: String,
+        image: String,
       }
     ],
 
