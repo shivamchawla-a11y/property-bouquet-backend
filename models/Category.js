@@ -15,14 +15,12 @@ const categorySchema = new mongoose.Schema(
       unique: true,
     },
 
-    // 🔥 NEW: PARENT SUPPORT
     parent: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Category",
       default: null,
     },
 
-    // 🔥 OPTIONAL: FOR QUICK ACCESS / SEO
     fullPath: {
       type: String,
       default: "",
@@ -31,8 +29,14 @@ const categorySchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// 🔥 AUTO SLUG + FULL PATH
-categorySchema.pre("save", async function (next) {
+// ✅ MODERN ASYNC HOOK (NO NEXT)
+categorySchema.pre("save", async function () {
+  // 🔥 Only run if name or parent changed
+  if (!this.isModified("name") && !this.isModified("parent")) {
+    return;
+  }
+
+  // 🔥 SLUG
   if (this.name) {
     this.slug = slugify(this.name, {
       lower: true,
@@ -40,17 +44,19 @@ categorySchema.pre("save", async function (next) {
     });
   }
 
-  // 🔥 Build full path
+  // 🔥 FULL PATH BUILD
   if (this.parent) {
-    const parent = await mongoose.model("Category").findById(this.parent);
+    const parent = await mongoose
+      .model("Category")
+      .findById(this.parent)
+      .lean();
+
     this.fullPath = parent
       ? `${parent.fullPath} > ${this.name}`
       : this.name;
   } else {
     this.fullPath = this.name;
   }
-
-  next();
 });
 
 module.exports = mongoose.model("Category", categorySchema);
