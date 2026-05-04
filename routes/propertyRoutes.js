@@ -1,17 +1,21 @@
 const express = require("express");
 const router = express.Router();
 
-const { protect, authorize } = require("../middleware/authMiddleware"); // ✅ FIX
+const { protect, authorize } = require("../middleware/authMiddleware");
 
 const {
   createProperty,
   getProperties,
   deleteProperty,
-  restoreProperty
+  restoreProperty,
+  getPropertyBySlug, // ✅ ADD THIS
 } = require("../controllers/propertyController");
 
 // PUBLIC
 router.get("/", getProperties);
+
+// 🔥 NEW ROUTE
+router.get("/slug/:slug", getPropertyBySlug);
 
 // ADMIN
 router.post("/", protect, authorize("SuperAdmin"), createProperty);

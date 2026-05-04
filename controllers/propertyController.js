@@ -185,3 +185,37 @@ exports.restoreProperty = async (req, res) => {
     });
   }
 };
+
+// ✅ GET PROPERTY BY SLUG (FOR PREVIEW PAGE)
+exports.getPropertyBySlug = async (req, res) => {
+  try {
+    const { slug } = req.params;
+
+    const property = await Property.findOne({
+      slug,
+      isActive: true, // 🔥 important (only show active)
+    })
+      .populate("createdBy")
+      .populate("coreDetails.developerRef", "name logo");
+
+    if (!property) {
+      return res.status(404).json({
+        success: false,
+        message: "Property not found ❌",
+      });
+    }
+
+    res.json({
+      success: true,
+      data: property,
+    });
+
+  } catch (err) {
+    console.error("GET PROPERTY BY SLUG ERROR:", err);
+
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
