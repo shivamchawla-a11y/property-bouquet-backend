@@ -24,10 +24,25 @@ const leadSchema = new mongoose.Schema(
       default: "Website",
     },
 
+    // 🔥 UPDATED STATUS (REAL ESTATE READY)
     status: {
       type: String,
-      enum: ["New", "Contacted", "Closed"],
+      enum: [
+        "New",
+        "Interested",
+        "Not Interested",
+        "Visit Scheduled",
+        "Visited",
+        "Closed",
+      ],
       default: "New",
+    },
+
+    // 🔥 PRIORITY
+    priority: {
+      type: String,
+      enum: ["Hot", "Warm", "Cold"],
+      default: "Warm",
     },
 
     assignedTo: {
@@ -36,15 +51,20 @@ const leadSchema = new mongoose.Schema(
       default: null,
     },
 
-    notes: {
-      type: String,
-      default: "",
-    },
-
-    date: {
-      type: Date,
-      default: Date.now,
-    },
+    // 🔥 NOTES HISTORY (IMPORTANT)
+    notes: [
+      {
+        text: String,
+        addedBy: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+        createdAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
   },
   { timestamps: true }
 );

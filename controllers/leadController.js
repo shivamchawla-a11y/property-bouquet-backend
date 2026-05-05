@@ -40,11 +40,12 @@ exports.createLead = async (req, res) => {
 
     // ✅ CREATE LEAD
     const lead = await Lead.create({
-      name,
-      phone,
-      property,
-      source: source || "Website",
-    });
+  name,
+  phone,
+  property,
+  source: source || "Website",
+  priority: "Warm", // default
+});
 
     res.status(201).json({
       success: true,
@@ -83,11 +84,9 @@ exports.getLeads = async (req, res) => {
 // ================= UPDATE =================
 exports.updateLead = async (req, res) => {
   try {
-    const lead = await Lead.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true }
-    );
+    const { notes, ...rest } = req.body;
+
+    const lead = await Lead.findById(req.params.id);
 
     if (!lead) {
       return res.status(404).json({
@@ -96,10 +95,24 @@ exports.updateLead = async (req, res) => {
       });
     }
 
+    // ✅ NORMAL FIELD UPDATE
+    Object.assign(lead, rest);
+
+    // ✅ ADD NOTE (NOT OVERWRITE)
+    if (notes) {
+      lead.notes.push({
+        text: notes,
+        addedBy: req.user?._id || null,
+      });
+    }
+
+    await lead.save();
+
     res.json({
       success: true,
       data: lead,
     });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({
