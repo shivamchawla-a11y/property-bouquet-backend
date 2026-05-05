@@ -26,17 +26,16 @@ const leadSchema = new mongoose.Schema(
 
     // 🔥 UPDATED STATUS (REAL ESTATE READY)
     status: {
-      type: String,
-      enum: [
-        "New",
-        "Interested",
-        "Not Interested",
-        "Visit Scheduled",
-        "Visited",
-        "Closed",
-      ],
-      default: "New",
-    },
+  type: String,
+  enum: [
+    "New",
+    "Interested",
+    "Not Interested",
+    "Visit",
+    "Closed"
+  ],
+  default: "New",
+},
 
     // 🔥 PRIORITY
     priority: {
