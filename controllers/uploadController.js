@@ -18,17 +18,15 @@ exports.uploadImage = async (req, res) => {
 
             transformation: [
               { fetch_format: "webp", quality: "auto:eco" },
+
+              // 🔥 LOGO WATERMARK
               {
-                overlay: {
-                  font_family: "Arial",
-                  font_size: 40,
-                  text: "Property Bouquet",
-                },
+                overlay: "Property_Bouquet_Logo_g4giud",
+                width: 0.18,
+                opacity: 70,
                 gravity: "south_east",
-                x: 20,
-                y: 20,
-                color: "white",
-                opacity: 60,
+                x: 30,
+                y: 30,
               },
             ],
           },

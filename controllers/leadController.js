@@ -3,12 +3,54 @@ const Lead = require("../models/Lead");
 // ================= CREATE =================
 exports.createLead = async (req, res) => {
   try {
-    const lead = await Lead.create(req.body);
+    const { name, phone, property, source } = req.body;
+
+    if (!name || !phone) {
+      return res.status(400).json({
+        success: false,
+        message: "Name and phone are required",
+      });
+    }
+
+    // ✅ Phone validation
+    const phoneRegex = /^[6-9]\d{9}$/;
+
+    if (!phoneRegex.test(phone)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid phone number",
+      });
+    }
+
+    // ✅ DUPLICATE CHECK (FIXED POSITION)
+    const existing = await Lead.findOne({
+      phone,
+      property,
+      createdAt: {
+        $gte: new Date(Date.now() - 1000 * 60 * 10), // last 10 mins
+      },
+    });
+
+    if (existing) {
+      return res.status(200).json({
+        success: true,
+        message: "Lead already submitted recently",
+      });
+    }
+
+    // ✅ CREATE LEAD
+    const lead = await Lead.create({
+      name,
+      phone,
+      property,
+      source: source || "Website",
+    });
 
     res.status(201).json({
       success: true,
       data: lead,
     });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({
