@@ -95,14 +95,21 @@ exports.updateLead = async (req, res) => {
       });
     }
 
-    // ✅ NORMAL FIELD UPDATE
+    // ✅ SAFE ASSIGN / UNASSIGN
+    if (req.body.hasOwnProperty("assignedTo")) {
+      lead.assignedTo = req.body.assignedTo || null;
+    }
+
+    delete rest.assignedTo;
+
+    // ✅ NORMAL UPDATE
     Object.assign(lead, rest);
 
-    // ✅ ADD NOTE (NOT OVERWRITE)
-    if (notes) {
+    // ✅ SAFE NOTE ADD
+    if (notes && typeof notes === "string") {
       lead.notes.push({
         text: notes,
-        addedBy: req.user?._id || null,
+        ...(req.user?._id && { addedBy: req.user._id }),
       });
     }
 
@@ -114,10 +121,10 @@ exports.updateLead = async (req, res) => {
     });
 
   } catch (err) {
-    console.error(err);
+    console.error("UPDATE ERROR:", err);
     res.status(500).json({
       success: false,
-      message: "Update failed",
+      message: err.message,
     });
   }
 };
