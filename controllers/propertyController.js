@@ -349,7 +349,7 @@ exports.getPropertyBySlug = async (req, res) => {
 exports.getPropertyById = async (req, res) => {
   try {
     const property = await Property.findById(req.params.id)
-      .populate("coreDetails.developerRef", "name")
+      .populate("coreDetails.developerRef", "name logo") // ✅ FIXED
       .populate("categoryData.categoryRef", "name")
       .populate("locationData.locationRef", "name");
 

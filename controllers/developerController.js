@@ -5,32 +5,38 @@ exports.createDeveloper = async (req, res) => {
   try {
     const { name, logo } = req.body;
 
-    if (!name) {
+    if (!name?.trim()) {
       return res.status(400).json({
+        success: false,
         message: "Developer name is required ❌",
       });
     }
 
-    const exists = await Developer.findOne({ name });
+    const exists = await Developer.findOne({
+      name: name.trim(),
+    });
 
     if (exists) {
       return res.status(400).json({
+        success: false,
         message: "Developer already exists ❌",
       });
     }
 
     const developer = await Developer.create({
-      name,
-      logo: logo || "/placeholder.png",
+      name: name.trim(),
+      logo: logo?.trim() || "/placeholder.png",
     });
 
     res.status(201).json({
       success: true,
       data: developer,
     });
+
   } catch (err) {
-    console.error(err);
+    console.error("CREATE DEV ERROR:", err);
     res.status(500).json({
+      success: false,
       message: "Server error ❌",
     });
   }
