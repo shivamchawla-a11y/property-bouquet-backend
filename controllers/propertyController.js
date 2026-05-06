@@ -111,24 +111,28 @@ exports.updateProperty = async (req, res) => {
     const { coreDetails, categoryData, locationData, unitConfigurations } = req.body;
 
     // ================= CONFIG CLEAN =================
-    const cleanedConfigurations = unitConfigurations?.filter(
-      (u) =>
-        u.unitType?.trim() ||
-        u.area?.trim() ||
-        u.price?.trim() ||
-        u.paymentPlan?.trim()
-    );
+    let validConfigurations;
 
-    const validConfigurations = cleanedConfigurations?.filter(
-      (u) => u.price && u.price.trim() !== ""
-    );
+if (unitConfigurations) {
+  const cleanedConfigurations = unitConfigurations.filter(
+    (u) =>
+      u.unitType?.trim() ||
+      u.area?.trim() ||
+      u.price?.trim() ||
+      u.paymentPlan?.trim()
+  );
 
-    if (!validConfigurations || validConfigurations.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "At least one configuration price required ❌",
-      });
-    }
+  validConfigurations = cleanedConfigurations.filter(
+    (u) => u.price && u.price.trim() !== ""
+  );
+
+  if (validConfigurations.length === 0) {
+    return res.status(400).json({
+      success: false,
+      message: "At least one configuration price required ❌",
+    });
+  }
+}
 
     // ================= DEVELOPER =================
     let developerData = {};
