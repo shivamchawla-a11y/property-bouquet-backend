@@ -15,7 +15,7 @@ const leadRoutes = require("./routes/leadRoutes");
 const developerRoutes = require("./routes/developerRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
 
-// 🔥 Import Models
+// Models
 require("./models/Location");
 require("./models/User");
 require("./models/Property");
@@ -24,20 +24,30 @@ require("./models/Category");
 
 const app = express();
 
-// ✅ 1. CORS (VERY IMPORTANT FIX)
+// ✅ CORS
 app.use(cors({
   origin: [
     "http://localhost:3000",
     "https://property-bouquet-frontend.vercel.app"
   ],
-  credentials: true
+  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization"],
 }));
 
-// ✅ 2. MIDDLEWARE ORDER FIX
+app.options("*", cors());
+
+// ✅ Middleware
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// ✅ 3. ROUTES
+// ✅ Debug Logger (optional)
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.url}`);
+  next();
+});
+
+// ✅ Routes
 app.use("/api/properties", propertyRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/locations", locationRoutes);
@@ -48,21 +58,28 @@ app.use("/api/leads", leadRoutes);
 app.use("/api/developers", developerRoutes);
 app.use("/api/categories", categoryRoutes);
 
-
-console.log("AUTH ROUTES LOADED");
-// Test Route
+// Test
 app.get("/", (req, res) => {
   res.send("Property Bouquet API running...");
 });
 
-// Health check
 app.get("/api/health", (req, res) => {
   res.json({ status: "OK" });
 });
 
+// ❗ GLOBAL ERROR HANDLER
+app.use((err, req, res, next) => {
+  console.error("GLOBAL ERROR:", err);
+
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || "Server Error",
+  });
+});
+
 const PORT = process.env.PORT || 5000;
 
-// MongoDB Connection
+// DB + Server
 mongoose.connect(process.env.MONGO_URI)
   .then(() => {
     console.log("MongoDB Connected ✅");

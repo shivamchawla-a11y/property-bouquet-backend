@@ -95,22 +95,21 @@ exports.updateLead = async (req, res) => {
       });
     }
 
-    // ✅ SAFE ASSIGN / UNASSIGN
-    if (req.body.hasOwnProperty("assignedTo")) {
-      lead.assignedTo = req.body.assignedTo || null;
-    }
-
-    delete rest.assignedTo;
-
-    // ✅ NORMAL UPDATE
+    // ✅ UPDATE NORMAL FIELDS
     Object.assign(lead, rest);
 
-    // ✅ SAFE NOTE ADD
-    if (notes && typeof notes === "string") {
-      lead.notes.push({
-        text: notes,
-        ...(req.user?._id && { addedBy: req.user._id }),
-      });
+    // ✅ NOTES LOGIC (FIXED)
+    if (notes !== undefined) {
+      if (notes.trim() === "") {
+        // 🔥 CLEAR ALL NOTES (overwrite behavior)
+        lead.notes = [];
+      } else {
+        // 🔥 ADD NEW NOTE
+        lead.notes.push({
+          text: notes,
+          addedBy: req.user?._id || null,
+        });
+      }
     }
 
     await lead.save();
