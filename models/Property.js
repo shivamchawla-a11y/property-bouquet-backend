@@ -69,7 +69,12 @@ const propertySchema = new mongoose.Schema({
   overview: {
     description: String,
     aboutImageUrl: String,
-    highlights: [String],
+    highlights: [
+  {
+    name: String,
+    icon: String,
+  },
+]
   },
 
   // ================= UNIT CONFIGURATIONS =================
