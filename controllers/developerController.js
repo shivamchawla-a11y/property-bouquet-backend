@@ -69,8 +69,9 @@ exports.getDeveloperBySlug = async (req, res) => {
       });
     }
 
+    // ✅ FIXED RELATION FIELD
     const properties = await Property.find({
-      developer: developer._id,
+      developerRef: developer._id,
     });
 
     return res.json({
@@ -79,6 +80,8 @@ exports.getDeveloperBySlug = async (req, res) => {
     });
 
   } catch (err) {
+    console.log("ERROR:", err);
+
     return res.status(500).json({
       message: "Server error",
       error: err.message,
