@@ -5,94 +5,40 @@ exports.createProperty = async (req, res) => {
   try {
     const { marketType, coreDetails, unitConfigurations, slug } = req.body;
 
-    // ================= VALIDATION =================
-    if (!slug) {
-      return res.status(400).json({
-        success: false,
-        message: "Slug is required ❌",
-      });
+    if (!slug || !marketType || !coreDetails?.title) {
+      return res.status(400).json({ success: false, message: "Missing fields ❌" });
     }
 
-    if (!marketType) {
-      return res.status(400).json({
-        success: false,
-        message: "Market type is required ❌",
-      });
-    }
-
-    if (!coreDetails?.title) {
-      return res.status(400).json({
-        success: false,
-        message: "Title is required ❌",
-      });
-    }
-
-    if (!coreDetails?.startingPrice) {
-      return res.status(400).json({
-        success: false,
-        message: "Starting price is required ❌",
-      });
-    }
-
-    // ================= CONFIG VALIDATION =================
-    const hasValidConfig = unitConfigurations?.some(
-      (u) => u.price && u.price.trim() !== ""
-    );
-
-    if (!hasValidConfig) {
-      return res.status(400).json({
-        success: false,
-        message: "At least one configuration price is required ❌",
-      });
-    }
-
-    // ================= DUPLICATE SLUG CHECK =================
     const existing = await Property.findOne({ slug });
-
     if (existing) {
-      return res.status(400).json({
-        success: false,
-        message: "Slug already exists ❌",
-      });
+      return res.status(400).json({ success: false, message: "Slug already exists ❌" });
     }
 
-    // ================= 🔥 DEVELOPER LOGIC =================
-    let developerData = {};
-
-    if (coreDetails?.developerRef) {
-      developerData = {
-        developerRef: coreDetails.developerRef,
-        developerName: "",
-      };
-    } else if (coreDetails?.developerName) {
-      developerData = {
-        developerRef: null,
-        developerName: coreDetails.developerName,
-      };
+    const hasValidConfig = unitConfigurations?.some(u => u.price?.trim());
+    if (!hasValidConfig) {
+      return res.status(400).json({ success: false, message: "At least one config required ❌" });
     }
 
-    // ================= CREATE =================
     const property = await Property.create({
       ...req.body,
+
+      // ✅ FIXED SINGLE SOURCE OF TRUTH
+      developerRef: coreDetails?.developerRef || null,
+
       coreDetails: {
         ...coreDetails,
-        ...developerData,
+        developerRef: undefined,
+        developerName: undefined,
       },
+
       createdBy: req.user?.id,
     });
 
-    res.status(201).json({
-      success: true,
-      data: property,
-    });
+    res.status(201).json({ success: true, data: property });
 
   } catch (err) {
-    console.error("CREATE PROPERTY ERROR:", err);
-
-    res.status(500).json({
-      success: false,
-      message: err.message || "Server error ❌",
-    });
+    console.error(err);
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
@@ -134,19 +80,6 @@ if (unitConfigurations) {
   }
 }
 
-    // ================= DEVELOPER =================
-    let developerData = {};
-    if (coreDetails?.developerRef) {
-      developerData = {
-        developerRef: coreDetails.developerRef,
-        developerName: "",
-      };
-    } else if (coreDetails?.developerName) {
-      developerData = {
-        developerRef: null,
-        developerName: coreDetails.developerName,
-      };
-    }
 
     // ================= CATEGORY =================
     let categoryFinal = {};
@@ -179,33 +112,43 @@ if (unitConfigurations) {
     }
 
     // ================= UPDATE =================
-    const updated = await Property.findByIdAndUpdate(
-      req.params.id,
-      {
-        ...req.body,
+   const updated = await Property.findByIdAndUpdate(
+  req.params.id,
+  {
+    marketType,
+    slug,
 
-        coreDetails: {
-          ...coreDetails,
-          ...developerData,
-        },
+    developerRef: coreDetails?.developerRef || null,
 
-        categoryData: categoryFinal,
+    coreDetails: {
+      ...coreDetails,
+      developerRef: undefined,
+      developerName: undefined,
+    },
 
-        locationData: {
-          ...locationData,
-          ...locationFinal,
-        },
+    categoryData: categoryFinal,
 
-        unitConfigurations: validConfigurations,
+    locationData: {
+      ...locationData,
+      ...locationFinal,
+    },
 
-        keyMetrics: {
-          ...req.body.keyMetrics,
-          totalUnits: Number(req.body.keyMetrics?.totalUnits) || 0,
-          totalTowers: Number(req.body.keyMetrics?.totalTowers) || 0,
-        },
-      },
-      { new: true }
-    );
+    unitConfigurations: validConfigurations,
+
+    keyMetrics: {
+      ...req.body.keyMetrics,
+      totalUnits: Number(req.body.keyMetrics?.totalUnits) || 0,
+      totalTowers: Number(req.body.keyMetrics?.totalTowers) || 0,
+    },
+
+    overview: req.body.overview,
+    media: req.body.media,
+    gatedContent: req.body.gatedContent,
+    seoEngine: req.body.seoEngine,
+    faqs: req.body.faqs,
+  },
+  { new: true }
+);
 
     res.json({
       success: true,
@@ -240,7 +183,7 @@ exports.getProperties = async (req, res) => {
 
     const properties = await Property.find(filter)
       .populate("createdBy")
-      .populate("coreDetails.developerRef", "name logo");
+      .populate("developerRef", "name logo");
 
     res.status(200).json({
       success: true,
@@ -329,7 +272,9 @@ exports.getPropertyBySlug = async (req, res) => {
       isActive: true, // 🔥 important (only show active)
     })
       .populate("createdBy")
-      .populate("coreDetails.developerRef", "name logo");
+      .populate("developerRef", "name logo")
+.populate("categoryData.categoryRef", "name")
+.populate("locationData.locationRef", "name")
 
     if (!property) {
       return res.status(404).json({
@@ -357,7 +302,9 @@ exports.getPropertyBySlug = async (req, res) => {
 exports.getPropertyById = async (req, res) => {
   try {
     const property = await Property.findById(req.params.id)
-      .populate("coreDetails.developerRef", "name logo") // ✅ FIXED
+      .populate("developerRef", "name logo")
+.populate("categoryData.categoryRef", "name")
+.populate("locationData.locationRef", "name")// ✅ FIXED
       .populate("categoryData.categoryRef", "name")
       .populate("locationData.locationRef", "name");
 
