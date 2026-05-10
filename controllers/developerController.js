@@ -57,35 +57,31 @@ exports.createDeveloper = async (req, res) => {
 
 exports.getDeveloperBySlug = async (req, res) => {
   try {
+    const { slug } = req.params;
 
-    const developer = await Developer.findOne({
-      slug: req.params.slug,
-    });
+    console.log("Slug received:", slug);
+
+    const developer = await Developer.findOne({ slug });
 
     if (!developer) {
       return res.status(404).json({
-        success: false,
-        message: "Developer not found ❌",
+        message: "Developer not found",
       });
     }
 
-    // 🔥 FIND ALL PROPERTIES USING THIS DEV
     const properties = await Property.find({
-      "coreDetails.developerRef": developer._id,
-    }).sort({ createdAt: -1 });
+      developer: developer._id,
+    });
 
-    res.json({
-      success: true,
+    return res.json({
       developer,
       properties,
     });
 
   } catch (err) {
-    console.error(err);
-
-    res.status(500).json({
-      success: false,
-      message: "Server error ❌",
+    return res.status(500).json({
+      message: "Server error",
+      error: err.message,
     });
   }
 };
