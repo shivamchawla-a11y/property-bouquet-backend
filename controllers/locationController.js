@@ -79,14 +79,30 @@ exports.getLocationBySlug = async (req, res) => {
       });
     }
 
+    // 🔥 GET ALL CHILD LOCATIONS (CRITICAL FIX)
+    const getAllChildIds = async (parentId) => {
+      const children = await Location.find({ parent: parentId });
+
+      let ids = [parentId];
+
+      for (const child of children) {
+        const subIds = await getAllChildIds(child._id);
+        ids = ids.concat(subIds);
+      }
+
+      return ids;
+    };
+
+    const locationIds = await getAllChildIds(location._id);
+
     const properties = await Property.find({
-      "locationData.locationRef": location._id,
+      "locationData.locationRef": { $in: locationIds },
       isActive: true,
     })
       .populate("coreDetails.developerRef", "name logo")
       .populate("categoryData.categoryRef", "name");
 
-    res.json({
+    return res.json({
       success: true,
       location,
       properties,
@@ -171,8 +187,8 @@ exports.deleteLocation = async (req, res) => {
 
     // ❌ CHECK PROPERTY USAGE
     const propertyExists = await Property.findOne({
-      location: locationId,
-    });
+  "locationData.locationRef": locationId,
+});
 
     if (propertyExists) {
       return res.status(400).json({
