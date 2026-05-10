@@ -21,17 +21,10 @@ exports.createProperty = async (req, res) => {
 
     const property = await Property.create({
       ...req.body,
-
-      // ✅ FIXED SINGLE SOURCE OF TRUTH
-      developerRef: coreDetails?.developerRef || null,
-
-      coreDetails: {
-        ...coreDetails,
-        developerRef: undefined,
-        developerName: undefined,
-      },
-
       createdBy: req.user?.id,
+
+      // ❌ REMOVE TOP LEVEL developerRef (NOT IN SCHEMA)
+      // ❌ DO NOT STORE coreDetails.developerRef manually again (already inside req.body)
     });
 
     res.status(201).json({ success: true, data: property });
@@ -118,13 +111,7 @@ if (unitConfigurations) {
     marketType,
     slug,
 
-    developerRef: coreDetails?.developerRef || null,
-
-    coreDetails: {
-      ...coreDetails,
-      developerRef: undefined,
-      developerName: undefined,
-    },
+    coreDetails,
 
     categoryData: categoryFinal,
 
@@ -183,7 +170,7 @@ exports.getProperties = async (req, res) => {
 
     const properties = await Property.find(filter)
       .populate("createdBy")
-      .populate("developerRef", "name logo");
+      .populate("coreDetails.developerRef", "name logo")
 
     res.status(200).json({
       success: true,
@@ -269,12 +256,12 @@ exports.getPropertyBySlug = async (req, res) => {
 
     const property = await Property.findOne({
       slug,
-      isActive: true, // 🔥 important (only show active)
+      isActive: true,
     })
       .populate("createdBy")
-      .populate("developerRef", "name logo")
-.populate("categoryData.categoryRef", "name")
-.populate("locationData.locationRef", "name")
+      .populate("coreDetails.developerRef", "name logo")
+      .populate("categoryData.categoryRef", "name")
+      .populate("locationData.locationRef", "name");
 
     if (!property) {
       return res.status(404).json({
@@ -302,7 +289,7 @@ exports.getPropertyBySlug = async (req, res) => {
 exports.getPropertyById = async (req, res) => {
   try {
     const property = await Property.findById(req.params.id)
-      .populate("developerRef", "name logo")
+      .populate("coreDetails.developerRef", "name logo")
 .populate("categoryData.categoryRef", "name")
 .populate("locationData.locationRef", "name")// ✅ FIXED
       .populate("categoryData.categoryRef", "name")
