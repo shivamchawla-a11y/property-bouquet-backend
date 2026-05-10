@@ -225,14 +225,22 @@ if (unitConfigurations) {
 // ✅ GET PROPERTIES
 exports.getProperties = async (req, res) => {
   try {
-    const showAll = req.query.all === "true";
+    const { all, inactive } = req.query;
 
-    const filter = showAll ? {} : { isActive: true };
+    let filter = {};
 
-    const properties = await Property
-      .find(filter)
+    // ================= FILTER LOGIC =================
+    if (all === "true") {
+      filter = {};
+    } else if (inactive === "true") {
+      filter = { isActive: false };
+    } else {
+      filter = { isActive: true };
+    }
+
+    const properties = await Property.find(filter)
       .populate("createdBy")
-      .populate("coreDetails.developerRef", "name logo"); // 🔥 IMPORTANT
+      .populate("coreDetails.developerRef", "name logo");
 
     res.status(200).json({
       success: true,
