@@ -2,6 +2,10 @@ const mongoose = require("mongoose");
 
 const developerSchema = new mongoose.Schema(
   {
+    slug: {
+  type: String,
+  unique: true,
+},
     name: {
       type: String,
       required: true,

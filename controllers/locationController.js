@@ -65,6 +65,39 @@ exports.createLocation = async (req, res) => {
   }
 };
 
+exports.getLocationBySlug = async (req, res) => {
+  try {
+
+    const location = await Location.findOne({
+      slug: req.params.slug,
+    }).populate("parent");
+
+    if (!location) {
+      return res.status(404).json({
+        message: "Location not found ❌",
+      });
+    }
+
+    // 🔥 FIND PROPERTIES
+    const properties = await Property.find({
+      "locationData.locationRef": location._id,
+    });
+
+    res.json({
+      success: true,
+      location,
+      properties,
+    });
+
+  } catch (err) {
+    console.error(err);
+
+    res.status(500).json({
+      message: "Server error ❌",
+    });
+  }
+};
+
 // ================= GET ALL =================
 exports.getLocations = async (req, res) => {
   try {

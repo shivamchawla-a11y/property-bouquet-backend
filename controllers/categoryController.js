@@ -1,4 +1,6 @@
 const Category = require("../models/Category");
+const slugify = require("slugify");
+const Property = require("../models/Property");
 
 // ✅ CREATE
 exports.createCategory = async (req, res) => {
@@ -28,9 +30,15 @@ exports.createCategory = async (req, res) => {
     }
 
     const category = await Category.create({
-      name,
-      parent: parent || null, // 🔥 IMPORTANT
-    });
+  name,
+
+  slug: slugify(name, {
+    lower: true,
+    strict: true,
+  }),
+
+  parent: parent || null,
+});
 
     res.status(201).json({
       success: true,
@@ -50,6 +58,40 @@ exports.createCategory = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server error",
+    });
+  }
+};
+
+exports.getCategoryBySlug = async (req, res) => {
+  try {
+
+    const category = await Category.findOne({
+      slug: req.params.slug,
+    });
+
+    if (!category) {
+      return res.status(404).json({
+        success: false,
+        message: "Category not found ❌",
+      });
+    }
+
+    const properties = await Property.find({
+      "categoryData.categoryRef": category._id,
+    });
+
+    res.json({
+      success: true,
+      category,
+      properties,
+    });
+
+  } catch (err) {
+    console.error(err);
+
+    res.status(500).json({
+      success: false,
+      message: "Server error ❌",
     });
   }
 };
