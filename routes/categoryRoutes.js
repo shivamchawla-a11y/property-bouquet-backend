@@ -5,7 +5,8 @@ const {
   createCategory,
   getCategories,
   deleteCategory,
-  getCategoryTree, // 🔥 ADD THIS
+  getCategoryTree,
+  getCategoryBySlug,
 } = require("../controllers/categoryController");
 
 // ================= ROUTES =================
@@ -13,11 +14,14 @@ const {
 // CREATE
 router.post("/", createCategory);
 
-// GET FLAT LIST (optional)
+// FLAT LIST
 router.get("/", getCategories);
 
-// 🔥 GET TREE (IMPORTANT)
+// TREE
 router.get("/tree", getCategoryTree);
+
+// SLUG PAGE (IMPORTANT FOR FRONTEND)
+router.get("/:slug", getCategoryBySlug);
 
 // DELETE
 router.delete("/:id", deleteCategory);

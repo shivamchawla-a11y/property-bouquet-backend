@@ -2,6 +2,20 @@ const Category = require("../models/Category");
 const slugify = require("slugify");
 const Property = require("../models/Property");
 
+
+const getAllCategoryIds = async (parentId) => {
+  const children = await Category.find({ parent: parentId });
+
+  let ids = [parentId];
+
+  for (const child of children) {
+    const subIds = await getAllCategoryIds(child._id);
+    ids = ids.concat(subIds);
+  }
+
+  return ids;
+};
+
 // ✅ CREATE
 exports.createCategory = async (req, res) => {
   try {
@@ -64,7 +78,6 @@ exports.createCategory = async (req, res) => {
 
 exports.getCategoryBySlug = async (req, res) => {
   try {
-
     const category = await Category.findOne({
       slug: req.params.slug,
     });
@@ -76,9 +89,15 @@ exports.getCategoryBySlug = async (req, res) => {
       });
     }
 
+    // 🔥 FIX: include all child categories
+    const categoryIds = await getAllCategoryIds(category._id);
+
     const properties = await Property.find({
-      "categoryData.categoryRef": category._id,
-    });
+      "categoryData.categoryRef": { $in: categoryIds },
+      isActive: true,
+    })
+      .populate("coreDetails.developerRef", "name logo")
+      .populate("locationData.locationRef", "name");
 
     res.json({
       success: true,
@@ -142,12 +161,15 @@ exports.getCategoryTree = async (req, res) => {
   });
 
   categories.forEach((cat) => {
-    if (cat.parent) {
-      map[cat.parent]?.children.push(map[cat._id]);
+    if (cat.parent && map[cat.parent]) {
+      map[cat.parent].children.push(map[cat._id]);
     } else {
       roots.push(map[cat._id]);
     }
   });
 
-  res.json({ data: roots });
+  res.json({
+    success: true,
+    data: roots,
+  });
 };
