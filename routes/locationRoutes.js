@@ -6,23 +6,26 @@ const {
   getLocations,
   getLocationsTree,
   deleteLocation,
-  updateLocation, // ✅ ADD THIS
+  updateLocation,
+  getLocationBySlug, // ✅ ADD THIS
 } = require("../controllers/locationController");
 
-// CREATE
+// ================= CREATE =================
 router.post("/", createLocation);
 
-// GET FLAT
+// ================= GET FLAT =================
 router.get("/", getLocations);
 
-// TREE
+// ================= TREE =================
 router.get("/tree", getLocationsTree);
 
-router.get("/locations/:slug", getLocationBySlug);
-// UPDATE ✅
+// ================= SLUG PAGE (IMPORTANT FIXED ROUTE) =================
+router.get("/:slug", getLocationBySlug);
+
+// ================= UPDATE =================
 router.patch("/:id", updateLocation);
 
-// DELETE
+// ================= DELETE =================
 router.delete("/:id", deleteLocation);
 
 module.exports = router;
