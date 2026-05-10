@@ -8,20 +8,22 @@ const pageSchema = new mongoose.Schema(
     },
 
     slug: {
-      type: String,
-      required: true,
-      unique: true,
-    },
+  type: String,
+  default: "",
+  unique: true,
+  sparse: true,
+},
 
     pageType: {
       type: String,
       enum: [
-        "About",
-        "Contact",
-        "Privacy",
-        "Terms",
-        "Custom",
-      ],
+  "Home",
+  "About",
+  "Contact",
+  "Privacy",
+  "Terms",
+  "Custom",
+],
       default: "Custom",
     },
 
