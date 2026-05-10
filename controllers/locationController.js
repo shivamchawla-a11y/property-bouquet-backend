@@ -65,23 +65,26 @@ exports.createLocation = async (req, res) => {
   }
 };
 
+// ✅ GET LOCATION + ITS PROPERTIES (LIKE DEVELOPER PAGE)
 exports.getLocationBySlug = async (req, res) => {
   try {
+    const { slug } = req.params;
 
-    const location = await Location.findOne({
-      slug: req.params.slug,
-    }).populate("parent");
+    const location = await Location.findOne({ slug });
 
     if (!location) {
       return res.status(404).json({
+        success: false,
         message: "Location not found ❌",
       });
     }
 
-    // 🔥 FIND PROPERTIES
     const properties = await Property.find({
       "locationData.locationRef": location._id,
-    });
+      isActive: true,
+    })
+      .populate("coreDetails.developerRef", "name logo")
+      .populate("categoryData.categoryRef", "name");
 
     res.json({
       success: true,
@@ -91,9 +94,9 @@ exports.getLocationBySlug = async (req, res) => {
 
   } catch (err) {
     console.error(err);
-
     res.status(500).json({
-      message: "Server error ❌",
+      success: false,
+      message: err.message,
     });
   }
 };

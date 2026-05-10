@@ -18,6 +18,7 @@ router.get("/", getLocations);
 // TREE
 router.get("/tree", getLocationsTree);
 
+router.get("/locations/:slug", getLocationBySlug);
 // UPDATE ✅
 router.patch("/:id", updateLocation);
 
