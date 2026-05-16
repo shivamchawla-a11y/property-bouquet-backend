@@ -3,35 +3,75 @@ const Property = require("../models/Property");
 // ✅ CREATE PROPERTY
 exports.createProperty = async (req, res) => {
   try {
-    const { marketType, coreDetails, unitConfigurations, slug } = req.body;
+    const {
+      marketType,
+      coreDetails,
+      unitConfigurations,
+      slug,
+      heroSection,
+    } = req.body;
 
+    // ================= REQUIRED CHECK =================
     if (!slug || !marketType || !coreDetails?.title) {
-      return res.status(400).json({ success: false, message: "Missing fields ❌" });
+      return res.status(400).json({
+        success: false,
+        message: "Missing fields ❌",
+      });
     }
 
+    // ================= UNIQUE SLUG =================
     const existing = await Property.findOne({ slug });
+
     if (existing) {
-      return res.status(400).json({ success: false, message: "Slug already exists ❌" });
+      return res.status(400).json({
+        success: false,
+        message: "Slug already exists ❌",
+      });
     }
 
-    const hasValidConfig = unitConfigurations?.some(u => u.price?.trim());
+    // ================= CONFIG VALIDATION =================
+    const hasValidConfig = unitConfigurations?.some(
+      (u) => u.price?.trim()
+    );
+
     if (!hasValidConfig) {
-      return res.status(400).json({ success: false, message: "At least one config required ❌" });
+      return res.status(400).json({
+        success: false,
+        message: "At least one config required ❌",
+      });
     }
 
+    // ================= HERO CLEAN =================
+    const cleanedHeroSection = {
+      ...heroSection,
+
+      taglineItems:
+        heroSection?.taglineItems?.filter(
+          (item) => item?.trim() !== ""
+        ) || [],
+    };
+
+    // ================= CREATE =================
     const property = await Property.create({
       ...req.body,
-      createdBy: req.user?.id,
 
-      // ❌ REMOVE TOP LEVEL developerRef (NOT IN SCHEMA)
-      // ❌ DO NOT STORE coreDetails.developerRef manually again (already inside req.body)
+      heroSection: cleanedHeroSection,
+
+      createdBy: req.user?.id,
     });
 
-    res.status(201).json({ success: true, data: property });
+    res.status(201).json({
+      success: true,
+      data: property,
+    });
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("CREATE PROPERTY ERROR:", err);
+
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
   }
 };
 
@@ -47,35 +87,48 @@ exports.updateProperty = async (req, res) => {
       });
     }
 
-    const { coreDetails, categoryData, locationData, unitConfigurations } = req.body;
+    const {
+      marketType,
+      slug,
+      coreDetails,
+      categoryData,
+      locationData,
+      unitConfigurations,
+      heroSection,
+    } = req.body;
 
     // ================= CONFIG CLEAN =================
-    let validConfigurations;
+    let validConfigurations = [];
 
-if (unitConfigurations) {
-  const cleanedConfigurations = unitConfigurations.filter(
-    (u) =>
-      u.unitType?.trim() ||
-      u.area?.trim() ||
-      u.price?.trim() ||
-      u.paymentPlan?.trim()
-  );
+    if (unitConfigurations?.length) {
+      const cleanedConfigurations =
+        unitConfigurations.filter(
+          (u) =>
+            u.unitType?.trim() ||
+            u.area?.trim() ||
+            u.price?.trim() ||
+            u.paymentPlan?.trim()
+        );
 
-  validConfigurations = cleanedConfigurations.filter(
-    (u) => u.price && u.price.trim() !== ""
-  );
+      validConfigurations =
+        cleanedConfigurations.filter(
+          (u) =>
+            u.price &&
+            u.price.trim() !== ""
+        );
 
-  if (validConfigurations.length === 0) {
-    return res.status(400).json({
-      success: false,
-      message: "At least one configuration price required ❌",
-    });
-  }
-}
-
+      if (validConfigurations.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "At least one configuration price required ❌",
+        });
+      }
+    }
 
     // ================= CATEGORY =================
     let categoryFinal = {};
+
     if (categoryData?.categoryRef) {
       categoryFinal = {
         categoryRef: categoryData.categoryRef,
@@ -84,12 +137,14 @@ if (unitConfigurations) {
     } else {
       categoryFinal = {
         categoryRef: null,
-        categoryName: categoryData.categoryName,
+        categoryName:
+          categoryData?.categoryName || "",
       };
     }
 
     // ================= LOCATION =================
     let locationFinal = {};
+
     if (locationData?.locationRef) {
       locationFinal = {
         locationRef: locationData.locationRef,
@@ -99,43 +154,75 @@ if (unitConfigurations) {
     } else {
       locationFinal = {
         locationRef: null,
-        locationName: locationData.locationName,
-        customLocation: locationData.customLocation,
+        locationName:
+          locationData?.locationName || "",
+        customLocation:
+          locationData?.customLocation || "",
       };
     }
 
+    // ================= HERO CLEAN =================
+    const cleanedHeroSection = {
+      ...heroSection,
+
+      taglineItems:
+        heroSection?.taglineItems?.filter(
+          (item) => item?.trim() !== ""
+        ) || [],
+    };
+
     // ================= UPDATE =================
-   const updated = await Property.findByIdAndUpdate(
-  req.params.id,
-  {
-    marketType,
-    slug,
+    const updated =
+      await Property.findByIdAndUpdate(
+        req.params.id,
+        {
+          marketType,
+          slug,
 
-    coreDetails,
+          coreDetails,
 
-    categoryData: categoryFinal,
+          heroSection: cleanedHeroSection,
 
-    locationData: {
-      ...locationData,
-      ...locationFinal,
-    },
+          categoryData: categoryFinal,
 
-    unitConfigurations: validConfigurations,
+          locationData: {
+            ...locationData,
+            ...locationFinal,
+          },
 
-    keyMetrics: {
-      ...req.body.keyMetrics,
-      totalUnits: Number(req.body.keyMetrics?.totalUnits) || 0,
-      totalTowers: Number(req.body.keyMetrics?.totalTowers) || 0,
-    },
+          unitConfigurations:
+            validConfigurations,
 
-    overview: req.body.overview,
-    media: req.body.media,
-    gatedContent: req.body.gatedContent,
-    seoEngine: req.body.seoEngine,
-    faqs: req.body.faqs,
-  },
-  { new: true }
-);
+          keyMetrics: {
+            ...req.body.keyMetrics,
+
+            totalUnits:
+              Number(
+                req.body.keyMetrics?.totalUnits
+              ) || 0,
+
+            totalTowers:
+              Number(
+                req.body.keyMetrics?.totalTowers
+              ) || 0,
+          },
+
+          overview: req.body.overview,
+
+          media: req.body.media,
+
+          gatedContent:
+            req.body.gatedContent,
+
+          seoEngine:
+            req.body.seoEngine,
+
+          faqs: req.body.faqs,
+
+          cta: req.body.cta,
+        },
+        { new: true }
+      );
 
     res.json({
       success: true,
@@ -159,7 +246,7 @@ exports.getProperties = async (req, res) => {
 
     let filter = {};
 
-    // ================= FILTER LOGIC =================
+    // ================= FILTER =================
     if (all === "true") {
       filter = {};
     } else if (inactive === "true") {
@@ -168,9 +255,13 @@ exports.getProperties = async (req, res) => {
       filter = { isActive: true };
     }
 
-    const properties = await Property.find(filter)
-      .populate("createdBy")
-      .populate("coreDetails.developerRef", "name logo")
+    const properties =
+      await Property.find(filter)
+        .populate("createdBy")
+        .populate(
+          "coreDetails.developerRef",
+          "name logo"
+        );
 
     res.status(200).json({
       success: true,
@@ -178,7 +269,10 @@ exports.getProperties = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("GET PROPERTIES ERROR:", error);
+    console.error(
+      "GET PROPERTIES ERROR:",
+      error
+    );
 
     res.status(500).json({
       success: false,
@@ -187,11 +281,11 @@ exports.getProperties = async (req, res) => {
   }
 };
 
-
 // ✅ SOFT DELETE
 exports.deleteProperty = async (req, res) => {
   try {
-    const property = await Property.findById(req.params.id);
+    const property =
+      await Property.findById(req.params.id);
 
     if (!property) {
       return res.status(404).json({
@@ -201,6 +295,7 @@ exports.deleteProperty = async (req, res) => {
     }
 
     property.isActive = false;
+
     await property.save();
 
     res.json({
@@ -218,11 +313,11 @@ exports.deleteProperty = async (req, res) => {
   }
 };
 
-
 // ✅ RESTORE PROPERTY
 exports.restoreProperty = async (req, res) => {
   try {
-    const property = await Property.findById(req.params.id);
+    const property =
+      await Property.findById(req.params.id);
 
     if (!property) {
       return res.status(404).json({
@@ -232,6 +327,7 @@ exports.restoreProperty = async (req, res) => {
     }
 
     property.isActive = true;
+
     await property.save();
 
     res.json({
@@ -249,19 +345,32 @@ exports.restoreProperty = async (req, res) => {
   }
 };
 
-// ✅ GET PROPERTY BY SLUG (FOR PREVIEW PAGE)
-exports.getPropertyBySlug = async (req, res) => {
+// ✅ GET PROPERTY BY SLUG
+exports.getPropertyBySlug = async (
+  req,
+  res
+) => {
   try {
     const { slug } = req.params;
 
-    const property = await Property.findOne({
-      slug,
-      isActive: true,
-    })
-      .populate("createdBy")
-      .populate("coreDetails.developerRef", "name logo")
-      .populate("categoryData.categoryRef", "name")
-      .populate("locationData.locationRef", "name");
+    const property =
+      await Property.findOne({
+        slug,
+        isActive: true,
+      })
+        .populate("createdBy")
+        .populate(
+          "coreDetails.developerRef",
+          "name logo"
+        )
+        .populate(
+          "categoryData.categoryRef",
+          "name"
+        )
+        .populate(
+          "locationData.locationRef",
+          "name"
+        );
 
     if (!property) {
       return res.status(404).json({
@@ -276,7 +385,10 @@ exports.getPropertyBySlug = async (req, res) => {
     });
 
   } catch (err) {
-    console.error("GET PROPERTY BY SLUG ERROR:", err);
+    console.error(
+      "GET PROPERTY BY SLUG ERROR:",
+      err
+    );
 
     res.status(500).json({
       success: false,
@@ -285,15 +397,26 @@ exports.getPropertyBySlug = async (req, res) => {
   }
 };
 
-// ✅ GET PROPERTY BY ID (FOR EDIT)
-exports.getPropertyById = async (req, res) => {
+// ✅ GET PROPERTY BY ID
+exports.getPropertyById = async (
+  req,
+  res
+) => {
   try {
-    const property = await Property.findById(req.params.id)
-      .populate("coreDetails.developerRef", "name logo")
-.populate("categoryData.categoryRef", "name")
-.populate("locationData.locationRef", "name")// ✅ FIXED
-      .populate("categoryData.categoryRef", "name")
-      .populate("locationData.locationRef", "name");
+    const property =
+      await Property.findById(req.params.id)
+        .populate(
+          "coreDetails.developerRef",
+          "name logo"
+        )
+        .populate(
+          "categoryData.categoryRef",
+          "name"
+        )
+        .populate(
+          "locationData.locationRef",
+          "name"
+        );
 
     if (!property) {
       return res.status(404).json({

@@ -54,6 +54,40 @@ const propertySchema = new mongoose.Schema({
     },
   },
 
+  // ================= HERO SECTION =================
+heroSection: {
+
+  // SMALL TOP LABEL
+  propertyStatus: {
+    type: String,
+    default: "PRIVATE DIGITAL MANDATE",
+  },
+
+  // HERO DESCRIPTION
+  heroDescription: {
+    type: String,
+    default: "",
+  },
+
+  // BUTTON TEXTS
+  brochureButtonText: {
+    type: String,
+    default: "DOWNLOAD BROCHURE",
+  },
+
+  videoButtonText: {
+    type: String,
+    default: "WATCH PROJECT VIDEO",
+  },
+
+  // BOTTOM TAGLINES
+  taglineItems: [
+    {
+      type: String,
+    }
+  ],
+},
+
   // ================= KEY METRICS =================
   keyMetrics: {
     landArea: String,
