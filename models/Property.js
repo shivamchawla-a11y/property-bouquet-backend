@@ -107,15 +107,73 @@ const propertySchema = new mongoose.Schema({
   },
 
   // ================= OVERVIEW =================
-  overview: {
+overview: {
+
+  // SECTION NUMBER
+  aboutSectionNumber: {
+    type: String,
+    default: "02",
+  },
+
+  // ================= ABOUT SECTION =================
+
+  aboutLabel: {
+    type: String,
+    default: "About The Project",
+  },
+
+  aboutTitleLine1: {
+    type: String,
+    default: "A Vision That",
+  },
+
+  aboutTitleLine2: {
+    type: String,
+    default: "Transcends the Ordinary",
+  },
 
     // ABOUT DESCRIPTION
-    description: String,
+    description: {
+      type: String,
+      default: "",
+    },
+
+    // SECOND PARAGRAPH
+    aboutParagraph2: {
+      type: String,
+      default:
+        "More than just a residence, it is a legacy in the making — crafted for discerning individuals and families who seek exclusivity in every detail of life.",
+    },
 
     // ABOUT IMAGE
-    aboutImageUrl: String,
+    aboutImageUrl: {
+      type: String,
+      default: "",
+    },
+
+    // ================= FEATURE BAR =================
+
+    featureBar: [
+      {
+        title: {
+          type: String,
+          default: "",
+        },
+
+        desc: {
+          type: String,
+          default: "",
+        },
+
+        icon: {
+          type: String,
+          default: "✦",
+        },
+      }
+    ],
 
     // ================= HIGHLIGHTS HEADER =================
+
     highlightsHeading: {
       type: String,
       default: "Crafted for Elevated",
@@ -127,12 +185,14 @@ const propertySchema = new mongoose.Schema({
     },
 
     // ================= QUOTE =================
+
     highlightQuote: {
       type: String,
       default: "",
     },
 
     // ================= DYNAMIC HIGHLIGHTS =================
+
     highlights: [
       {
         heading: {
