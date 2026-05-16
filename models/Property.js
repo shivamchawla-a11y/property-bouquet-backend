@@ -3,7 +3,11 @@ const mongoose = require("mongoose");
 const propertySchema = new mongoose.Schema({
 
   // 🔥 BASIC INFO
-  slug: { type: String, unique: true, required: true },
+  slug: {
+    type: String,
+    unique: true,
+    required: true,
+  },
 
   marketType: {
     type: String,
@@ -18,7 +22,10 @@ const propertySchema = new mongoose.Schema({
 
   // ================= CORE DETAILS =================
   coreDetails: {
-    title: { type: String, required: true },
+    title: {
+      type: String,
+      required: true,
+    },
 
     // 🔥 DEVELOPER RELATION
     developerRef: {
@@ -37,7 +44,7 @@ const propertySchema = new mongoose.Schema({
     maxPrice: Number,
   },
 
-  // ================= CATEGORY (🔥 NEW) =================
+  // ================= CATEGORY =================
   categoryData: {
 
     // 🔥 CATEGORY RELATION
@@ -47,7 +54,7 @@ const propertySchema = new mongoose.Schema({
       default: null,
     },
 
-    // 🔥 STORE NAME FOR FAST ACCESS / SEO
+    // 🔥 CATEGORY NAME
     categoryName: {
       type: String,
       default: "",
@@ -55,38 +62,38 @@ const propertySchema = new mongoose.Schema({
   },
 
   // ================= HERO SECTION =================
-heroSection: {
+  heroSection: {
 
-  // SMALL TOP LABEL
-  propertyStatus: {
-    type: String,
-    default: "PRIVATE DIGITAL MANDATE",
-  },
-
-  // HERO DESCRIPTION
-  heroDescription: {
-    type: String,
-    default: "",
-  },
-
-  // BUTTON TEXTS
-  brochureButtonText: {
-    type: String,
-    default: "DOWNLOAD BROCHURE",
-  },
-
-  videoButtonText: {
-    type: String,
-    default: "WATCH PROJECT VIDEO",
-  },
-
-  // BOTTOM TAGLINES
-  taglineItems: [
-    {
+    // SMALL TOP LABEL
+    propertyStatus: {
       type: String,
-    }
-  ],
-},
+      default: "PRIVATE DIGITAL MANDATE",
+    },
+
+    // HERO DESCRIPTION
+    heroDescription: {
+      type: String,
+      default: "",
+    },
+
+    // BUTTON TEXTS
+    brochureButtonText: {
+      type: String,
+      default: "DOWNLOAD BROCHURE",
+    },
+
+    videoButtonText: {
+      type: String,
+      default: "WATCH PROJECT VIDEO",
+    },
+
+    // TAGLINES
+    taglineItems: [
+      {
+        type: String,
+      }
+    ],
+  },
 
   // ================= KEY METRICS =================
   keyMetrics: {
@@ -101,14 +108,49 @@ heroSection: {
 
   // ================= OVERVIEW =================
   overview: {
+
+    // ABOUT DESCRIPTION
     description: String,
+
+    // ABOUT IMAGE
     aboutImageUrl: String,
+
+    // ================= HIGHLIGHTS HEADER =================
+    highlightsHeading: {
+      type: String,
+      default: "Crafted for Elevated",
+    },
+
+    highlightsSubheading: {
+      type: String,
+      default: "Modern Living",
+    },
+
+    // ================= QUOTE =================
+    highlightQuote: {
+      type: String,
+      default: "",
+    },
+
+    // ================= DYNAMIC HIGHLIGHTS =================
     highlights: [
-  {
-    name: String,
-    icon: String,
-  },
-]
+      {
+        heading: {
+          type: String,
+          default: "",
+        },
+
+        subheading: {
+          type: String,
+          default: "",
+        },
+
+        icon: {
+          type: String,
+          default: "✦",
+        },
+      }
+    ],
   },
 
   // ================= UNIT CONFIGURATIONS =================
@@ -128,7 +170,7 @@ heroSection: {
     walkthroughUrl: String,
   },
 
-  // ================= LOCATION DATA (🔥 UPDATED) =================
+  // ================= LOCATION DATA =================
   locationData: {
 
     // 🔥 LOCATION RELATION
@@ -138,7 +180,7 @@ heroSection: {
       default: null,
     },
 
-    // 🔥 STORE FULL LABEL (Gurgaon > Sector 65 > etc)
+    // 🔥 LOCATION LABEL
     locationName: {
       type: String,
       default: "",
@@ -163,6 +205,7 @@ heroSection: {
 
   // ================= GATED CONTENT =================
   gatedContent: {
+
     brochurePdfUrl: String,
 
     floorPlans: [
@@ -203,6 +246,7 @@ heroSection: {
     buttonText: String,
   },
 
+  // ================= CREATED BY =================
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
