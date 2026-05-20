@@ -283,15 +283,92 @@ overview: {
   },
 },
 
-  // ================= UNIT CONFIGURATIONS =================
-  unitConfigurations: [
+// ================= CONFIGURATION SECTION =================
+configurationSection: {
+
+  // SECTION NUMBER
+  sectionNumber: {
+    type: String,
+    default: "05",
+  },
+
+  // TOP LABEL
+  sectionLabel: {
+    type: String,
+    default: "Residence Configurations",
+  },
+
+  // TITLE
+  titleLine1: {
+    type: String,
+    default: "Residences Tailored",
+  },
+
+  titleLine2: {
+    type: String,
+    default: "to Your Lifestyle",
+  },
+
+  // SUBTEXT
+  subheading: {
+    type: String,
+    default:
+      "Thoughtfully designed layouts that redefine space, privacy and luxury.",
+  },
+
+  // LEFT FEATURES
+  features: [
     {
-      unitType: String,
-      area: String,
-      price: String,
-      paymentPlan: String,
+      type: String,
     }
   ],
+
+  // BUTTON TEXT
+  buttonText: {
+    type: String,
+    default: "View Details",
+  },
+},
+
+  // ================= UNIT CONFIGURATIONS =================
+unitConfigurations: [
+  {
+    unitType: {
+      type: String,
+      default: "",
+    },
+
+    area: {
+      type: String,
+      default: "",
+    },
+
+    price: {
+      type: String,
+      default: "",
+    },
+
+    paymentPlan: {
+      type: String,
+      default: "",
+    },
+
+    bedrooms: {
+      type: String,
+      default: "",
+    },
+
+    bathrooms: {
+      type: String,
+      default: "",
+    },
+
+    balconies: {
+      type: String,
+      default: "",
+    },
+  }
+],
 
   // ================= MEDIA =================
   media: {
@@ -339,14 +416,48 @@ overview: {
     brochurePdfUrl: String,
 
     floorPlans: [
-      {
-        unitType: String,
-        area: String,
-        price: String,
-        paymentPlan: String,
-        image: String,
-      }
-    ],
+  {
+    unitType: {
+      type: String,
+      default: "",
+    },
+
+    area: {
+      type: String,
+      default: "",
+    },
+
+    price: {
+      type: String,
+      default: "",
+    },
+
+    paymentPlan: {
+      type: String,
+      default: "",
+    },
+
+    bedrooms: {
+      type: String,
+      default: "",
+    },
+
+    bathrooms: {
+      type: String,
+      default: "",
+    },
+
+    balconies: {
+      type: String,
+      default: "",
+    },
+
+    image: {
+      type: String,
+      default: "",
+    },
+  }
+],
 
     requireLogin: {
       type: Boolean,

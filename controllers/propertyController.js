@@ -1,14 +1,20 @@
 const Property = require("../models/Property");
 
 // ✅ CREATE PROPERTY
+// ✅ CREATE PROPERTY
 exports.createProperty = async (req, res) => {
   try {
     const {
       marketType,
       coreDetails,
+      categoryData,
+      locationData,
       unitConfigurations,
-      slug,
       heroSection,
+      overview,
+      gatedContent,
+      configurationSection,
+      slug,
     } = req.body;
 
     // ================= REQUIRED CHECK =================
@@ -30,7 +36,18 @@ exports.createProperty = async (req, res) => {
     }
 
     // ================= CONFIG VALIDATION =================
-    const hasValidConfig = unitConfigurations?.some(
+    const cleanedConfigurations =
+      (unitConfigurations || []).map((u) => ({
+        unitType: u?.unitType || "",
+        area: u?.area || "",
+        price: u?.price || "",
+        paymentPlan: u?.paymentPlan || "",
+        bedrooms: u?.bedrooms || "",
+        bathrooms: u?.bathrooms || "",
+        balconies: u?.balconies || "",
+      }));
+
+    const hasValidConfig = cleanedConfigurations.some(
       (u) => u.price?.trim()
     );
 
@@ -40,6 +57,19 @@ exports.createProperty = async (req, res) => {
         message: "At least one config required ❌",
       });
     }
+
+    // ================= FLOOR PLAN CLEAN =================
+    const cleanedFloorPlans =
+      gatedContent?.floorPlans?.map((fp) => ({
+        unitType: fp?.unitType || "",
+        area: fp?.area || "",
+        price: fp?.price || "",
+        paymentPlan: fp?.paymentPlan || "",
+        bedrooms: fp?.bedrooms || "",
+        bathrooms: fp?.bathrooms || "",
+        balconies: fp?.balconies || "",
+        image: fp?.image || "",
+      })) || [];
 
     // ================= HERO CLEAN =================
     const cleanedHeroSection = {
@@ -52,48 +82,79 @@ exports.createProperty = async (req, res) => {
     };
 
     // ================= OVERVIEW CLEAN =================
-const cleanedOverview = {
-  ...overview,
+    const cleanedOverview = {
+      ...overview,
 
-  highlights:
-    overview?.highlights?.filter(
-      (item) => item?.name?.trim() !== ""
-    ) || [],
-};
+      highlights:
+        overview?.highlights?.filter(
+          (item) => item?.name?.trim() !== ""
+        ) || [],
+    };
 
-   // ================= DEVELOPER SNAPSHOT =================
-let developerData = {};
+    // ================= CONFIG SECTION CLEAN =================
+    const cleanedConfigurationSection = {
+      ...configurationSection,
 
-if (
-  coreDetails?.developerRef &&
-  typeof coreDetails.developerRef === "object"
-) {
-  developerData = {
-    developerName:
-      coreDetails.developerRef.name || "",
+      features:
+        configurationSection?.features?.filter(
+          (item) => item?.trim() !== ""
+        ) || [],
+    };
 
-    developerLogo:
-      coreDetails.developerRef.logo || "",
+    // ================= DEVELOPER SNAPSHOT =================
+    let developerData = {};
 
-    developerImage:
-      coreDetails.developerRef.image || "",
-  };
-}
+    if (
+      coreDetails?.developerRef &&
+      typeof coreDetails.developerRef === "object"
+    ) {
+      developerData = {
+        developerName:
+          coreDetails.developerRef.name || "",
 
-// ================= CREATE =================
-const property = await Property.create({
-  ...req.body,
+        developerLogo:
+          coreDetails.developerRef.logo || "",
 
-  coreDetails: {
-    ...coreDetails,
-    ...developerData,
-  },
-heroSection: cleanedHeroSection,
+        developerImage:
+          coreDetails.developerRef.image || "",
+      };
+    }
 
-overview: cleanedOverview,
+    // ================= CREATE =================
+    const property = await Property.create({
+      ...req.body,
 
-  createdBy: req.user?.id,
-});
+      coreDetails: {
+        ...coreDetails,
+        ...developerData,
+      },
+
+      categoryData: {
+        ...categoryData,
+      },
+
+      locationData: {
+        ...locationData,
+      },
+
+      heroSection: cleanedHeroSection,
+
+      overview: cleanedOverview,
+
+      configurationSection:
+        cleanedConfigurationSection,
+
+      unitConfigurations:
+        cleanedConfigurations,
+
+      gatedContent: {
+        ...gatedContent,
+
+        floorPlans: cleanedFloorPlans,
+      },
+
+      createdBy: req.user?.id,
+    });
 
     res.status(201).json({
       success: true,
@@ -113,7 +174,9 @@ overview: cleanedOverview,
 // ✅ UPDATE PROPERTY
 exports.updateProperty = async (req, res) => {
   try {
-    const property = await Property.findById(req.params.id);
+    const property = await Property.findById(
+      req.params.id
+    );
 
     if (!property) {
       return res.status(404).json({
@@ -130,35 +193,38 @@ exports.updateProperty = async (req, res) => {
       locationData,
       unitConfigurations,
       heroSection,
+      overview,
+      gatedContent,
+      configurationSection,
     } = req.body;
 
     // ================= CONFIG CLEAN =================
-    let validConfigurations = [];
+    const cleanedConfigurations =
+      (unitConfigurations || []).map((u) => ({
+        unitType: u?.unitType || "",
+        area: u?.area || "",
+        price: u?.price || "",
+        paymentPlan: u?.paymentPlan || "",
+        bedrooms: u?.bedrooms || "",
+        bathrooms: u?.bathrooms || "",
+        balconies: u?.balconies || "",
+      }));
 
-    if (unitConfigurations?.length) {
-      const cleanedConfigurations =
-        unitConfigurations.filter(
-          (u) =>
-            u.unitType?.trim() ||
-            u.area?.trim() ||
-            u.price?.trim() ||
-            u.paymentPlan?.trim()
-        );
+    const validConfigurations =
+      cleanedConfigurations.filter(
+        (u) =>
+          u.unitType?.trim() ||
+          u.area?.trim() ||
+          u.price?.trim() ||
+          u.paymentPlan?.trim()
+      );
 
-      validConfigurations =
-        cleanedConfigurations.filter(
-          (u) =>
-            u.price &&
-            u.price.trim() !== ""
-        );
-
-      if (validConfigurations.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "At least one configuration price required ❌",
-        });
-      }
+    if (validConfigurations.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "At least one configuration required ❌",
+      });
     }
 
     // ================= CATEGORY =================
@@ -167,7 +233,8 @@ exports.updateProperty = async (req, res) => {
     if (categoryData?.categoryRef) {
       categoryFinal = {
         categoryRef: categoryData.categoryRef,
-        categoryName: categoryData.categoryName,
+        categoryName:
+          categoryData.categoryName || "",
       };
     } else {
       categoryFinal = {
@@ -182,15 +249,21 @@ exports.updateProperty = async (req, res) => {
 
     if (locationData?.locationRef) {
       locationFinal = {
-        locationRef: locationData.locationRef,
-        locationName: locationData.locationName,
+        locationRef:
+          locationData.locationRef,
+
+        locationName:
+          locationData.locationName || "",
+
         customLocation: "",
       };
     } else {
       locationFinal = {
         locationRef: null,
+
         locationName:
           locationData?.locationName || "",
+
         customLocation:
           locationData?.customLocation || "",
       };
@@ -207,14 +280,37 @@ exports.updateProperty = async (req, res) => {
     };
 
     // ================= OVERVIEW CLEAN =================
-const cleanedOverview = {
-  ...overview,
+    const cleanedOverview = {
+      ...overview,
 
-  highlights:
-    overview?.highlights?.filter(
-      (item) => item?.name?.trim() !== ""
-    ) || [],
-};
+      highlights:
+        overview?.highlights?.filter(
+          (item) => item?.name?.trim() !== ""
+        ) || [],
+    };
+
+    // ================= CONFIG SECTION CLEAN =================
+    const cleanedConfigurationSection = {
+      ...configurationSection,
+
+      features:
+        configurationSection?.features?.filter(
+          (item) => item?.trim() !== ""
+        ) || [],
+    };
+
+    // ================= FLOOR PLAN CLEAN =================
+    const cleanedFloorPlans =
+      gatedContent?.floorPlans?.map((fp) => ({
+        unitType: fp?.unitType || "",
+        area: fp?.area || "",
+        price: fp?.price || "",
+        paymentPlan: fp?.paymentPlan || "",
+        bedrooms: fp?.bedrooms || "",
+        bathrooms: fp?.bathrooms || "",
+        balconies: fp?.balconies || "",
+        image: fp?.image || "",
+      })) || [];
 
     // ================= UPDATE =================
     const updated =
@@ -225,21 +321,17 @@ const cleanedOverview = {
           slug,
 
           coreDetails: {
-  ...coreDetails,
+            ...coreDetails,
 
-  developerName:
-    coreDetails?.developerName || "",
+            developerName:
+              coreDetails?.developerName || "",
 
-  developerLogo:
-    coreDetails?.developerLogo || "",
+            developerLogo:
+              coreDetails?.developerLogo || "",
 
-  developerImage:
-    coreDetails?.developerImage || "",
-},
-
-          heroSection: cleanedHeroSection,
-
-          overview: cleanedOverview,
+            developerImage:
+              coreDetails?.developerImage || "",
+          },
 
           categoryData: categoryFinal,
 
@@ -247,6 +339,13 @@ const cleanedOverview = {
             ...locationData,
             ...locationFinal,
           },
+
+          heroSection: cleanedHeroSection,
+
+          overview: cleanedOverview,
+
+          configurationSection:
+            cleanedConfigurationSection,
 
           unitConfigurations:
             validConfigurations,
@@ -265,12 +364,13 @@ const cleanedOverview = {
               ) || 0,
           },
 
-          overview: req.body.overview,
-
           media: req.body.media,
 
-          gatedContent:
-            req.body.gatedContent,
+          gatedContent: {
+            ...gatedContent,
+
+            floorPlans: cleanedFloorPlans,
+          },
 
           seoEngine:
             req.body.seoEngine,
