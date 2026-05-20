@@ -21,28 +21,40 @@ const propertySchema = new mongoose.Schema({
   },
 
   // ================= CORE DETAILS =================
-  coreDetails: {
-    title: {
-      type: String,
-      required: true,
-    },
-
-    // 🔥 DEVELOPER RELATION
-    developerRef: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Developer",
-      default: null,
-    },
-
-    // 🔥 CUSTOM DEVELOPER
-    developerName: {
-      type: String,
-      default: "",
-    },
-
-    startingPrice: Number,
-    maxPrice: Number,
+coreDetails: {
+  title: {
+    type: String,
+    required: true,
   },
+
+  // 🔥 DEVELOPER RELATION
+  developerRef: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Developer",
+    default: null,
+  },
+
+  // 🔥 CUSTOM DEVELOPER NAME
+  developerName: {
+    type: String,
+    default: "",
+  },
+
+  // 🔥 NEW DEVELOPER IMAGE
+  developerImage: {
+    type: String,
+    default: "",
+  },
+
+  // 🔥 NEW DEVELOPER LOGO
+  developerLogo: {
+    type: String,
+    default: "",
+  },
+
+  startingPrice: Number,
+  maxPrice: Number,
+},
 
   // ================= CATEGORY =================
   categoryData: {
