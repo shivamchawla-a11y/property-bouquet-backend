@@ -51,6 +51,16 @@ exports.createProperty = async (req, res) => {
         ) || [],
     };
 
+    // ================= OVERVIEW CLEAN =================
+const cleanedOverview = {
+  ...overview,
+
+  highlights:
+    overview?.highlights?.filter(
+      (item) => item?.name?.trim() !== ""
+    ) || [],
+};
+
    // ================= DEVELOPER SNAPSHOT =================
 let developerData = {};
 
@@ -78,8 +88,9 @@ const property = await Property.create({
     ...coreDetails,
     ...developerData,
   },
+heroSection: cleanedHeroSection,
 
-  heroSection: cleanedHeroSection,
+overview: cleanedOverview,
 
   createdBy: req.user?.id,
 });
@@ -195,6 +206,16 @@ exports.updateProperty = async (req, res) => {
         ) || [],
     };
 
+    // ================= OVERVIEW CLEAN =================
+const cleanedOverview = {
+  ...overview,
+
+  highlights:
+    overview?.highlights?.filter(
+      (item) => item?.name?.trim() !== ""
+    ) || [],
+};
+
     // ================= UPDATE =================
     const updated =
       await Property.findByIdAndUpdate(
@@ -217,6 +238,8 @@ exports.updateProperty = async (req, res) => {
 },
 
           heroSection: cleanedHeroSection,
+
+          overview: cleanedOverview,
 
           categoryData: categoryFinal,
 

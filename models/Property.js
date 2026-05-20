@@ -118,8 +118,10 @@ coreDetails: {
     reraNumber: String,
   },
 
-  // ================= OVERVIEW =================
+ // ================= OVERVIEW =================
 overview: {
+
+  // ================= ABOUT SECTION =================
 
   // SECTION NUMBER
   aboutSectionNumber: {
@@ -127,103 +129,159 @@ overview: {
     default: "02",
   },
 
-  // ================= ABOUT SECTION =================
-
+  // SECTION LABEL
   aboutLabel: {
     type: String,
     default: "About The Project",
   },
 
+  // TITLE LINE 1
   aboutTitleLine1: {
     type: String,
     default: "A Vision That",
   },
 
+  // TITLE LINE 2
   aboutTitleLine2: {
     type: String,
     default: "Transcends the Ordinary",
   },
 
-    // ABOUT DESCRIPTION
-    description: {
-      type: String,
-      default: "",
-    },
-
-    // SECOND PARAGRAPH
-    aboutParagraph2: {
-      type: String,
-      default:
-        "More than just a residence, it is a legacy in the making — crafted for discerning individuals and families who seek exclusivity in every detail of life.",
-    },
-
-    // ABOUT IMAGE
-    aboutImageUrl: {
-      type: String,
-      default: "",
-    },
-
-    // ================= FEATURE BAR =================
-
-    featureBar: [
-      {
-        title: {
-          type: String,
-          default: "",
-        },
-
-        desc: {
-          type: String,
-          default: "",
-        },
-
-        icon: {
-          type: String,
-          default: "✦",
-        },
-      }
-    ],
-
-    // ================= HIGHLIGHTS HEADER =================
-
-    highlightsHeading: {
-      type: String,
-      default: "Crafted for Elevated",
-    },
-
-    highlightsSubheading: {
-      type: String,
-      default: "Modern Living",
-    },
-
-    // ================= QUOTE =================
-
-    highlightQuote: {
-      type: String,
-      default: "",
-    },
-
-    // ================= DYNAMIC HIGHLIGHTS =================
-
-    highlights: [
-      {
-        heading: {
-          type: String,
-          default: "",
-        },
-
-        subheading: {
-          type: String,
-          default: "",
-        },
-
-        icon: {
-          type: String,
-          default: "✦",
-        },
-      }
-    ],
+  // DESCRIPTION
+  description: {
+    type: String,
+    default: "",
   },
+
+  // SECOND PARAGRAPH
+  aboutParagraph2: {
+    type: String,
+    default:
+      "More than just a residence, it is a legacy in the making — crafted for discerning individuals and families who seek exclusivity in every detail of life.",
+  },
+
+  // ABOUT IMAGE
+  aboutImageUrl: {
+    type: String,
+    default: "",
+  },
+
+  // ================= FEATURE BAR =================
+
+  featureBar: [
+    {
+      title: {
+        type: String,
+        default: "",
+      },
+
+      desc: {
+        type: String,
+        default: "",
+      },
+
+      icon: {
+        type: String,
+        default: "✦",
+      },
+    }
+  ],
+
+  // ================= PROPERTY HIGHLIGHTS =================
+
+  highlightsHeading: {
+    type: String,
+    default: "Crafted for Elevated",
+  },
+
+  highlightsSubheading: {
+    type: String,
+    default: "Modern Living",
+  },
+
+  // ================= QUOTE =================
+
+  highlightQuote: {
+    type: String,
+    default: "",
+  },
+
+  // ================= AMENITIES SECTION =================
+
+  amenitiesSectionNumber: {
+    type: String,
+    default: "04",
+  },
+
+  amenitiesSectionLabel: {
+    type: String,
+    default: "Project Amenities",
+  },
+
+  amenitiesHeadingLine1: {
+    type: String,
+    default: "Every Detail.",
+  },
+
+  amenitiesHeadingLine2: {
+    type: String,
+    default: "Elevated",
+  },
+
+  amenitiesHeadingLine3: {
+    type: String,
+    default: "Beyond Expectation.",
+  },
+
+  amenitiesSubheading: {
+    type: String,
+    default:
+      "Eldeco Camelot is a seamless blend of thoughtful design, cutting-edge technology and world-class amenities curated for an extraordinary lifestyle.",
+  },
+
+  // ================= AMENITIES =================
+
+  highlights: [
+    {
+      name: {
+        type: String,
+        default: "",
+      },
+
+      icon: {
+        type: String,
+        default: "Home",
+      },
+    }
+  ],
+
+  // ================= BOTTOM STRIP =================
+
+  bottomStripTitle1: {
+    type: String,
+    default: "Thoughtfully by Design.",
+  },
+
+  bottomStripTitle2: {
+    type: String,
+    default: "Crafted for the Exceptional.",
+  },
+
+  bottomStripFeature1: {
+    type: String,
+    default: "Premium Specifications",
+  },
+
+  bottomStripFeature2: {
+    type: String,
+    default: "Finest Quality Materials",
+  },
+
+  bottomStripFeature3: {
+    type: String,
+    default: "Curated for Discerning Families",
+  },
+},
 
   // ================= UNIT CONFIGURATIONS =================
   unitConfigurations: [
