@@ -3,50 +3,76 @@ const slugify = require("slugify");
 const Property = require("../models/Property");
 
 // ================= CREATE =================
-exports.createDeveloper = async (req, res) => {
+exports.createDeveloper = async (
+  req,
+  res
+) => {
   try {
-    const { name, logo } = req.body;
+    const {
+      name,
+      logo,
+      image,
+    } = req.body;
 
     if (!name?.trim()) {
       return res.status(400).json({
         success: false,
-        message: "Developer name is required ❌",
+        message:
+          "Developer name is required ❌",
       });
     }
 
-    const trimmedName = name.trim();
+    const trimmedName =
+      name.trim();
 
-    const exists = await Developer.findOne({
-      name: {
-        $regex: new RegExp(`^${trimmedName}$`, "i"),
-      },
-    });
+    const exists =
+      await Developer.findOne({
+        name: {
+          $regex: new RegExp(
+            `^${trimmedName}$`,
+            "i"
+          ),
+        },
+      });
 
     if (exists) {
       return res.status(400).json({
         success: false,
-        message: "Developer already exists ❌",
+        message:
+          "Developer already exists ❌",
       });
     }
 
-    const developer = await Developer.create({
-      name: trimmedName,
+    const developer =
+      await Developer.create({
+        name: trimmedName,
 
-      slug: slugify(trimmedName, {
-        lower: true,
-        strict: true,
-      }),
+        slug: slugify(
+          trimmedName,
+          {
+            lower: true,
+            strict: true,
+          }
+        ),
 
-      logo: logo?.trim() || "/placeholder.png",
-    });
+        logo:
+          logo?.trim() ||
+          "/placeholder.png",
+
+        // ✅ NEW IMAGE FIELD
+        image:
+          image?.trim() || "",
+      });
 
     res.status(201).json({
       success: true,
       data: developer,
     });
-
   } catch (err) {
-    console.error("CREATE DEV ERROR:", err);
+    console.error(
+      "CREATE DEV ERROR:",
+      err
+    );
 
     res.status(500).json({
       success: false,
@@ -55,67 +81,199 @@ exports.createDeveloper = async (req, res) => {
   }
 };
 
-exports.getDeveloperBySlug = async (req, res) => {
+// ================= UPDATE =================
+exports.updateDeveloper = async (
+  req,
+  res
+) => {
   try {
-    const { slug } = req.params;
+    const { id } = req.params;
 
-    console.log("Slug received:", slug);
+    const {
+      name,
+      logo,
+      image,
+    } = req.body;
 
-    const developer = await Developer.findOne({ slug });
-
-    if (!developer) {
-      return res.status(404).json({
-        message: "Developer not found",
+    if (!name?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Developer name is required ❌",
       });
     }
 
-    // ✅ FIXED RELATION FIELD
-    const properties = await Property.find({
-      developerRef: developer._id,
-    });
+    const trimmedName =
+      name.trim();
 
-    return res.json({
-      developer,
-      properties,
-    });
+    const existing =
+      await Developer.findOne({
+        _id: { $ne: id },
 
+        name: {
+          $regex: new RegExp(
+            `^${trimmedName}$`,
+            "i"
+          ),
+        },
+      });
+
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Another developer with this name already exists ❌",
+      });
+    }
+
+    const updatedDeveloper =
+      await Developer.findByIdAndUpdate(
+        id,
+        {
+          name: trimmedName,
+
+          slug: slugify(
+            trimmedName,
+            {
+              lower: true,
+              strict: true,
+            }
+          ),
+
+          logo:
+            logo?.trim() ||
+            "/placeholder.png",
+
+          image:
+            image?.trim() || "",
+        },
+        {
+          new: true,
+        }
+      );
+
+    if (!updatedDeveloper) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Developer not found ❌",
+      });
+    }
+
+    res.json({
+      success: true,
+      message:
+        "Developer updated successfully ✅",
+      data: updatedDeveloper,
+    });
   } catch (err) {
-    console.log("ERROR:", err);
+    console.error(
+      "UPDATE DEV ERROR:",
+      err
+    );
 
-    return res.status(500).json({
-      message: "Server error",
-      error: err.message,
+    res.status(500).json({
+      success: false,
+      message: "Server error ❌",
     });
   }
 };
 
-// ================= GET =================
-exports.getDevelopers = async (req, res) => {
+// ================= GET BY SLUG =================
+exports.getDeveloperBySlug =
+  async (req, res) => {
+    try {
+      const { slug } = req.params;
+
+      const developer =
+        await Developer.findOne({
+          slug,
+        });
+
+      if (!developer) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Developer not found ❌",
+        });
+      }
+
+      const properties =
+        await Property.find({
+          developerRef:
+            developer._id,
+        });
+
+      return res.json({
+        success: true,
+        developer,
+        properties,
+      });
+    } catch (err) {
+      console.log(
+        "GET DEV BY SLUG ERROR:",
+        err
+      );
+
+      return res.status(500).json({
+        success: false,
+        message: "Server error ❌",
+        error: err.message,
+      });
+    }
+  };
+
+// ================= GET ALL =================
+exports.getDevelopers = async (
+  req,
+  res
+) => {
   try {
-    const developers = await Developer.find().sort({ createdAt: -1 });
+    const developers =
+      await Developer.find().sort({
+        createdAt: -1,
+      });
 
     res.json({
       success: true,
       data: developers,
     });
   } catch (err) {
+    console.log(
+      "GET DEVELOPERS ERROR:",
+      err
+    );
+
     res.status(500).json({
+      success: false,
       message: "Server error ❌",
     });
   }
 };
 
 // ================= DELETE =================
-exports.deleteDeveloper = async (req, res) => {
+exports.deleteDeveloper = async (
+  req,
+  res
+) => {
   try {
-    await Developer.findByIdAndDelete(req.params.id);
+    await Developer.findByIdAndDelete(
+      req.params.id
+    );
 
     res.json({
       success: true,
-      message: "Deleted successfully ✅",
+      message:
+        "Deleted successfully ✅",
     });
   } catch (err) {
+    console.log(
+      "DELETE DEV ERROR:",
+      err
+    );
+
     res.status(500).json({
+      success: false,
       message: "Server error ❌",
     });
   }
