@@ -51,14 +51,38 @@ exports.createProperty = async (req, res) => {
         ) || [],
     };
 
-    // ================= CREATE =================
-    const property = await Property.create({
-      ...req.body,
+   // ================= DEVELOPER SNAPSHOT =================
+let developerData = {};
 
-      heroSection: cleanedHeroSection,
+if (
+  coreDetails?.developerRef &&
+  typeof coreDetails.developerRef === "object"
+) {
+  developerData = {
+    developerName:
+      coreDetails.developerRef.name || "",
 
-      createdBy: req.user?.id,
-    });
+    developerLogo:
+      coreDetails.developerRef.logo || "",
+
+    developerImage:
+      coreDetails.developerRef.image || "",
+  };
+}
+
+// ================= CREATE =================
+const property = await Property.create({
+  ...req.body,
+
+  coreDetails: {
+    ...coreDetails,
+    ...developerData,
+  },
+
+  heroSection: cleanedHeroSection,
+
+  createdBy: req.user?.id,
+});
 
     res.status(201).json({
       success: true,
@@ -179,7 +203,18 @@ exports.updateProperty = async (req, res) => {
           marketType,
           slug,
 
-          coreDetails,
+          coreDetails: {
+  ...coreDetails,
+
+  developerName:
+    coreDetails?.developerName || "",
+
+  developerLogo:
+    coreDetails?.developerLogo || "",
+
+  developerImage:
+    coreDetails?.developerImage || "",
+},
 
           heroSection: cleanedHeroSection,
 
@@ -259,9 +294,9 @@ exports.getProperties = async (req, res) => {
       await Property.find(filter)
         .populate("createdBy")
         .populate(
-          "coreDetails.developerRef",
-          "name logo"
-        );
+  "coreDetails.developerRef",
+  "name logo image"
+);
 
     res.status(200).json({
       success: true,
@@ -360,9 +395,9 @@ exports.getPropertyBySlug = async (
       })
         .populate("createdBy")
         .populate(
-          "coreDetails.developerRef",
-          "name logo"
-        )
+  "coreDetails.developerRef",
+  "name logo image"
+)
         .populate(
           "categoryData.categoryRef",
           "name"
@@ -406,9 +441,9 @@ exports.getPropertyById = async (
     const property =
       await Property.findById(req.params.id)
         .populate(
-          "coreDetails.developerRef",
-          "name logo"
-        )
+  "coreDetails.developerRef",
+  "name logo image"
+)
         .populate(
           "categoryData.categoryRef",
           "name"
