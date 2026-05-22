@@ -555,6 +555,100 @@ const propertySchema = new mongoose.Schema({
     ],
   },
 
+  // ================= MASTER PLAN SECTION =================
+masterPlanSection: {
+
+  // ================= SECTION CONTENT =================
+
+  sectionNumber: {
+    type: String,
+    default: "08",
+  },
+
+  topLabel: {
+    type: String,
+    default: "MASTER PLAN",
+  },
+
+  headingLine1: {
+    type: String,
+    default: "Crafted With Vision.",
+  },
+
+  headingHighlight: {
+    type: String,
+    default: "Designed For Legacy.",
+  },
+
+  description: {
+    type: String,
+    default:
+      "Explore the thoughtfully designed master plan featuring elegant layouts, landscaped greens, premium amenities, and seamless connectivity crafted for elevated living.",
+  },
+
+  // ================= SIDE STRIPS =================
+
+  enableSideStrips: {
+    type: Boolean,
+    default: true,
+  },
+
+  // ================= TOP FLOATING LABEL =================
+
+  topFloatingLabel: {
+    type: String,
+    default: "Premium Architectural Planning",
+  },
+
+  // ================= CENTER CONTENT =================
+
+  centerTitle: {
+    type: String,
+    default: "The Master Plan",
+  },
+
+  centerDescription: {
+    type: String,
+    default:
+      "Every space is carefully envisioned to create harmony between luxury, comfort, and timeless architecture.",
+  },
+
+  // ================= BUTTON =================
+
+  buttonText: {
+    type: String,
+    default: "View Master Plan",
+  },
+
+  // ================= IMAGE =================
+
+  masterPlanImage: {
+    type: String,
+    default: "",
+  },
+
+  // ================= BOTTOM STRIP =================
+
+  bottomStrip: [
+    {
+      title: {
+        type: String,
+        default: "",
+      },
+
+      desc: {
+        type: String,
+        default: "",
+      },
+
+      icon: {
+        type: String,
+        default: "✦",
+      },
+    }
+  ],
+},
+
   // ================= GATED CONTENT =================
   gatedContent: {
 
