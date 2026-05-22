@@ -711,13 +711,112 @@ masterPlanSection: {
     keywords: [String],
   },
 
-  // ================= FAQ =================
-  faqs: [
-    {
-      question: String,
-      answer: String,
-    }
-  ],
+  // ================= FAQ SECTION =================
+faqSection: {
+
+  // ================= HEADING =================
+
+  sectionNumber: {
+    type: String,
+    default: "09",
+  },
+
+  topLabel: {
+    type: String,
+    default: "FAQ",
+  },
+
+  headingLine1: {
+    type: String,
+    default: "Frequently Asked Questions",
+  },
+
+  headingHighlight: {
+    type: String,
+    default: "",
+  },
+
+  description: {
+    type: String,
+    default:
+      "Find answers to common questions about the project and your journey to your dream home.",
+  },
+
+  // ================= LEFT CARD =================
+
+  developerLabel: {
+    type: String,
+    default: "Luxury Developer",
+  },
+
+  // ================= CONTACT BOX =================
+
+  contactTitle: {
+    type: String,
+    default: "Still have questions?",
+  },
+
+  contactDescription: {
+    type: String,
+    default:
+      "Connect with our luxury property specialists and discover every detail crafted for elevated living.",
+  },
+
+  phone: {
+    type: String,
+    default: "+91 99999 99999",
+  },
+
+  timing: {
+    type: String,
+    default: "Monday — Sunday | 10 AM — 7 PM",
+  },
+
+  // ================= CTA =================
+
+  ctaTitle: {
+    type: String,
+    default: "Ready to experience your dream home?",
+  },
+
+  ctaDescription: {
+    type: String,
+    default:
+      "Book a site visit and take the first step towards your dream home.",
+  },
+
+  ctaButtonText: {
+    type: String,
+    default: "Book A Site Visit",
+  },
+
+  // ================= CTA SMALL LABELS =================
+
+  callLabel: {
+    type: String,
+    default: "Call Us",
+  },
+
+  whatsappLabel: {
+    type: String,
+    default: "WhatsApp",
+  },
+},
+
+// ================= FAQS =================
+faqs: [
+  {
+    question: {
+      type: String,
+      default: "",
+    },
+
+    answer: {
+      type: String,
+      default: "",
+    },
+  }
+],
 
   // ================= CTA =================
   cta: {
