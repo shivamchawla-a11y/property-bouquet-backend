@@ -20,6 +20,19 @@ const propertySchema = new mongoose.Schema({
     default: true,
   },
 
+  // ================= PROPERTY TAG =================
+propertyTag: {
+  type: String,
+  enum: [
+    "Normal",
+    "Featured",
+    "Recommended",
+    "Trending",
+    "New",
+  ],
+  default: "Normal",
+},
+
   // ================= CORE DETAILS =================
   coreDetails: {
     title: {

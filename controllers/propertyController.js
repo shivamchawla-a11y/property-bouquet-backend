@@ -185,18 +185,19 @@ exports.updateProperty = async (req, res) => {
       });
     }
 
-    const {
-      marketType,
-      slug,
-      coreDetails,
-      categoryData,
-      locationData,
-      unitConfigurations,
-      heroSection,
-      overview,
-      gatedContent,
-      configurationSection,
-    } = req.body;
+   const {
+  marketType,
+  slug,
+  propertyTag,
+  coreDetails,
+  categoryData,
+  locationData,
+  unitConfigurations,
+  heroSection,
+  overview,
+  gatedContent,
+  configurationSection,
+} = req.body;
 
     // ================= CONFIG CLEAN =================
     const cleanedConfigurations =
@@ -317,8 +318,12 @@ exports.updateProperty = async (req, res) => {
       await Property.findByIdAndUpdate(
         req.params.id,
         {
-          marketType,
-          slug,
+  marketType,
+  slug,
+
+  // ✅ PROPERTY TAG
+  propertyTag:
+    propertyTag || property.propertyTag || "Normal",
 
           coreDetails: {
             ...coreDetails,
@@ -400,11 +405,12 @@ exports.updateProperty = async (req, res) => {
 // ✅ GET PROPERTIES
 exports.getProperties = async (req, res) => {
   try {
-    const { all, inactive } = req.query;
+    const { all, inactive, propertyTag } =
+      req.query;
 
     let filter = {};
 
-    // ================= FILTER =================
+    // ================= STATUS FILTER =================
     if (all === "true") {
       filter = {};
     } else if (inactive === "true") {
@@ -413,13 +419,21 @@ exports.getProperties = async (req, res) => {
       filter = { isActive: true };
     }
 
+    // ================= PROPERTY TAG FILTER =================
+    if (
+      propertyTag &&
+      propertyTag !== "All"
+    ) {
+      filter.propertyTag = propertyTag;
+    }
+
     const properties =
       await Property.find(filter)
         .populate("createdBy")
         .populate(
-  "coreDetails.developerRef",
-  "name logo image"
-);
+          "coreDetails.developerRef",
+          "name logo image"
+        );
 
     res.status(200).json({
       success: true,
