@@ -9,10 +9,11 @@ exports.createDeveloper = async (
 ) => {
   try {
     const {
-      name,
-      logo,
-      image,
-    } = req.body;
+  name,
+  logo,
+  image,
+  description,
+} = req.body;
 
     if (!name?.trim()) {
       return res.status(400).json({
@@ -61,7 +62,10 @@ exports.createDeveloper = async (
 
         // ✅ NEW IMAGE FIELD
         image:
-          image?.trim() || "",
+  image?.trim() || "",
+
+description:
+  description?.trim() || "",
       });
 
     res.status(201).json({
@@ -90,10 +94,11 @@ exports.updateDeveloper = async (
     const { id } = req.params;
 
     const {
-      name,
-      logo,
-      image,
-    } = req.body;
+  name,
+  logo,
+  image,
+  description,
+} = req.body;
 
     if (!name?.trim()) {
       return res.status(400).json({
@@ -145,7 +150,10 @@ exports.updateDeveloper = async (
             "/placeholder.png",
 
           image:
-            image?.trim() || "",
+  image?.trim() || "",
+
+description:
+  description?.trim() || "",
         },
         {
           new: true,

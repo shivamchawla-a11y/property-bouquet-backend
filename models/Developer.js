@@ -15,13 +15,20 @@ const developerSchema = new mongoose.Schema(
 
     logo: {
       type: String,
-     default: "/placeholder.png",
+      default: "/placeholder.png",
     },
 
-    // ✅ NEW DEVELOPER COVER IMAGE
+    // ✅ DEVELOPER COVER IMAGE
     image: {
       type: String,
       default: "",
+    },
+
+    // ✅ ABOUT DEVELOPER DESCRIPTION
+    description: {
+      type: String,
+      default: "",
+      trim: true,
     },
   },
   { timestamps: true }
