@@ -185,19 +185,19 @@ exports.updateProperty = async (req, res) => {
       });
     }
 
-   const {
-  marketType,
-  slug,
-  propertyTag,
-  coreDetails,
-  categoryData,
-  locationData,
-  unitConfigurations,
-  heroSection,
-  overview,
-  gatedContent,
-  configurationSection,
-} = req.body;
+    const {
+      marketType,
+      slug,
+      propertyTag,
+      coreDetails,
+      categoryData,
+      locationData,
+      unitConfigurations,
+      heroSection,
+      overview,
+      gatedContent,
+      configurationSection,
+    } = req.body;
 
     // ================= CONFIG CLEAN =================
     const cleanedConfigurations =
@@ -211,94 +211,116 @@ exports.updateProperty = async (req, res) => {
         balconies: u?.balconies || "",
       }));
 
-    const validConfigurations =
-      cleanedConfigurations.filter(
-        (u) =>
-          u.unitType?.trim() ||
-          u.area?.trim() ||
-          u.price?.trim() ||
-          u.paymentPlan?.trim()
-      );
+    // ✅ ONLY VALIDATE IF CONFIGS ARE SENT
+    let validConfigurations = property.unitConfigurations || [];
 
-    if (validConfigurations.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "At least one configuration required ❌",
-      });
+    if (unitConfigurations) {
+      validConfigurations =
+        cleanedConfigurations.filter(
+          (u) =>
+            u.unitType?.trim() ||
+            u.area?.trim() ||
+            u.price?.trim() ||
+            u.paymentPlan?.trim()
+        );
+
+      if (validConfigurations.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "At least one configuration required ❌",
+        });
+      }
     }
 
     // ================= CATEGORY =================
-    let categoryFinal = {};
+    let categoryFinal =
+      property.categoryData || {};
 
-    if (categoryData?.categoryRef) {
-      categoryFinal = {
-        categoryRef: categoryData.categoryRef,
-        categoryName:
-          categoryData.categoryName || "",
-      };
-    } else {
-      categoryFinal = {
-        categoryRef: null,
-        categoryName:
-          categoryData?.categoryName || "",
-      };
+    if (categoryData) {
+      if (categoryData?.categoryRef) {
+        categoryFinal = {
+          categoryRef:
+            categoryData.categoryRef,
+
+          categoryName:
+            categoryData.categoryName || "",
+        };
+      } else {
+        categoryFinal = {
+          categoryRef: null,
+
+          categoryName:
+            categoryData?.categoryName || "",
+        };
+      }
     }
 
     // ================= LOCATION =================
-    let locationFinal = {};
+    let locationFinal =
+      property.locationData || {};
 
-    if (locationData?.locationRef) {
-      locationFinal = {
-        locationRef:
-          locationData.locationRef,
+    if (locationData) {
+      if (locationData?.locationRef) {
+        locationFinal = {
+          locationRef:
+            locationData.locationRef,
 
-        locationName:
-          locationData.locationName || "",
+          locationName:
+            locationData.locationName || "",
 
-        customLocation: "",
-      };
-    } else {
-      locationFinal = {
-        locationRef: null,
+          customLocation: "",
+        };
+      } else {
+        locationFinal = {
+          locationRef: null,
 
-        locationName:
-          locationData?.locationName || "",
+          locationName:
+            locationData?.locationName || "",
 
-        customLocation:
-          locationData?.customLocation || "",
-      };
+          customLocation:
+            locationData?.customLocation || "",
+        };
+      }
     }
 
     // ================= HERO CLEAN =================
-    const cleanedHeroSection = {
-      ...heroSection,
+    const cleanedHeroSection = heroSection
+      ? {
+          ...heroSection,
 
-      taglineItems:
-        heroSection?.taglineItems?.filter(
-          (item) => item?.trim() !== ""
-        ) || [],
-    };
+          taglineItems:
+            heroSection?.taglineItems?.filter(
+              (item) => item?.trim() !== ""
+            ) || [],
+        }
+      : property.heroSection;
 
     // ================= OVERVIEW CLEAN =================
-    const cleanedOverview = {
-      ...overview,
+    const cleanedOverview = overview
+      ? {
+          ...overview,
 
-      highlights:
-        overview?.highlights?.filter(
-          (item) => item?.name?.trim() !== ""
-        ) || [],
-    };
+          highlights:
+            overview?.highlights?.filter(
+              (item) =>
+                item?.heading?.trim() !== ""
+            ) || [],
+        }
+      : property.overview;
 
     // ================= CONFIG SECTION CLEAN =================
-    const cleanedConfigurationSection = {
-      ...configurationSection,
+    const cleanedConfigurationSection =
+      configurationSection
+        ? {
+            ...configurationSection,
 
-      features:
-        configurationSection?.features?.filter(
-          (item) => item?.trim() !== ""
-        ) || [],
-    };
+            features:
+              configurationSection?.features?.filter(
+                (item) => item?.trim() !== ""
+              ) || [],
+          }
+        : property.configurationSection;
 
     // ================= FLOOR PLAN CLEAN =================
     const cleanedFloorPlans =
@@ -311,80 +333,117 @@ exports.updateProperty = async (req, res) => {
         bathrooms: fp?.bathrooms || "",
         balconies: fp?.balconies || "",
         image: fp?.image || "",
-      })) || [];
+      })) ||
+      property.gatedContent?.floorPlans ||
+      [];
 
     // ================= UPDATE =================
     const updated =
       await Property.findByIdAndUpdate(
         req.params.id,
         {
-  marketType,
-  slug,
+          marketType:
+            marketType || property.marketType,
 
-  // ✅ PROPERTY TAG
-  propertyTag:
-    propertyTag || property.propertyTag || "Normal",
+          slug: slug || property.slug,
 
-          coreDetails: {
-            ...coreDetails,
+          // ✅ PROPERTY TAG
+          propertyTag:
+            propertyTag ||
+            property.propertyTag ||
+            "Normal",
 
-            developerName:
-              coreDetails?.developerName || "",
+          // ================= CORE DETAILS =================
+          coreDetails: coreDetails
+            ? {
+                ...coreDetails,
 
-            developerLogo:
-              coreDetails?.developerLogo || "",
+                developerName:
+                  coreDetails?.developerName ||
+                  "",
 
-            developerImage:
-              coreDetails?.developerImage || "",
-          },
+                developerLogo:
+                  coreDetails?.developerLogo ||
+                  "",
 
+                developerImage:
+                  coreDetails?.developerImage ||
+                  "",
+              }
+            : property.coreDetails,
+
+          // ================= CATEGORY =================
           categoryData: categoryFinal,
 
+          // ================= LOCATION =================
           locationData: {
-            ...locationData,
+            ...property.locationData,
             ...locationFinal,
           },
 
+          // ================= HERO =================
           heroSection: cleanedHeroSection,
 
+          // ================= OVERVIEW =================
           overview: cleanedOverview,
 
+          // ================= CONFIG SECTION =================
           configurationSection:
             cleanedConfigurationSection,
 
+          // ================= CONFIGURATIONS =================
           unitConfigurations:
             validConfigurations,
 
-          keyMetrics: {
-            ...req.body.keyMetrics,
+          // ================= KEY METRICS =================
+          keyMetrics: req.body.keyMetrics
+            ? {
+                ...req.body.keyMetrics,
 
-            totalUnits:
-              Number(
-                req.body.keyMetrics?.totalUnits
-              ) || 0,
+                totalUnits:
+                  Number(
+                    req.body.keyMetrics
+                      ?.totalUnits
+                  ) || 0,
 
-            totalTowers:
-              Number(
-                req.body.keyMetrics?.totalTowers
-              ) || 0,
-          },
+                totalTowers:
+                  Number(
+                    req.body.keyMetrics
+                      ?.totalTowers
+                  ) || 0,
+              }
+            : property.keyMetrics,
 
-          media: req.body.media,
+          // ================= MEDIA =================
+          media:
+            req.body.media || property.media,
 
-          gatedContent: {
-            ...gatedContent,
+          // ================= GATED CONTENT =================
+          gatedContent: gatedContent
+            ? {
+                ...gatedContent,
 
-            floorPlans: cleanedFloorPlans,
-          },
+                floorPlans:
+                  cleanedFloorPlans,
+              }
+            : property.gatedContent,
 
+          // ================= SEO =================
           seoEngine:
-            req.body.seoEngine,
+            req.body.seoEngine ||
+            property.seoEngine,
 
-          faqs: req.body.faqs,
+          // ================= FAQ =================
+          faqs:
+            req.body.faqs || property.faqs,
 
-          cta: req.body.cta,
+          // ================= CTA =================
+          cta: req.body.cta || property.cta,
         },
-        { new: true }
+        {
+          new: true,
+          runValidators: true,
+        }
       );
 
     res.json({
@@ -398,7 +457,7 @@ exports.updateProperty = async (req, res) => {
     res.status(500).json({
       success: false,
       message: err.message,
-    }); 
+    });
   }
 };
 
