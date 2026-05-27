@@ -15,6 +15,7 @@ const leadRoutes = require("./routes/leadRoutes");
 const developerRoutes = require("./routes/developerRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
 const pageRoutes = require("./routes/pageRoutes");
+const uploadDeveloperRoutes = require("./routes/uploadDeveloperRoutes");
 
 // 🔥 Import Models
 require("./models/Location");
@@ -45,6 +46,7 @@ app.use("/api/locations", locationRoutes);
 app.use("/api/builders", builderRoutes);
 app.use("/api/property-types", propertyTypeRoutes);
 app.use("/api/upload", uploadRoutes);
+app.use("/api/upload-developer", uploadDeveloperRoutes);
 app.use("/api/leads", leadRoutes);
 app.use("/api/developers", developerRoutes);
 app.use("/api/categories", categoryRoutes);
