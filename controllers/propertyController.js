@@ -17,25 +17,14 @@ exports.createProperty = async (req, res) => {
       slug,
     } = req.body;
 
-    // ================= REQUIRED CHECK =================
-    if (!slug || !marketType || !coreDetails?.title) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing fields ❌",
-      });
-    }
+    // ================= DETAILED REQUIRED CHECK =================
+    const missingFields = [];
 
-    // ================= UNIQUE SLUG =================
-    const existing = await Property.findOne({ slug });
+    if (!slug) missingFields.push("slug");
+    if (!marketType) missingFields.push("marketType");
+    if (!coreDetails?.title) missingFields.push("coreDetails.title");
 
-    if (existing) {
-      return res.status(400).json({
-        success: false,
-        message: "Slug already exists ❌",
-      });
-    }
-
-    // ================= CONFIG VALIDATION =================
+    // ================= CLEAN CONFIGURATIONS =================
     const cleanedConfigurations =
       (unitConfigurations || []).map((u) => ({
         unitType: u?.unitType || "",
@@ -52,9 +41,27 @@ exports.createProperty = async (req, res) => {
     );
 
     if (!hasValidConfig) {
+      missingFields.push(
+        "unitConfigurations (at least one config with price)"
+      );
+    }
+
+    // ❌ STOP REQUEST IF ANYTHING MISSING
+    if (missingFields.length > 0) {
       return res.status(400).json({
         success: false,
-        message: "At least one config required ❌",
+        message: "Validation failed ❌",
+        missingFields,
+      });
+    }
+
+    // ================= UNIQUE SLUG =================
+    const existing = await Property.findOne({ slug });
+
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message: "Slug already exists ❌",
       });
     }
 
@@ -74,7 +81,6 @@ exports.createProperty = async (req, res) => {
     // ================= HERO CLEAN =================
     const cleanedHeroSection = {
       ...heroSection,
-
       taglineItems:
         heroSection?.taglineItems?.filter(
           (item) => item?.trim() !== ""
@@ -84,7 +90,6 @@ exports.createProperty = async (req, res) => {
     // ================= OVERVIEW CLEAN =================
     const cleanedOverview = {
       ...overview,
-
       highlights:
         overview?.highlights?.filter(
           (item) => item?.name?.trim() !== ""
@@ -94,7 +99,6 @@ exports.createProperty = async (req, res) => {
     // ================= CONFIG SECTION CLEAN =================
     const cleanedConfigurationSection = {
       ...configurationSection,
-
       features:
         configurationSection?.features?.filter(
           (item) => item?.trim() !== ""
@@ -109,18 +113,13 @@ exports.createProperty = async (req, res) => {
       typeof coreDetails.developerRef === "object"
     ) {
       developerData = {
-        developerName:
-          coreDetails.developerRef.name || "",
-
-        developerLogo:
-          coreDetails.developerRef.logo || "",
-
-        developerImage:
-          coreDetails.developerRef.image || "",
+        developerName: coreDetails.developerRef.name || "",
+        developerLogo: coreDetails.developerRef.logo || "",
+        developerImage: coreDetails.developerRef.image || "",
       };
     }
 
-    // ================= CREATE =================
+    // ================= CREATE PROPERTY =================
     const property = await Property.create({
       ...req.body,
 
@@ -141,15 +140,12 @@ exports.createProperty = async (req, res) => {
 
       overview: cleanedOverview,
 
-      configurationSection:
-        cleanedConfigurationSection,
+      configurationSection: cleanedConfigurationSection,
 
-      unitConfigurations:
-        cleanedConfigurations,
+      unitConfigurations: cleanedConfigurations,
 
       gatedContent: {
         ...gatedContent,
-
         floorPlans: cleanedFloorPlans,
       },
 
@@ -160,7 +156,6 @@ exports.createProperty = async (req, res) => {
       success: true,
       data: property,
     });
-
   } catch (err) {
     console.error("CREATE PROPERTY ERROR:", err);
 
