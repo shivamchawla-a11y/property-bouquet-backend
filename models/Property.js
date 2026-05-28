@@ -252,27 +252,48 @@ propertyTag: {
         "Eldeco Camelot is a seamless blend of thoughtful design, cutting-edge technology and world-class amenities curated for an extraordinary lifestyle.",
     },
 
-    // ================= HIGHLIGHTS =================
 
-    highlights: [
-      {
-        heading: {
-          type: String,
-          default: "",
-        },
+    // ================= PROPERTY HIGHLIGHTS =================
 
-        subheading: {
-          type: String,
-          default: "",
-        },
+highlights: [
+  {
+    heading: {
+      type: String,
+      default: "",
+    },
 
-        icon: {
-          type: String,
-          default: "✦",
-        },
-      }
-    ],
+    subheading: {
+      type: String,
+      default: "",
+    },
 
+    icon: {
+      type: String,
+      default: "✦",
+    },
+  }
+],
+
+// ================= AMENITIES =================
+
+amenities: [
+  {
+    heading: {
+      type: String,
+      default: "",
+    },
+
+    subheading: {
+      type: String,
+      default: "",
+    },
+
+    icon: {
+      type: String,
+      default: "Home",
+    },
+  }
+],
     // ================= BOTTOM STRIP =================
 
     bottomStripTitle1: {
