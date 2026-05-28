@@ -25,26 +25,16 @@ exports.createProperty = async (req, res) => {
     if (!coreDetails?.title) missingFields.push("coreDetails.title");
 
     // ================= CLEAN CONFIGURATIONS =================
-    const cleanedConfigurations =
-      (unitConfigurations || []).map((u) => ({
-        unitType: u?.unitType || "",
-        area: u?.area || "",
-        price: u?.price || "",
-        paymentPlan: u?.paymentPlan || "",
-        bedrooms: u?.bedrooms || "",
-        bathrooms: u?.bathrooms || "",
-        balconies: u?.balconies || "",
-      }));
-
-    const hasValidConfig = cleanedConfigurations.some(
-      (u) => u.price?.trim()
-    );
-
-    if (!hasValidConfig) {
-      missingFields.push(
-        "unitConfigurations (at least one config with price)"
-      );
-    }
+const cleanedConfigurations =
+  (unitConfigurations || []).map((u) => ({
+    unitType: u?.unitType || "",
+    area: u?.area || "",
+    price: u?.price || "",
+    paymentPlan: u?.paymentPlan || "",
+    bedrooms: u?.bedrooms || "",
+    bathrooms: u?.bathrooms || "",
+    balconies: u?.balconies || "",
+  }));
 
     // ❌ STOP REQUEST IF ANYTHING MISSING
     if (missingFields.length > 0) {
