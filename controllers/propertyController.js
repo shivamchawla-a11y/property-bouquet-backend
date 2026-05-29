@@ -185,38 +185,40 @@ exports.updateProperty = async (req, res) => {
     } = req.body;
 
     // ================= CONFIG CLEAN =================
-    const cleanedConfigurations =
-      (unitConfigurations || []).map((u) => ({
-        unitType: u?.unitType || "",
-        area: u?.area || "",
-        price: u?.price || "",
-        paymentPlan: u?.paymentPlan || "",
-        bedrooms: u?.bedrooms || "",
-        bathrooms: u?.bathrooms || "",
-        balconies: u?.balconies || "",
-      }));
+const cleanedConfigurations =
+  (unitConfigurations || []).map((u) => ({
+    unitType: u?.unitType || "",
+    area: u?.area || "",
+    price: u?.price || "",
+    paymentPlan: u?.paymentPlan || "",
+    bedrooms: u?.bedrooms || "",
+    bathrooms: u?.bathrooms || "",
+    balconies: u?.balconies || "",
+  }));
 
-    // ✅ ONLY VALIDATE IF CONFIGS ARE SENT
-    let validConfigurations = property.unitConfigurations || [];
+// ✅ ALLOW EMPTY CONFIGURATIONS
+let validConfigurations =
+  property.unitConfigurations || [];
 
-    if (unitConfigurations) {
-      validConfigurations =
-        cleanedConfigurations.filter(
-          (u) =>
-            u.unitType?.trim() ||
-            u.area?.trim() ||
-            u.price?.trim() ||
-            u.paymentPlan?.trim()
-        );
+if (unitConfigurations) {
 
-      if (validConfigurations.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "At least one configuration required ❌",
-        });
-      }
-    }
+  validConfigurations =
+    cleanedConfigurations.filter(
+      (u) =>
+        u.unitType?.trim() ||
+        u.area?.trim() ||
+        u.price?.trim() ||
+        u.paymentPlan?.trim() ||
+        u.bedrooms?.toString().trim() ||
+        u.bathrooms?.toString().trim() ||
+        u.balconies?.toString().trim()
+    );
+
+  // ✅ IF EVERYTHING EMPTY → STORE EMPTY ARRAY
+  if (validConfigurations.length === 0) {
+    validConfigurations = [];
+  }
+}
 
     // ================= CATEGORY =================
     let categoryFinal =
