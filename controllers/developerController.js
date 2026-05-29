@@ -207,10 +207,28 @@ exports.getDeveloperBySlug =
       }
 
       const properties =
-        await Property.find({
-          developerRef:
-            developer._id,
-        });
+  await Property.find({
+    "coreDetails.developerRef": developer._id,
+    isActive: true,
+  });
+
+console.log(
+  "Developer:",
+  developer.name,
+  developer._id
+);
+
+console.log(
+  "Properties found:",
+  properties.length
+);
+
+console.log(
+  properties.map((p) => ({
+    title: p.coreDetails?.title,
+    slug: p.slug,
+  }))
+);
 
       return res.json({
         success: true,
