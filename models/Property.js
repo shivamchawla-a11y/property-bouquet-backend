@@ -4,10 +4,10 @@ const propertySchema = new mongoose.Schema({
 
   // 🔥 BASIC INFO
   slug: {
-    type: String,
-    unique: true,
-    required: true,
-  },
+  type: String,
+  unique: true,
+  sparse: true,
+},
 
   marketType: {
     type: String,
@@ -19,6 +19,12 @@ const propertySchema = new mongoose.Schema({
     type: Boolean,
     default: true,
   },
+
+  status: {
+  type: String,
+  enum: ["draft", "published"],
+  default: "draft",
+},
 
   // ================= PROPERTY TAG =================
 propertyTag: {

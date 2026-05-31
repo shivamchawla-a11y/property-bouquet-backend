@@ -111,7 +111,9 @@ const cleanedConfigurations =
 
     // ================= CREATE PROPERTY =================
     const property = await Property.create({
-      ...req.body,
+  ...req.body,
+
+  status: "published",
 
       coreDetails: {
         ...coreDetails,
@@ -153,6 +155,108 @@ const cleanedConfigurations =
       success: false,
       message: err.message,
     });
+  }
+};
+
+exports.saveDraft = async (req, res) => {
+  try {
+
+    const { draftId } = req.body;
+
+    let property;
+
+    if (draftId) {
+
+      property =
+        await Property.findByIdAndUpdate(
+          draftId,
+          {
+            ...req.body,
+            status: "draft",
+          },
+          {
+            new: true,
+          }
+        );
+
+    } else {
+
+      property =
+        await Property.create({
+          ...req.body,
+          status: "draft",
+          createdBy: req.user.id,
+        });
+
+    }
+
+    res.status(200).json({
+      success: true,
+      data: property,
+    });
+
+  } catch (err) {
+
+    console.error(
+      "SAVE DRAFT ERROR:",
+      err
+    );
+
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+
+  }
+};
+
+exports.publishDraft = async (req, res) => {
+  try {
+
+    const property =
+      await Property.findById(req.params.id);
+
+    if (!property) {
+      return res.status(404).json({
+        success: false,
+        message: "Draft not found",
+      });
+    }
+
+    const existingSlug =
+      await Property.findOne({
+        slug: property.slug,
+        _id: { $ne: property._id },
+      });
+
+    if (existingSlug) {
+      return res.status(400).json({
+        success: false,
+        message: "Slug already exists",
+      });
+    }
+
+    property.status = "published";
+
+    await property.save();
+
+    res.json({
+      success: true,
+      data: property,
+    });
+
+  } catch (err) {
+
+    console.error(
+      "PUBLISH DRAFT ERROR:",
+      err
+    );
+
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+
   }
 };
 
@@ -451,19 +555,29 @@ if (unitConfigurations) {
 // ✅ GET PROPERTIES
 exports.getProperties = async (req, res) => {
   try {
-    const { all, inactive, propertyTag } =
-      req.query;
+    const { all, inactive, propertyTag, status } =
+  req.query;
 
     let filter = {};
 
-    // ================= STATUS FILTER =================
-    if (all === "true") {
-      filter = {};
-    } else if (inactive === "true") {
-      filter = { isActive: false };
-    } else {
-      filter = { isActive: true };
-    }
+if (all === "true") {
+  filter = {};
+}
+else if (inactive === "true") {
+  filter = {
+    isActive: false,
+  };
+}
+else {
+  filter = {
+    isActive: true,
+    status: "published",
+  };
+}
+
+if (status) {
+  filter.status = status;
+}
 
     // ================= PROPERTY TAG FILTER =================
     if (
@@ -572,10 +686,11 @@ exports.getPropertyBySlug = async (
     const { slug } = req.params;
 
     const property =
-      await Property.findOne({
-        slug,
-        isActive: true,
-      })
+    await Property.findOne({
+    slug,
+    isActive: true,
+    status: "published",
+  })
         .populate("createdBy")
         .populate(
   "coreDetails.developerRef",

@@ -5,12 +5,14 @@ const { protect, authorize } = require("../middleware/authMiddleware");
 
 const {
   createProperty,
+  saveDraft,
+  publishDraft,
   getProperties,
   deleteProperty,
   restoreProperty,
   getPropertyBySlug,
-  updateProperty,       // ✅ ADD
-  getPropertyById,      // ✅ ADD
+  updateProperty,
+  getPropertyById,
 } = require("../controllers/propertyController");
 
 // PUBLIC
@@ -18,6 +20,20 @@ router.get("/", getProperties);
 
 // 🔥 NEW ROUTE
 router.get("/slug/:slug", getPropertyBySlug);
+
+router.post(
+  "/draft",
+  protect,
+  authorize("SuperAdmin"),
+  saveDraft
+);
+
+router.patch(
+  "/publish/:id",
+  protect,
+  authorize("SuperAdmin"),
+  publishDraft
+);
 
 // ADMIN
 router.post("/", protect, authorize("SuperAdmin"), createProperty);
