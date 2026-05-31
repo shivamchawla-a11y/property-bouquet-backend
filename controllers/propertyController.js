@@ -687,10 +687,13 @@ exports.getPropertyBySlug = async (
 
     const property =
     await Property.findOne({
-    slug,
-    isActive: true,
-    status: "published",
-  })
+  slug,
+  isActive: true,
+  $or: [
+    { status: "published" },
+    { status: { $exists: false } }
+  ]
+})
         .populate("createdBy")
         .populate(
   "coreDetails.developerRef",
