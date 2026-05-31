@@ -733,6 +733,45 @@ exports.getPropertyBySlug = async (
   }
 };
 
+// GET PROPERTY PREVIEW
+exports.getPropertyPreview = async (req, res) => {
+  try {
+    const property = await Property.findOne({
+      slug: req.params.slug,
+    })
+      .populate("createdBy")
+      .populate(
+        "coreDetails.developerRef",
+        "name logo image"
+      )
+      .populate(
+        "categoryData.categoryRef",
+        "name"
+      )
+      .populate(
+        "locationData.locationRef",
+        "name"
+      );
+
+    if (!property) {
+      return res.status(404).json({
+        success: false,
+        message: "Property not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      data: property,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
 // ✅ GET PROPERTY BY ID
 exports.getPropertyById = async (
   req,
