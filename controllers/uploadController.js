@@ -17,18 +17,20 @@ exports.uploadImage = async (req, res) => {
             folder: "property-bouquet",
 
             transformation: [
-              { fetch_format: "webp", quality: "auto:eco" },
+            {
+              fetch_format: "webp",
+              quality: "auto:eco",
+            },
 
-              // 🔥 LOGO WATERMARK
-              {
-                overlay: "Property_Bouquet_Logo_g4giud",
-                width: 0.18,
-                opacity: 70,
-                gravity: "south_east",
-                x: 30,
-                y: 30,
-              },
-            ],
+            {
+              overlay: "Property_Bouquet_Logo_g4giud",
+              width: 60,
+              opacity: 45,
+              gravity: "south_east",
+              x: 12,
+              y: 12,
+            },
+          ]
           },
           (error, result) => {
             if (result) resolve(result);
