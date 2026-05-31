@@ -621,28 +621,25 @@ if (status) {
 // ✅ SOFT DELETE
 exports.deleteProperty = async (req, res) => {
   try {
-    const property =
-      await Property.findById(req.params.id);
+    const property = await Property.findById(req.params.id);
 
     if (!property) {
       return res.status(404).json({
         success: false,
-        message: "Property not found ❌",
+        message: "Property not found",
       });
     }
 
-    property.isActive = false;
+    property.status = "draft";
 
     await property.save();
 
     res.json({
       success: true,
-      message: "Property soft deleted ✅",
+      message: "Property moved to draft",
     });
 
   } catch (err) {
-    console.error("DELETE ERROR:", err);
-
     res.status(500).json({
       success: false,
       message: err.message,
@@ -653,35 +650,25 @@ exports.deleteProperty = async (req, res) => {
 // ✅ RESTORE PROPERTY
 exports.restoreProperty = async (req, res) => {
   try {
-    const property =
-      await Property.findById(req.params.id);
+    const property = await Property.findById(req.params.id);
 
     if (!property) {
       return res.status(404).json({
         success: false,
-        message: "Property not found ❌",
+        message: "Property not found",
       });
     }
 
-    property.isActive = true;
+    property.status = "published";
 
-if (
-  !property.status ||
-  property.status === ""
-) {
-  property.status = "published";
-}
-
-await property.save();
+    await property.save();
 
     res.json({
       success: true,
-      message: "Property restored ✅",
+      message: "Property published",
     });
 
   } catch (err) {
-    console.error("RESTORE ERROR:", err);
-
     res.status(500).json({
       success: false,
       message: err.message,
