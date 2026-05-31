@@ -20,6 +20,22 @@ const propertySchema = new mongoose.Schema({
     default: true,
   },
 
+  status: {
+  type: String,
+  enum: ["draft", "published"],
+  default: "draft",
+},
+
+isDraft: {
+  type: Boolean,
+  default: true,
+},
+
+lastSavedAt: {
+  type: Date,
+  default: Date.now,
+},
+
   // ================= PROPERTY TAG =================
 propertyTag: {
   type: String,
