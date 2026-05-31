@@ -11,6 +11,7 @@ const {
   deleteProperty,
   restoreProperty,
   getPropertyBySlug,
+  getPropertyPreview, // <-- ADD THIS
   updateProperty,
   getPropertyById,
 } = require("../controllers/propertyController");
