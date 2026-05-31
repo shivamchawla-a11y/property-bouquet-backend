@@ -45,7 +45,7 @@ router.patch("/:id/restore", protect, authorize("SuperAdmin"), restoreProperty);
 
 router.get(
   "/preview/:slug",
-  getPropertyPreview,
+  getPropertyPreview
 );
 // ✅ GET SINGLE PROPERTY (EDIT)
 router.get("/:id", protect, authorize("SuperAdmin"), getPropertyById);
