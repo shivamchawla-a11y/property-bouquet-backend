@@ -16,7 +16,6 @@ const developerRoutes = require("./routes/developerRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
 const pageRoutes = require("./routes/pageRoutes");
 const uploadDeveloperRoutes = require("./routes/uploadDeveloperRoutes");
-const propertyDraftRoutes = require("./routes/propertyDraftRoutes");
 
 // 🔥 Import Models
 require("./models/Location");
@@ -52,10 +51,6 @@ app.use("/api/leads", leadRoutes);
 app.use("/api/developers", developerRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/pages", pageRoutes);
-app.use(
-  "/api/properties",
-  propertyDraftRoutes
-);
 
 
 console.log("AUTH ROUTES LOADED");
