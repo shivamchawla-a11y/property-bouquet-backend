@@ -571,7 +571,12 @@ else if (inactive === "true") {
 else {
   filter = {
     isActive: true,
-    status: "published",
+    $or: [
+      { status: "published" },
+      { status: { $exists: false } },
+      { status: null },
+      { status: "" }
+    ]
   };
 }
 
@@ -660,7 +665,14 @@ exports.restoreProperty = async (req, res) => {
 
     property.isActive = true;
 
-    await property.save();
+if (
+  !property.status ||
+  property.status === ""
+) {
+  property.status = "published";
+}
+
+await property.save();
 
     res.json({
       success: true,
@@ -685,28 +697,29 @@ exports.getPropertyBySlug = async (
   try {
     const { slug } = req.params;
 
-    const property =
-    await Property.findOne({
+    const property = await Property.findOne({
   slug,
   isActive: true,
   $or: [
     { status: "published" },
-    { status: { $exists: false } }
+    { status: { $exists: false } },
+    { status: null },
+    { status: "" }
   ]
 })
-        .populate("createdBy")
-        .populate(
+.populate("createdBy")
+.populate(
   "coreDetails.developerRef",
   "name logo image"
 )
-        .populate(
-          "categoryData.categoryRef",
-          "name"
-        )
-        .populate(
-          "locationData.locationRef",
-          "name"
-        );
+.populate(
+  "categoryData.categoryRef",
+  "name"
+)
+.populate(
+  "locationData.locationRef",
+  "name"
+);
 
     if (!property) {
       return res.status(404).json({
