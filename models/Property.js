@@ -26,6 +26,17 @@ const propertySchema = new mongoose.Schema({
   default: "draft",
 },
 
+isDeleted: {
+  type: Boolean,
+  default: false,
+},
+
+deletedFromStatus: {
+  type: String,
+  enum: ["draft", "published"],
+  default: null,
+},
+
   // ================= PROPERTY TAG =================
 propertyTag: {
   type: String,

@@ -46,7 +46,10 @@ const cleanedConfigurations =
     }
 
     // ================= UNIQUE SLUG =================
-    const existing = await Property.findOne({ slug });
+    const existing = await Property.findOne({
+  slug,
+  isDeleted: false,
+});
 
     if (existing) {
       return res.status(400).json({
@@ -224,10 +227,11 @@ exports.publishDraft = async (req, res) => {
     }
 
     const existingSlug =
-      await Property.findOne({
-        slug: property.slug,
-        _id: { $ne: property._id },
-      });
+  await Property.findOne({
+    slug: property.slug,
+    _id: { $ne: property._id },
+    isDeleted: false,
+  });
 
     if (existingSlug) {
       return res.status(400).json({
@@ -558,7 +562,9 @@ exports.getProperties = async (req, res) => {
     const { all, inactive, propertyTag, status } =
   req.query;
 
-    let filter = {};
+    let filter = {
+  isDeleted: false,
+};
 
 if (all === "true") {
   filter = {};
@@ -676,6 +682,103 @@ exports.restoreProperty = async (req, res) => {
   }
 };
 
+exports.moveToTrash = async (req, res) => {
+  try {
+
+    const property =
+      await Property.findById(req.params.id);
+
+    if (!property) {
+      return res.status(404).json({
+        success: false,
+        message: "Property not found",
+      });
+    }
+
+    property.deletedFromStatus =
+      property.status;
+
+    property.isDeleted = true;
+
+    await property.save();
+
+    res.json({
+      success: true,
+      message: "Moved to trash",
+    });
+
+  } catch (err) {
+
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+
+  }
+};
+
+exports.restoreTrash = async (req, res) => {
+  try {
+
+    const property =
+      await Property.findById(req.params.id);
+
+    if (!property) {
+      return res.status(404).json({
+        success: false,
+        message: "Property not found",
+      });
+    }
+
+    property.isDeleted = false;
+
+    property.status =
+      property.deletedFromStatus ||
+      property.status;
+
+    property.deletedFromStatus = null;
+
+    await property.save();
+
+    res.json({
+      success: true,
+      message: "Property restored",
+    });
+
+  } catch (err) {
+
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+
+  }
+};
+
+exports.permanentDeleteProperty =
+  async (req, res) => {
+    try {
+
+      await Property.findByIdAndDelete(
+        req.params.id
+      );
+
+      res.json({
+        success: true,
+        message:
+          "Property permanently deleted",
+      });
+
+    } catch (err) {
+
+      res.status(500).json({
+        success: false,
+        message: err.message,
+      });
+
+    }
+  };
+
 // ✅ GET PROPERTY BY SLUG
 exports.getPropertyBySlug = async (
   req,
@@ -687,6 +790,7 @@ exports.getPropertyBySlug = async (
     const property = await Property.findOne({
   slug,
   isActive: true,
+  isDeleted: false,
   $or: [
     { status: "published" },
     { status: { $exists: false } },

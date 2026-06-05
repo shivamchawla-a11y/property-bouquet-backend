@@ -10,8 +10,13 @@ const {
   getProperties,
   deleteProperty,
   restoreProperty,
+
+  moveToTrash,
+  restoreTrash,
+  permanentDeleteProperty,
+
   getPropertyBySlug,
-  getPropertyPreview, // <-- ADD THIS
+  getPropertyPreview,
   updateProperty,
   getPropertyById,
 } = require("../controllers/propertyController");
@@ -52,5 +57,26 @@ router.get("/:id", protect, authorize("SuperAdmin"), getPropertyById);
 
 // ✅ UPDATE PROPERTY
 router.patch("/:id", protect, authorize("SuperAdmin"), updateProperty);
+
+router.patch(
+  "/:id/trash",
+  protect,
+  authorize("SuperAdmin"),
+  moveToTrash
+);
+
+router.patch(
+  "/:id/restore-trash",
+  protect,
+  authorize("SuperAdmin"),
+  restoreTrash
+);
+
+router.delete(
+  "/:id/permanent-delete",
+  protect,
+  authorize("SuperAdmin"),
+  permanentDeleteProperty
+);
 
 module.exports = router;
