@@ -139,14 +139,33 @@ propertyTag: {
 
   // ================= KEY METRICS =================
   keyMetrics: {
-    landArea: String,
-    possession: String,
-    status: String,
-    totalUnits: Number,
-    totalTowers: Number,
-    floors: String,
-    reraNumber: String,
-  },
+  landArea: String,
+  possession: String,
+  status: String,
+  totalUnits: Number,
+  totalTowers: Number,
+  floors: String,
+  reraNumber: String,
+
+  customMetrics: [
+    {
+      label: {
+        type: String,
+        default: "",
+      },
+
+      value: {
+        type: String,
+        default: "",
+      },
+
+      icon: {
+        type: String,
+        default: "FaHome",
+      },
+    },
+  ],
+},
 
   // ================= OVERVIEW =================
   overview: {
