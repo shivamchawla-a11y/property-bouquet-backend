@@ -206,11 +206,23 @@ exports.getDeveloperBySlug =
         });
       }
 
-      const properties =
-  await Property.find({
-    "coreDetails.developerRef": developer._id,
-    isActive: true,
-  });
+      const properties = await Property.find({
+  isActive: true,
+  status: "published",
+  isDeleted: { $ne: true },
+  deletedFromStatus: { $ne: "trash" },
+
+  $or: [
+    {
+      "coreDetails.developerRef":
+        developer._id,
+    },
+    {
+      developerRef:
+        developer._id,
+    },
+  ],
+});
 
 console.log(
   "Developer:",
