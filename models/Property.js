@@ -82,8 +82,20 @@ propertyTag: {
       default: "",
     },
 
-    startingPrice: Number,
-    maxPrice: Number,
+    startingPrice: {
+  type: Number,
+  default: null,
+},
+
+maxPrice: {
+  type: Number,
+  default: null,
+},
+
+priceOnRequest: {
+  type: Boolean,
+  default: false,
+},
   },
 
   // ================= CATEGORY =================
