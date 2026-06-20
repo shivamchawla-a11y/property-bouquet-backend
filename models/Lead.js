@@ -19,10 +19,16 @@ const leadSchema = new mongoose.Schema(
     },
 
     source: {
-      type: String,
-      enum: ["Website", "Facebook", "Google", "Referral"],
-      default: "Website",
-    },
+  type: String,
+  enum: [
+    "Website",
+    "Facebook",
+    "Google",
+    "Referral",
+    "Private Consultation",
+  ],
+  default: "Website",
+},
 
     // 🔥 UPDATED STATUS (REAL ESTATE READY)
     status: {
