@@ -5,7 +5,7 @@ const slugify = require("../utils/slugify");
 // ================= CREATE =================
 exports.createLocation = async (req, res) => {
   try {
-    const { name, parent } = req.body;
+    const { name, parent, image } = req.body;
 
     if (!name || !name.trim()) {
       return res.status(400).json({
@@ -38,10 +38,11 @@ exports.createLocation = async (req, res) => {
     }
 
     const location = await Location.create({
-      name: trimmedName,
-      slug: slugify(trimmedName),
-      parent: parent || null,
-    });
+    name: trimmedName,
+    slug: slugify(trimmedName),
+    parent: parent || null,
+    image: image || "",
+  });
 
     res.status(201).json({
       success: true,
@@ -214,7 +215,7 @@ exports.deleteLocation = async (req, res) => {
 // ================= UPDATE =================
 exports.updateLocation = async (req, res) => {
   try {
-    const { name } = req.body;
+    const { name, image } = req.body;
 
     if (!name || !name.trim()) {
       return res.status(400).json({
@@ -249,6 +250,10 @@ exports.updateLocation = async (req, res) => {
 
     location.name = trimmedName;
     location.slug = slugify(trimmedName);
+
+    if (image !== undefined) {
+      location.image = image;
+    }
 
     await location.save();
 

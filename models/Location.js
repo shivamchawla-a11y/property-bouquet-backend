@@ -2,21 +2,38 @@ const mongoose = require("mongoose");
 
 const locationSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true, trim: true },
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+    },
 
-    // ❌ removed unique (IMPORTANT FIX)
-    slug: { type: String },
+    slug: {
+      type: String,
+    },
 
     parent: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Location",
       default: null,
     },
+
+    // NEW
+    image: {
+      type: String,
+      default: "",
+    },
   },
   { timestamps: true }
 );
 
-// ✅ UNIQUE only within same parent (correct logic)
-locationSchema.index({ name: 1, parent: 1 }, { unique: true });
+// unique only within same parent
+locationSchema.index(
+  { name: 1, parent: 1 },
+  { unique: true }
+);
 
-module.exports = mongoose.model("Location", locationSchema);
+module.exports = mongoose.model(
+  "Location",
+  locationSchema
+);
