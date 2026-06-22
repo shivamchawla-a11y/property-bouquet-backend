@@ -8,12 +8,21 @@ const {
   createUser,
   getUsers,
   toggleUserAccess,
+  forgotPassword,
+  resetPassword,
 } = require("../controllers/authController");
 
 const { protect, authorize } = require("../middleware/authMiddleware");
 
 // LOGIN
+// LOGIN
 router.post("/login", login);
+
+// FORGOT PASSWORD
+router.post("/forgot-password", forgotPassword);
+
+// RESET PASSWORD
+router.put("/reset-password/:token", resetPassword);
 
 // AUTH
 router.get("/me", protect, me);

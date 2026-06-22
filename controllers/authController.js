@@ -1,5 +1,9 @@
 const User = require("../models/User");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
+const { Resend } = require("resend");
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // 🔐 LOGIN
 exports.login = async (req, res) => {
@@ -51,6 +55,107 @@ exports.login = async (req, res) => {
   }
 };
 
+exports.forgotPassword = async (req, res) => {
+  try {
+
+    const { email } = req.body;
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    // Generate token
+    const resetToken = crypto.randomBytes(32).toString("hex");
+
+    // Save hashed token
+    user.resetPasswordToken = crypto
+      .createHash("sha256")
+      .update(resetToken)
+      .digest("hex");
+
+    user.resetPasswordExpire = Date.now() + 15 * 60 * 1000;
+
+    await user.save();
+
+    const resetUrl =
+      `https://property-bouquet-frontend.vercel.app/reset-password/${resetToken}`;
+
+    await resend.emails.send({
+      from: "Property Bouquet <onboarding@resend.dev>",
+      to: email,
+      subject: "Reset Your Password",
+      html: `
+      <h2>Password Reset</h2>
+
+      <p>Click below to reset your password.</p>
+
+      <a href="${resetUrl}">
+      Reset Password
+      </a>
+
+      <p>This link expires in 15 minutes.</p>
+      `,
+    });
+
+    res.json({
+      success: true,
+      message: "Reset email sent.",
+    });
+
+  } catch (err) {
+
+    console.log(err);
+
+    res.status(500).json({
+      message: err.message,
+    });
+
+  }
+};
+
+exports.resetPassword = async (req, res) => {
+  try {
+
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(req.params.token)
+      .digest("hex");
+
+    const user = await User.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordExpire: { $gt: Date.now() },
+    }).select("+password");
+
+    if (!user) {
+      return res.status(400).json({
+        message: "Invalid or expired token",
+      });
+    }
+
+    user.password = req.body.password;
+
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+
+    await user.save();
+
+    res.json({
+      success: true,
+      message: "Password updated successfully.",
+    });
+
+  } catch (err) {
+
+    res.status(500).json({
+      message: err.message,
+    });
+
+  }
+};
 
 
 // 🔐 GET CURRENT USER (FIXED)
