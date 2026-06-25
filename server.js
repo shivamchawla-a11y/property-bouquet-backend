@@ -16,7 +16,7 @@ const developerRoutes = require("./routes/developerRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
 const pageRoutes = require("./routes/pageRoutes");
 const uploadDeveloperRoutes = require("./routes/uploadDeveloperRoutes");
-const newsRoutes = require("./routes/newsRoute");
+const newsRoutes = require("./routes/newsRoutes");
 
 // 🔥 Import Models
 require("./models/Location");
