@@ -26,7 +26,7 @@ const newsSchema = new mongoose.Schema(
       required: true,
     },
 
-    heroImage: {
+    featuredImage: {
       type: String,
       default: "",
     },
