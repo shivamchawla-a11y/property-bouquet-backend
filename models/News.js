@@ -49,6 +49,16 @@ const newsSchema = new mongoose.Schema(
       default: "Property Bouquet Research Team",
     },
 
+    authorQuote: {
+  type: String,
+  default: "",
+},
+
+authorDesignation: {
+    type: String,
+    default: "Property Bouquet Research Team"
+},
+
     readTime: {
       type: Number,
       default: 5,
