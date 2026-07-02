@@ -82,7 +82,7 @@ exports.forgotPassword = async (req, res) => {
     await user.save();
 
     const resetUrl =
-      `https://property-bouquet-frontend.vercel.app/reset-password/${resetToken}`;
+  `https://propertybouquet.com/reset-password/${resetToken}`;
 
     await resend.emails.send({
       from: "Property Bouquet <onboarding@resend.dev>",
