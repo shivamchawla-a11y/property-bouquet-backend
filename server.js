@@ -28,18 +28,13 @@ require("./models/Category");
 
 const app = express();
 
-// ✅ 1. CORS (VERY IMPORTANT FIX)
-// app.use(cors({
-//   origin: [
-//     "http://localhost:3000",
-//     "https://property-bouquet-frontend.vercel.app"
-//   ],
-//   credentials: true
-// }));
-
-// ✅ OPEN CORS (ALLOW ALL ORIGINS - TEMPORARY ONLY)
 app.use(cors({
-  origin: true,
+  origin: [
+    "http://localhost:3000",
+    "https://property-bouquet-frontend.vercel.app",
+    "https://propertybouquet.com",
+    "https://www.propertybouquet.com"
+  ],
   credentials: true
 }));
 
