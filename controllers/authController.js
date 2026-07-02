@@ -85,7 +85,7 @@ exports.forgotPassword = async (req, res) => {
   `https://propertybouquet.com/reset-password/${resetToken}`;
 
     await resend.emails.send({
-      from: "Property Bouquet <onboarding@resend.dev>",
+      from: "Property Bouquet <no-reply@propertybouquet.com>",
       to: email,
       subject: "Reset Your Password",
       html: `

@@ -1,4 +1,7 @@
 const Lead = require("../models/Lead");
+const { Resend } = require("resend");
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // ================= CREATE =================
 exports.createLead = async (req, res) => {
@@ -22,7 +25,7 @@ exports.createLead = async (req, res) => {
       });
     }
 
-    // ✅ DUPLICATE CHECK (FIXED POSITION)
+    // ✅ DUPLICATE CHECK
     const existing = await Lead.findOne({
       phone,
       property,
@@ -40,18 +43,40 @@ exports.createLead = async (req, res) => {
 
     // ✅ CREATE LEAD
     const lead = await Lead.create({
-  name,
-  phone,
-  property,
-  source: source || "Website",
-  priority: "Warm", // default
-});
+      name,
+      phone,
+      property,
+      source: source || "Website",
+      priority: "Warm",
+    });
+
+    // ================= EMAIL NOTIFICATION =================
+    try {
+      await resend.emails.send({
+        from: "Property Bouquet <no-reply@propertybouquet.com>",
+        to: "amethystlandbase@gmail.com",
+        subject: "🔥 New Lead Received - Property Bouquet",
+        html: `
+          <h2>New Lead Details</h2>
+
+          <p><strong>Name:</strong> ${name}</p>
+          <p><strong>Phone:</strong> ${phone}</p>
+          <p><strong>Property:</strong> ${property || "N/A"}</p>
+          <p><strong>Source:</strong> ${source || "Website"}</p>
+          <p><strong>Priority:</strong> Warm</p>
+
+          <hr/>
+          <p><strong>Submitted At:</strong> ${new Date().toLocaleString()}</p>
+        `,
+      });
+    } catch (emailErr) {
+      console.error("Email sending failed:", emailErr.message);
+    }
 
     res.status(201).json({
       success: true,
       data: lead,
     });
-
   } catch (err) {
     console.error(err);
     res.status(500).json({
@@ -98,13 +123,11 @@ exports.updateLead = async (req, res) => {
     // ✅ UPDATE NORMAL FIELDS
     Object.assign(lead, rest);
 
-    // ✅ NOTES LOGIC (FIXED)
+    // ✅ NOTES LOGIC
     if (notes !== undefined) {
       if (notes.trim() === "") {
-        // 🔥 CLEAR ALL NOTES (overwrite behavior)
         lead.notes = [];
       } else {
-        // 🔥 ADD NEW NOTE
         lead.notes.push({
           text: notes,
           addedBy: req.user?._id || null,
@@ -118,7 +141,6 @@ exports.updateLead = async (req, res) => {
       success: true,
       data: lead,
     });
-
   } catch (err) {
     console.error("UPDATE ERROR:", err);
     res.status(500).json({
