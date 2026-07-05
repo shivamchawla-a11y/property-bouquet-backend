@@ -53,22 +53,219 @@ exports.createLead = async (req, res) => {
     // ================= EMAIL NOTIFICATION =================
     try {
       await resend.emails.send({
-        from: "Property Bouquet <no-reply@propertybouquet.com>",
-        to: "amethystlandbase@gmail.com",
-        subject: "🔥 New Lead Received - Property Bouquet",
-        html: `
-          <h2>New Lead Details</h2>
+  from: "Property Bouquet <no-reply@propertybouquet.com>",
+  to: "amethystlandbase@gmail.com",
+  subject: `🏡 New Property Lead • ${property || "General Enquiry"}`,
+  html: `
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+</head>
 
-          <p><strong>Name:</strong> ${name}</p>
-          <p><strong>Phone:</strong> ${phone}</p>
-          <p><strong>Property:</strong> ${property || "N/A"}</p>
-          <p><strong>Source:</strong> ${source || "Website"}</p>
-          <p><strong>Priority:</strong> Warm</p>
+<body style="margin:0;background:#f5f5f5;font-family:Arial,sans-serif;">
 
-          <hr/>
-          <p><strong>Submitted At:</strong> ${new Date().toLocaleString()}</p>
-        `,
-      });
+<table width="100%" cellpadding="0" cellspacing="0">
+<tr>
+<td align="center">
+
+<table
+width="650"
+cellpadding="0"
+cellspacing="0"
+style="
+background:#ffffff;
+margin-top:30px;
+border-radius:18px;
+overflow:hidden;
+box-shadow:0 10px 35px rgba(0,0,0,.08);
+">
+
+<!-- HEADER -->
+
+<tr>
+<td
+style="
+background:#111;
+padding:35px;
+text-align:center;
+"
+>
+
+<h1
+style="
+margin:0;
+color:#C89B4F;
+font-size:30px;
+font-weight:700;
+"
+>
+PROPERTY BOUQUET
+</h1>
+
+<p
+style="
+margin-top:10px;
+color:#dddddd;
+font-size:15px;
+"
+>
+Luxury Real Estate Advisory
+</p>
+
+</td>
+</tr>
+
+<!-- TITLE -->
+
+<tr>
+
+<td style="padding:35px;">
+
+<h2
+style="
+margin-top:0;
+color:#111;
+font-size:26px;
+"
+>
+🏡 New Lead Received
+</h2>
+
+<p
+style="
+color:#666;
+line-height:28px;
+font-size:15px;
+"
+>
+A new enquiry has been submitted from the website.
+</p>
+
+<table
+width="100%"
+cellpadding="12"
+style="
+margin-top:25px;
+border-collapse:collapse;
+"
+>
+
+<tr style="background:#fafafa;">
+<td width="180"><strong>Name</strong></td>
+<td>${name}</td>
+</tr>
+
+<tr>
+<td><strong>Phone</strong></td>
+<td>${phone}</td>
+</tr>
+
+<tr style="background:#fafafa;">
+<td><strong>Property</strong></td>
+<td>${property || "General Enquiry"}</td>
+</tr>
+
+<tr>
+<td><strong>Source</strong></td>
+<td>${source || "Website"}</td>
+</tr>
+
+<tr style="background:#fafafa;">
+<td><strong>Priority</strong></td>
+<td>Warm</td>
+</tr>
+
+<tr>
+<td><strong>Status</strong></td>
+<td>New</td>
+</tr>
+
+<tr style="background:#fafafa;">
+<td><strong>Submitted</strong></td>
+<td>${new Date().toLocaleString("en-IN")}</td>
+</tr>
+
+</table>
+
+<div
+style="
+margin-top:35px;
+text-align:center;
+"
+>
+
+<a
+href="tel:${phone}"
+style="
+display:inline-block;
+padding:14px 26px;
+background:#C89B4F;
+color:#111;
+text-decoration:none;
+font-weight:bold;
+border-radius:8px;
+margin-right:10px;
+"
+>
+📞 Call Customer
+</a>
+
+<a
+href="https://wa.me/91${phone}"
+style="
+display:inline-block;
+padding:14px 26px;
+background:#25D366;
+color:#fff;
+text-decoration:none;
+font-weight:bold;
+border-radius:8px;
+"
+>
+💬 WhatsApp
+</a>
+
+</div>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td
+style="
+background:#111;
+padding:25px;
+text-align:center;
+color:#aaa;
+font-size:13px;
+"
+>
+
+Property Bouquet CRM Notification
+
+<br><br>
+
+Luxury Properties • Gurgaon • Delhi NCR • Dubai
+
+</td>
+
+</tr>
+
+</table>
+
+</td>
+
+</tr>
+</table>
+
+</body>
+
+</html>
+`,
+});
     } catch (emailErr) {
       console.error("Email sending failed:", emailErr.message);
     }
@@ -120,8 +317,36 @@ exports.updateLead = async (req, res) => {
       });
     }
 
-    // ✅ UPDATE NORMAL FIELDS
-    Object.assign(lead, rest);
+    // ================= AUTO PRIORITY =================
+
+// If status changes, update priority automatically
+if (rest.status) {
+  switch (rest.status) {
+    case "Interested":
+      rest.priority = "Hot";
+      break;
+
+    case "Visit":
+      rest.priority = "Hot";
+      break;
+
+    case "Not Interested":
+      rest.priority = "Cold";
+      break;
+
+    case "Closed":
+      rest.priority = "Hot";
+      break;
+
+    case "New":
+    default:
+      rest.priority = "Warm";
+      break;
+  }
+}
+
+// ✅ UPDATE NORMAL FIELDS
+Object.assign(lead, rest);
 
     // ✅ NOTES LOGIC
     if (notes !== undefined) {
