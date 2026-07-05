@@ -846,7 +846,7 @@ faqSection: {
 
   phone: {
     type: String,
-    default: "+91 99999 99999",
+    default: "+91 90901 06101",
   },
 
   timing: {
