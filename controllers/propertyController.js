@@ -599,12 +599,21 @@ if (status) {
     }
 
     const properties =
-      await Property.find(filter)
-        .populate("createdBy")
-        .populate(
-          "coreDetails.developerRef",
-          "name logo image"
-        );
+  await Property.find(filter)
+    .populate("createdBy")
+    .populate(
+      "coreDetails.developerRef",
+      "name logo image"
+    )
+    .populate({
+      path: "locationData.locationRef",
+      populate: {
+        path: "parent",
+        populate: {
+          path: "parent",
+        },
+      },
+    });
 
     res.status(200).json({
       success: true,
