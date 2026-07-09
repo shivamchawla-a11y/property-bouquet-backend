@@ -82,12 +82,23 @@ const cleanedConfigurations =
 
     // ================= OVERVIEW CLEAN =================
     const cleanedOverview = {
-      ...overview,
-      highlights:
-        overview?.highlights?.filter(
-          (item) => item?.name?.trim() !== ""
-        ) || [],
-    };
+  ...overview,
+
+  highlights:
+    overview?.highlights?.filter(
+      (item) => item?.heading?.trim() !== ""
+    ) || [],
+
+  amenities:
+    overview?.amenities?.filter(
+      (item) => item?.heading?.trim() !== ""
+    ) || [],
+
+  featureBar:
+    overview?.featureBar?.filter(
+      (item) => item?.title?.trim() !== ""
+    ) || [],
+};
 
     // ================= CONFIG SECTION CLEAN =================
     const cleanedConfigurationSection = {
@@ -351,33 +362,30 @@ if (unitConfigurations) {
       }
     }
 
-    // ================= LOCATION =================
-    let locationFinal =
-      property.locationData || {};
+// ================= LOCATION =================
+let locationFinal = property.locationData || {};
 
-    if (locationData) {
-      if (locationData?.locationRef) {
-        locationFinal = {
-          locationRef:
-            locationData.locationRef,
+if (locationData) {
+  locationFinal = {
+    // Preserve every existing location field
+    ...property.locationData,
 
-          locationName:
-            locationData.locationName || "",
+    // Apply every updated field from the request
+    ...locationData,
 
-          customLocation: "",
-        };
-      } else {
-        locationFinal = {
-          locationRef: null,
+    // Handle location reference
+    locationRef: locationData.locationRef || null,
 
-          locationName:
-            locationData?.locationName || "",
+    // Location name
+    locationName:
+      locationData.locationName || "",
 
-          customLocation:
-            locationData?.customLocation || "",
-        };
-      }
-    }
+    // Custom location
+    customLocation: locationData.locationRef
+      ? ""
+      : locationData.customLocation || "",
+  };
+}
 
     // ================= HERO CLEAN =================
     const cleanedHeroSection = heroSection
@@ -393,16 +401,28 @@ if (unitConfigurations) {
 
     // ================= OVERVIEW CLEAN =================
     const cleanedOverview = overview
-      ? {
-          ...overview,
+  ? {
+      ...overview,
 
-          highlights:
-            overview?.highlights?.filter(
-              (item) =>
-                item?.heading?.trim() !== ""
-            ) || [],
-        }
-      : property.overview;
+      highlights:
+        overview?.highlights?.filter(
+          (item) =>
+            item?.heading?.trim() !== ""
+        ) || [],
+
+      amenities:
+        overview?.amenities?.filter(
+          (item) =>
+            item?.heading?.trim() !== ""
+        ) || [],
+
+      featureBar:
+        overview?.featureBar?.filter(
+          (item) =>
+            item?.title?.trim() !== ""
+        ) || [],
+    }
+  : property.overview;
 
     // ================= CONFIG SECTION CLEAN =================
     const cleanedConfigurationSection =
@@ -471,10 +491,7 @@ if (unitConfigurations) {
           categoryData: categoryFinal,
 
           // ================= LOCATION =================
-          locationData: {
-            ...property.locationData,
-            ...locationFinal,
-          },
+          locationData: locationFinal,
 
           // ================= HERO =================
           heroSection: cleanedHeroSection,
