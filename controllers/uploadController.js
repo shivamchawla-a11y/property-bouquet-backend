@@ -11,9 +11,9 @@ exports.uploadImage = async (req, res) => {
       });
     }
 
-    // Resize & compress image BEFORE uploading to Cloudinary
+    // Optimize image
     const processedBuffer = await sharp(req.file.buffer)
-      .rotate() // Fix image orientation from mobile devices
+      .rotate()
       .resize({
         width: 2500,
         height: 2500,
@@ -25,6 +25,15 @@ exports.uploadImage = async (req, res) => {
       })
       .toBuffer();
 
+    // Create SEO-friendly filename
+    const originalName = req.file.originalname
+      .replace(/\.[^/.]+$/, "") // Remove extension
+      .toLowerCase()
+      .replace(/&/g, "and")
+      .replace(/[^a-z0-9]+/g, "-") // Replace spaces/special chars with hyphens
+      .replace(/^-+|-+$/g, "") // Remove starting/ending hyphens
+      .replace(/-+/g, "-"); // Remove duplicate hyphens
+
     const streamUpload = () => {
       return new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
@@ -32,9 +41,20 @@ exports.uploadImage = async (req, res) => {
             folder: "property-bouquet",
             resource_type: "image",
 
+            // SEO Friendly URL
+            public_id: originalName,
+            use_filename: true,
+            unique_filename: false,
+            overwrite: true,
+
+            // Accessibility & SEO
+            context: `alt=${originalName}|caption=${originalName}`,
+
+            // Better image optimization
             transformation: [
               {
-                quality: "auto:eco",
+                fetch_format: "auto",
+                quality: "auto",
               },
               {
                 overlay: "Property_Bouquet_Logo_g4giud",
@@ -61,6 +81,8 @@ exports.uploadImage = async (req, res) => {
     res.status(200).json({
       success: true,
       url: result.secure_url,
+      public_id: result.public_id,
+      alt: originalName,
     });
 
   } catch (err) {
