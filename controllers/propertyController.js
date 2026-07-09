@@ -400,27 +400,25 @@ if (locationData) {
       : property.heroSection;
 
     // ================= OVERVIEW CLEAN =================
-    const cleanedOverview = overview
+const cleanedOverview = overview
   ? {
+      ...property.overview,
       ...overview,
 
       highlights:
-        overview?.highlights?.filter(
-          (item) =>
-            item?.heading?.trim() !== ""
-        ) || [],
+        overview.highlights?.filter(
+          item => item?.heading?.trim()
+        ) || property.overview.highlights,
 
       amenities:
-        overview?.amenities?.filter(
-          (item) =>
-            item?.heading?.trim() !== ""
-        ) || [],
+        overview.amenities?.filter(
+          item => item?.heading?.trim()
+        ) || property.overview.amenities,
 
       featureBar:
-        overview?.featureBar?.filter(
-          (item) =>
-            item?.title?.trim() !== ""
-        ) || [],
+        overview.featureBar?.filter(
+          item => item?.title?.trim()
+        ) || property.overview.featureBar,
     }
   : property.overview;
 
