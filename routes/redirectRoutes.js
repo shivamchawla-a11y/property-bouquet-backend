@@ -17,30 +17,41 @@ const {
   authorize,
 } = require("../middleware/authMiddleware");
 
-// Apply middleware to every route
+
+// ================= PUBLIC =================
+// Used by Next.js middleware
+router.get("/check", checkRedirect);
+
+
+// ================= ADMIN ONLY =================
 router.use(
   protect,
   authorize("SuperAdmin")
 );
 
+
 // ================= GET ALL =================
 router.get("/", getRedirects);
 
-router.get("/check", checkRedirect);
 
 // ================= GET SINGLE =================
 router.get("/:id", getRedirect);
 
+
 // ================= CREATE =================
 router.post("/", createRedirect);
+
 
 // ================= UPDATE =================
 router.put("/:id", updateRedirect);
 
+
 // ================= TOGGLE =================
 router.patch("/:id/toggle", toggleRedirect);
 
+
 // ================= DELETE =================
 router.delete("/:id", deleteRedirect);
+
 
 module.exports = router;
