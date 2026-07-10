@@ -18,6 +18,7 @@ const pageRoutes = require("./routes/pageRoutes");
 const uploadDeveloperRoutes = require("./routes/uploadDeveloperRoutes");
 const newsRoutes = require("./routes/newsRoutes");
 const knowledgeRoutes = require("./routes/knowledgeRoutes");
+const redirectRoutes = require("./routes/redirectRoutes");
 
 // 🔥 Import Models
 require("./models/Location");
@@ -56,6 +57,7 @@ app.use("/api/categories", categoryRoutes);
 app.use("/api/pages", pageRoutes);
 app.use("/api/news", newsRoutes);
 app.use("/api/knowledge", knowledgeRoutes);
+app.use("/api/redirections", redirectRoutes);
 
 
 console.log("AUTH ROUTES LOADED");
