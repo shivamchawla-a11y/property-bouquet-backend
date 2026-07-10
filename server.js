@@ -19,13 +19,16 @@ const uploadDeveloperRoutes = require("./routes/uploadDeveloperRoutes");
 const newsRoutes = require("./routes/newsRoutes");
 const knowledgeRoutes = require("./routes/knowledgeRoutes");
 const redirectRoutes = require("./routes/redirectRoutes");
+const redirectMiddleware = require("./middleware/redirectMiddleware");
 
+// 🔥 Import Models
 // 🔥 Import Models
 require("./models/Location");
 require("./models/User");
 require("./models/Property");
 require("./models/Lead");
 require("./models/Category");
+require("./models/Redirect");
 
 const app = express();
 
@@ -42,6 +45,8 @@ app.use(cors({
 // ✅ 2. MIDDLEWARE ORDER FIX
 app.use(express.json());
 app.use(cookieParser());
+
+app.use(redirectMiddleware);
 
 // ✅ 3. ROUTES
 app.use("/api/properties", propertyRoutes);
