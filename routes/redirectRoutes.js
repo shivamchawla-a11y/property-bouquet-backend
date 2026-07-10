@@ -9,6 +9,7 @@ const {
   updateRedirect,
   deleteRedirect,
   toggleRedirect,
+  checkRedirect,
 } = require("../controllers/redirectController");
 
 const {
@@ -24,6 +25,8 @@ router.use(
 
 // ================= GET ALL =================
 router.get("/", getRedirects);
+
+router.get("/check", checkRedirect);
 
 // ================= GET SINGLE =================
 router.get("/:id", getRedirect);

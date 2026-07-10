@@ -210,3 +210,51 @@ exports.toggleRedirect = async (req, res) => {
     });
   }
 };
+
+// ===============================
+// CHECK REDIRECT (For Next.js Middleware)
+// ===============================
+exports.checkRedirect = async (req, res) => {
+  try {
+    const path = req.query.path;
+
+    if (!path) {
+      return res.status(400).json({
+        found: false,
+      });
+    }
+
+    const redirect = await Redirect.findOne({
+      active: true,
+      $or: [
+        { from: path },
+        {
+          from: `${req.protocol}://${req.get("host")}${path}`,
+        },
+      ],
+    });
+
+    if (!redirect) {
+      return res.json({
+        found: false,
+      });
+    }
+
+    // Analytics
+    redirect.hits += 1;
+    redirect.lastUsed = new Date();
+    await redirect.save();
+
+    return res.json({
+      found: true,
+      to: redirect.to,
+      type: redirect.type,
+    });
+  } catch (err) {
+    console.error(err);
+
+    res.status(500).json({
+      found: false,
+    });
+  }
+};
