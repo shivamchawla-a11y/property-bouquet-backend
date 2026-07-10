@@ -7,38 +7,49 @@ const redirectMiddleware = async (req, res, next) => {
       return next();
     }
 
-    // Ignore static assets
+    // Ignore Next.js & static assets
     if (
+      req.path.startsWith("/_next") ||
       req.path.startsWith("/uploads") ||
       req.path.startsWith("/favicon") ||
       req.path.startsWith("/robots") ||
       req.path.startsWith("/sitemap") ||
-      req.path.startsWith("/_next")
+      req.path.startsWith("/images") ||
+      req.path.startsWith("/icons")
     ) {
       return next();
     }
 
-    // Ignore root
+    // Ignore homepage
     if (req.path === "/") {
       return next();
     }
 
+    // Build current URL
+    const currentUrl =
+      `${req.protocol}://${req.get("host")}${req.originalUrl}`;
+
+    // Find redirect by FULL URL or PATH
     const redirect = await Redirect.findOne({
-      sourceUrl: req.path,
-      enabled: true,
+      active: true,
+      $or: [
+        { from: currentUrl },
+        { from: req.originalUrl },
+        { from: req.path },
+      ],
     });
 
     if (!redirect) {
       return next();
     }
 
+    // Update analytics
     redirect.hits += 1;
-    redirect.lastHit = new Date();
+    redirect.lastUsed = new Date();
+
     await redirect.save();
 
-    const status = redirect.type === 302 ? 302 : 301;
-
-    return res.redirect(status, redirect.destinationUrl);
+    return res.redirect(redirect.type, redirect.to);
 
   } catch (err) {
     console.error("Redirect Middleware:", err);
