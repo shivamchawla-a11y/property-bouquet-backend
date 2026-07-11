@@ -579,7 +579,6 @@ const hasCustomSEO =
             : property.gatedContent,
 
           // ================= SEO =================
-          // ================= SEO =================
 seoEngine: req.body.seoEngine
   ? {
       hasCustomSEO,
