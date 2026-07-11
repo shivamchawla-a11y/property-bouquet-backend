@@ -123,9 +123,33 @@ const cleanedConfigurations =
       };
     }
 
+    // ================= SEO =================
+const seoKeywords =
+  typeof req.body.seoEngine?.keywords === "string"
+    ? req.body.seoEngine.keywords
+        .split(",")
+        .map((k) => k.trim())
+        .filter(Boolean)
+    : req.body.seoEngine?.keywords || [];
+
+const hasCustomSEO =
+  !!(
+    req.body.seoEngine?.metaTitle?.trim() &&
+    req.body.seoEngine?.metaDescription?.trim() &&
+    seoKeywords.length
+  );
+
     // ================= CREATE PROPERTY =================
     const property = await Property.create({
   ...req.body,
+
+seoEngine: {
+  hasCustomSEO,
+  metaTitle: req.body.seoEngine?.metaTitle || "",
+  metaDescription:
+    req.body.seoEngine?.metaDescription || "",
+  keywords: seoKeywords,
+},
 
   status: "published",
 
@@ -450,6 +474,22 @@ const cleanedOverview = overview
       property.gatedContent?.floorPlans ||
       [];
 
+      // ================= SEO =================
+const seoKeywords =
+  typeof req.body.seoEngine?.keywords === "string"
+    ? req.body.seoEngine.keywords
+        .split(",")
+        .map((k) => k.trim())
+        .filter(Boolean)
+    : req.body.seoEngine?.keywords || [];
+
+const hasCustomSEO =
+  !!(
+    req.body.seoEngine?.metaTitle?.trim() &&
+    req.body.seoEngine?.metaDescription?.trim() &&
+    seoKeywords.length
+  );
+
     // ================= UPDATE =================
     const updated =
       await Property.findByIdAndUpdate(
@@ -539,9 +579,17 @@ const cleanedOverview = overview
             : property.gatedContent,
 
           // ================= SEO =================
-          seoEngine:
-            req.body.seoEngine ||
-            property.seoEngine,
+          // ================= SEO =================
+seoEngine: req.body.seoEngine
+  ? {
+      hasCustomSEO,
+      metaTitle:
+        req.body.seoEngine.metaTitle || "",
+      metaDescription:
+        req.body.seoEngine.metaDescription || "",
+      keywords: seoKeywords,
+    }
+  : property.seoEngine,
 
           // ================= FAQ =================
           faqs:

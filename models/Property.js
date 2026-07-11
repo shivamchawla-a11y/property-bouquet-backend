@@ -788,10 +788,15 @@ masterPlanSection: {
 
   // ================= SEO ENGINE =================
   seoEngine: {
-    metaTitle: String,
-    metaDescription: String,
-    keywords: [String],
+  hasCustomSEO: {
+    type: Boolean,
+    default: false,
   },
+
+  metaTitle: String,
+  metaDescription: String,
+  keywords: [String],
+},
 
   // ================= FAQ SECTION =================
 faqSection: {
