@@ -248,7 +248,7 @@ Property Bouquet CRM Notification
 
 <br><br>
 
-Luxury Properties • Gurgaon • Delhi NCR • Dubai
+Luxury Properties • Gurgaon • Delhi NCR
 
 </td>
 
