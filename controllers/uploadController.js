@@ -4,6 +4,15 @@ const sharp = require("sharp");
 
 exports.uploadImage = async (req, res) => {
   try {
+
+    console.log("========== UPLOAD START ==========");
+    console.log("File:", req.file);
+
+    if (req.file) {
+      console.log("Original Name:", req.file.originalname);
+      console.log("Mime Type:", req.file.mimetype);
+      console.log("Size:", req.file.size);
+    }
     if (!req.file) {
       return res.status(400).json({
         success: false,
@@ -86,7 +95,10 @@ exports.uploadImage = async (req, res) => {
     });
 
   } catch (err) {
-    console.error("UPLOAD ERROR:", err);
+    console.error("========== UPLOAD ERROR ==========");
+console.error(err);
+console.error("Message:", err.message);
+console.error("Stack:", err.stack);
 
     res.status(500).json({
       success: false,
