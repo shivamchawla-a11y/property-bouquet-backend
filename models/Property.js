@@ -37,17 +37,21 @@ deletedFromStatus: {
   default: null,
 },
 
-  // ================= PROPERTY TAG =================
+// ================= PROPERTY TAGS =================
 propertyTag: {
-  type: String,
-  enum: [
-    "Normal",
-    "Featured",
-    "Recommended",
-    "Trending",
-    "New",
+  type: [
+    {
+      type: String,
+      enum: [
+        "Normal",
+        "Featured",
+        "Recommended",
+        "Trending",
+        "New",
+      ],
+    },
   ],
-  default: "Normal",
+  default: ["Normal"],
 },
 
   // ================= CORE DETAILS =================

@@ -501,10 +501,15 @@ const hasCustomSEO =
           slug: slug || property.slug,
 
           // ✅ PROPERTY TAG
-          propertyTag:
-            propertyTag ||
-            property.propertyTag ||
-            "Normal",
+         propertyTag: Array.isArray(propertyTag)
+  ? propertyTag
+  : propertyTag
+  ? [propertyTag]
+  : Array.isArray(property.propertyTag)
+  ? property.propertyTag
+  : property.propertyTag
+  ? [property.propertyTag]
+  : ["Normal"],
 
           // ================= CORE DETAILS =================
           coreDetails: coreDetails
@@ -653,12 +658,11 @@ if (status) {
 }
 
     // ================= PROPERTY TAG FILTER =================
-    if (
-      propertyTag &&
-      propertyTag !== "All"
-    ) {
-      filter.propertyTag = propertyTag;
-    }
+    if (propertyTag && propertyTag !== "All") {
+  filter.propertyTag = {
+    $in: [propertyTag],
+  };
+}
 
     const properties =
   await Property.find(filter)
