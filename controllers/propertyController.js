@@ -5,17 +5,18 @@ const Property = require("../models/Property");
 exports.createProperty = async (req, res) => {
   try {
     const {
-      marketType,
-      coreDetails,
-      categoryData,
-      locationData,
-      unitConfigurations,
-      heroSection,
-      overview,
-      gatedContent,
-      configurationSection,
-      slug,
-    } = req.body;
+  marketType,
+  coreDetails,
+  categoryData,
+  locationData,
+  unitConfigurations,
+  heroSection,
+  overview,
+  gatedContent,
+  configurationSection,
+  slug,
+  propertyTag,
+} = req.body;
 
     // ================= DETAILED REQUIRED CHECK =================
     const missingFields = [];
@@ -139,9 +140,26 @@ const hasCustomSEO =
     seoKeywords.length
   );
 
+  // ================= PROPERTY TAG CLEAN =================
+let finalPropertyTag = propertyTag;
+
+if (typeof finalPropertyTag === "string") {
+  try {
+    finalPropertyTag = JSON.parse(finalPropertyTag);
+  } catch {
+    finalPropertyTag = [finalPropertyTag];
+  }
+}
+
+if (!Array.isArray(finalPropertyTag)) {
+  finalPropertyTag = ["Normal"];
+}
+
     // ================= CREATE PROPERTY =================
     const property = await Property.create({
   ...req.body,
+
+propertyTag: finalPropertyTag,
 
 seoEngine: {
   hasCustomSEO,
@@ -490,6 +508,29 @@ const hasCustomSEO =
     seoKeywords.length
   );
 
+  console.log("REQ BODY PROPERTY TAG:", req.body.propertyTag);
+console.log("TYPE:", typeof req.body.propertyTag);
+console.log("IS ARRAY:", Array.isArray(req.body.propertyTag));
+
+// ================= PROPERTY TAG CLEAN =================
+let finalPropertyTag = propertyTag;
+
+if (typeof finalPropertyTag === "string") {
+  try {
+    finalPropertyTag = JSON.parse(finalPropertyTag);
+  } catch {
+    finalPropertyTag = [finalPropertyTag];
+  }
+}
+
+if (!Array.isArray(finalPropertyTag)) {
+  finalPropertyTag = Array.isArray(property.propertyTag)
+    ? property.propertyTag
+    : property.propertyTag
+    ? [property.propertyTag]
+    : ["Normal"];
+}
+
     // ================= UPDATE =================
     const updated =
       await Property.findByIdAndUpdate(
@@ -500,16 +541,8 @@ const hasCustomSEO =
 
           slug: slug || property.slug,
 
-          // ✅ PROPERTY TAG
-         propertyTag: Array.isArray(propertyTag)
-  ? propertyTag
-  : propertyTag
-  ? [propertyTag]
-  : Array.isArray(property.propertyTag)
-  ? property.propertyTag
-  : property.propertyTag
-  ? [property.propertyTag]
-  : ["Normal"],
+          propertyTag: finalPropertyTag,
+
 
           // ================= CORE DETAILS =================
           coreDetails: coreDetails
