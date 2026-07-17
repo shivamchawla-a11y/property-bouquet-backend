@@ -13,12 +13,18 @@ exports.getAllNews = async (req, res) => {
 
     const query = {};
 
-    // ================= TRASH FILTER =================
-    if (trash === "true") {
-      query.isDeleted = true;
-    } else {
-      query.isDeleted = false;
-    }
+    // ================= DELETED FILTER =================
+// all=true  -> return everything
+// trash=true -> only trash
+// default -> only active
+
+if (req.query.all === "true") {
+  // don't filter isDeleted
+} else if (trash === "true") {
+  query.isDeleted = true;
+} else {
+  query.isDeleted = false;
+}
 
     // ================= STATUS =================
     if (status) {
