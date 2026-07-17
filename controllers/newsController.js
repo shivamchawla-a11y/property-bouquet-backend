@@ -116,6 +116,32 @@ res.status(500).json({
 }
 };
 
+// ================= GET FOR EDIT =================
+exports.getNewsForEdit = async (req, res) => {
+  try {
+    const news = await News.findById(req.params.id);
+
+    if (!news) {
+      return res.status(404).json({
+        success: false,
+        message: "Insight not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      data: news,
+    });
+  } catch (err) {
+    console.error(err);
+
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
 // ================= GET BY SLUG =================
 exports.getNewsBySlug = async (
 req,
@@ -204,47 +230,51 @@ res.status(500).json({
 };
 
 // ================= UPDATE =================
-exports.updateNews = async (
-req,
-res
-) => {
-try {
-const news =
-await News.findByIdAndUpdate(
-req.params.id,
-req.body,
-{
-new: true,
-runValidators: true,
-}
-);
+exports.updateNews = async (req, res) => {
+  try {
+    const existing = await News.findById(req.params.id);
 
+    if (!existing) {
+      return res.status(404).json({
+        success: false,
+        message: "Insight not found",
+      });
+    }
 
-if (!news) {
-  return res.status(404).json({
-    success: false,
-    message:
-      "News not found ❌",
-  });
-}
+    const duplicate = await News.findOne({
+      slug: req.body.slug,
+      _id: { $ne: req.params.id },
+    });
 
-res.json({
-  success: true,
-  data: news,
-});
+    if (duplicate) {
+      return res.status(400).json({
+        success: false,
+        message: "Slug already exists",
+      });
+    }
 
+    const updated = await News.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      {
+        new: true,
+        runValidators: true,
+      }
+    );
 
-} catch (err) {
-console.error(err);
+    res.json({
+      success: true,
+      data: updated,
+      message: "Insight updated successfully",
+    });
+  } catch (err) {
+    console.error(err);
 
-
-res.status(500).json({
-  success: false,
-  message: err.message,
-});
-
-
-}
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
 };
 
 // ================= TRASH =================

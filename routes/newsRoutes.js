@@ -1,15 +1,16 @@
 const express = require("express");
 
 const {
-getAllNews,
-getNewsById,
-getNewsBySlug,
-createNews,
-updateNews,
-trashNews,
-restoreNews,
-getTrashNews,
-deleteNews,
+  getAllNews,
+  getNewsById,
+  getNewsForEdit,
+  getNewsBySlug,
+  createNews,
+  updateNews,
+  trashNews,
+  restoreNews,
+  getTrashNews,
+  deleteNews,
 } = require("../controllers/newsController");
 
 const router =
@@ -28,6 +29,8 @@ router.get(
 "/trash/all",
 getTrashNews
 );
+
+router.get("/edit/:id", getNewsForEdit);
 
 router.get(
 "/:id",
