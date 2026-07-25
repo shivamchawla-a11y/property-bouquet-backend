@@ -18,7 +18,6 @@ const landingPageSchema = new mongoose.Schema(
       unique: true,
       lowercase: true,
       trim: true,
-      index: true,
     },
 
     // Used to prevent duplicate generated pages
@@ -26,7 +25,6 @@ const landingPageSchema = new mongoose.Schema(
       type: String,
       required: true,
       unique: true,
-      index: true,
     },
 
     status: {
@@ -311,18 +309,6 @@ values: {
 landingPageSchema.index({
   status: 1,
   pageType: 1,
-});
-
-landingPageSchema.index({
-  slug: 1,
-});
-
-landingPageSchema.index({
-  fingerprint: 1,
-});
-
-landingPageSchema.index({
-  isDeleted: 1,
 });
 
 landingPageSchema.index({
