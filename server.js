@@ -20,6 +20,7 @@ const newsRoutes = require("./routes/newsRoutes");
 const knowledgeRoutes = require("./routes/knowledgeRoutes");
 const redirectRoutes = require("./routes/redirectRoutes");
 const redirectMiddleware = require("./middleware/redirectMiddleware");
+const landingPageRoutes = require("./routes/landingPageRoutes");
 
 // 🔥 Import Models
 // 🔥 Import Models
@@ -63,6 +64,7 @@ app.use("/api/pages", pageRoutes);
 app.use("/api/news", newsRoutes);
 app.use("/api/knowledge", knowledgeRoutes);
 app.use("/api/redirections", redirectRoutes);
+app.use("/api/landing-pages", landingPageRoutes);
 
 
 console.log("AUTH ROUTES LOADED");

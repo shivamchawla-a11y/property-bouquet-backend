@@ -63,6 +63,57 @@ const landingPageSchema = new mongoose.Schema(
     },
 
     // ======================================================
+// COLLECTION VALUES
+// Used for Admin UI, SEO and Templates
+// ======================================================
+
+values: {
+  developer: {
+    id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Developer",
+      default: null,
+    },
+
+    name: {
+      type: String,
+      default: "",
+    },
+  },
+
+  location: {
+    id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Location",
+      default: null,
+    },
+
+    name: {
+      type: String,
+      default: "",
+    },
+  },
+
+  category: {
+    id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Category",
+      default: null,
+    },
+
+    name: {
+      type: String,
+      default: "",
+    },
+  },
+
+  bhk: {
+    type: String,
+    default: "",
+  },
+},
+
+    // ======================================================
     // FILTERS
     // These match your existing PropertyFilters
     // ======================================================
