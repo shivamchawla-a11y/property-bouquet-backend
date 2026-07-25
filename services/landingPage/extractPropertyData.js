@@ -51,13 +51,13 @@ const extractPropertyData = async () => {
       },
 
       location: {
-        id: locationRef?._id || null,
-        name:
-          locationRef?.name ||
-          property?.locationData?.locationName ||
-          "",
-        document: locationRef || null,
-      },
+  id: locationRef?._id || null,
+  name:
+    property?.locationData?.locationName ||
+    locationRef?.name ||
+    "",
+  document: locationRef || null,
+},
 
       bhk: [
   ...new Set([
