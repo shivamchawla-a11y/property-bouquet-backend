@@ -35,7 +35,7 @@ const enrichCollections = (
           !filters.locations.some(
             (id) =>
               String(id) ===
-              String(property.location.id)
+              String(property.location?.id)
           )
         ) {
           return false;
@@ -46,7 +46,7 @@ const enrichCollections = (
           !filters.categories.some(
             (id) =>
               String(id) ===
-              String(property.category.id)
+              String(property.category?.id)
           )
         ) {
           return false;
