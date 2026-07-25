@@ -1,76 +1,36 @@
 const crypto = require("crypto");
 
-/**
- * Creates a unique fingerprint for a landing page.
- *
- * Example:
- *
- * {
- *   developers: ["DLF"],
- *   locations: ["Sector 56"],
- *   categories: ["Apartment"]
- * }
- *
- * =>
- *
- * categories:apartment|
- * developers:dlf|
- * locations:sector-56
- */
+const normalize = (value) =>
+  String(value).trim().toLowerCase();
 
-const normalizeArray = (arr = []) => {
-  return [...arr]
-    .map((item) =>
-      String(item)
-        .trim()
-        .toLowerCase()
-    )
-    .sort();
-};
+const createFingerprint = (pageType, values = {}) => {
+  const parts = [`type:${pageType}`];
 
-const createFingerprint = (filters = {}) => {
-  const parts = [];
-
-  Object.keys(filters)
+  Object.keys(values)
     .sort()
     .forEach((key) => {
-      const value = filters[key];
+      const value = values[key];
 
-      // Ignore empty values
-      if (
-        value === undefined ||
-        value === null
-      ) {
-        return;
-      }
+      if (value == null) return;
 
-      if (Array.isArray(value)) {
-        if (!value.length) return;
-
+      if (typeof value === "object") {
+        if (value.id) {
+          parts.push(`${key}:${value.id}`);
+        } else if (value.name) {
+          parts.push(`${key}:${normalize(value.name)}`);
+        }
+      } else if (Array.isArray(value)) {
         parts.push(
-          `${key}:${normalizeArray(value).join(",")}`
-        );
-      } else if (
-        typeof value === "object"
-      ) {
-        // Budget etc.
-        parts.push(
-          `${key}:${JSON.stringify(value)}`
+          `${key}:${value.map(normalize).sort().join(",")}`
         );
       } else {
-        parts.push(
-          `${key}:${String(value)
-            .trim()
-            .toLowerCase()}`
-        );
+        parts.push(`${key}:${normalize(value)}`);
       }
     });
 
-  const raw = parts.join("|");
-
   return crypto
     .createHash("sha256")
-    .update(raw)
+    .update(parts.join("|"))
     .digest("hex");
 };
 
