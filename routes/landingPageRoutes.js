@@ -7,6 +7,8 @@ const {
   getLandingPage,
   generateLandingPages,
   updateLandingPage,
+  publishLandingPage,
+  unpublishLandingPage,
   deleteLandingPage,
 } = require("../controllers/landingPageController");
 
@@ -42,6 +44,20 @@ router.patch(
   "/:id",
   protect,
   updateLandingPage
+);
+
+// Publish Collection
+router.patch(
+  "/:id/publish",
+  protect,
+  publishLandingPage
+);
+
+// Unpublish Collection
+router.patch(
+  "/:id/unpublish",
+  protect,
+  unpublishLandingPage
 );
 
 // Soft Delete Collection

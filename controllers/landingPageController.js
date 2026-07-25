@@ -133,6 +133,82 @@ exports.updateLandingPage = async (req, res) => {
 };
 
 // =====================================================
+// PUBLISH LANDING PAGE
+// =====================================================
+
+exports.publishLandingPage = async (req, res) => {
+  try {
+    const page = await LandingPage.findOne({
+      _id: req.params.id,
+      isDeleted: false,
+    });
+
+    if (!page) {
+      return res.status(404).json({
+        success: false,
+        message: "Landing page not found.",
+      });
+    }
+
+    page.status = "published";
+    page.publishedAt = new Date();
+
+    await page.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Landing page published successfully.",
+      data: page,
+    });
+  } catch (error) {
+    console.error("Publish Landing Page Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to publish landing page.",
+    });
+  }
+};
+
+// =====================================================
+// UNPUBLISH LANDING PAGE
+// =====================================================
+
+exports.unpublishLandingPage = async (req, res) => {
+  try {
+    const page = await LandingPage.findOne({
+      _id: req.params.id,
+      isDeleted: false,
+    });
+
+    if (!page) {
+      return res.status(404).json({
+        success: false,
+        message: "Landing page not found.",
+      });
+    }
+
+    page.status = "draft";
+    page.publishedAt = null;
+
+    await page.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Landing page moved back to draft.",
+      data: page,
+    });
+  } catch (error) {
+    console.error("Unpublish Landing Page Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to unpublish landing page.",
+    });
+  }
+};
+
+// =====================================================
 // SOFT DELETE
 // =====================================================
 
