@@ -24,7 +24,7 @@ const enrichCollections = (
           !filters.developers.some(
             (id) =>
               String(id) ===
-              String(property.developer.id)
+              String(property.developer?.id)
           )
         ) {
           return false;
@@ -164,18 +164,18 @@ const enrichCollections = (
         maxPrice,
 
         developerCount: new Set(
-          matchingProperties.map(
-            (item) =>
-              item.developer.id.toString()
-          )
-        ).size,
+  matchingProperties
+    .map((item) => item.developer?.id)
+    .filter(Boolean)
+    .map((id) => String(id))
+).size,
 
-        locationCount: new Set(
-          matchingProperties.map(
-            (item) =>
-              item.location.id.toString()
-          )
-        ).size,
+locationCount: new Set(
+  matchingProperties
+    .map((item) => item.location?.id)
+    .filter(Boolean)
+    .map((id) => String(id))
+).size,
 
         updatedAt:
           new Date(),

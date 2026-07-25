@@ -34,8 +34,8 @@ const landingPageGenerator = async () => {
 
     console.log("✅ STEP 2 COMPLETE");
     console.log(
-      `Developers: ${indexes.developers.length}, Locations: ${indexes.locations.length}, Categories: ${indexes.categories.length}`
-    );
+  `Developers: ${indexes.developers.size}, Locations: ${indexes.locations.size}, Categories: ${indexes.categories.size}`
+);
 
     // ======================================================
     // STEP 3
@@ -86,9 +86,9 @@ const landingPageGenerator = async () => {
       properties: properties.length,
 
       indexes: {
-        developers: indexes.developers.length,
-        locations: indexes.locations.length,
-        categories: indexes.categories.length,
+        developers: indexes.developers.size,
+locations: indexes.locations.size,
+categories: indexes.categories.size,
       },
 
       discoveredCollections: collections.length,
