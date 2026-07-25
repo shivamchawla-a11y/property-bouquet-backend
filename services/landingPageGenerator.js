@@ -9,78 +9,101 @@ const saveLandingPages = require("./landingPage/saveLandingPages");
 // ======================================================
 
 const landingPageGenerator = async () => {
-  // ======================================================
-  // STEP 1
-  // Extract Property Data
-  // ======================================================
+  try {
+    console.log("\n========== LANDING PAGE GENERATION STARTED ==========");
 
-  const properties =
-    await extractPropertyData();
+    // ======================================================
+    // STEP 1
+    // Extract Property Data
+    // ======================================================
 
-  // ======================================================
-  // STEP 2
-  // Build Indexes
-  // ======================================================
+    console.log("STEP 1: Extracting property data...");
 
-  const indexes =
-    buildIndexes(properties);
+    const properties = await extractPropertyData();
 
-  // ======================================================
-  // STEP 3
-  // Discover Collections
-  // ======================================================
+    console.log(`✅ STEP 1 COMPLETE - Properties Found: ${properties.length}`);
 
-  const collections =
-    discoverCollections(
+    // ======================================================
+    // STEP 2
+    // Build Indexes
+    // ======================================================
+
+    console.log("STEP 2: Building indexes...");
+
+    const indexes = buildIndexes(properties);
+
+    console.log("✅ STEP 2 COMPLETE");
+    console.log(
+      `Developers: ${indexes.developers.length}, Locations: ${indexes.locations.length}, Categories: ${indexes.categories.length}`
+    );
+
+    // ======================================================
+    // STEP 3
+    // Discover Collections
+    // ======================================================
+
+    console.log("STEP 3: Discovering collections...");
+
+    const collections = discoverCollections(
       properties,
       indexes
     );
 
-  // ======================================================
-  // STEP 4
-  // Enrich Collections
-  // ======================================================
+    console.log(`✅ STEP 3 COMPLETE - Collections: ${collections.length}`);
 
-  const enrichedCollections =
-    enrichCollections(
+    // ======================================================
+    // STEP 4
+    // Enrich Collections
+    // ======================================================
+
+    console.log("STEP 4: Enriching collections...");
+
+    const enrichedCollections = enrichCollections(
       collections,
       properties,
       indexes
     );
 
-  // ======================================================
-  // STEP 5
-  // Save Landing Pages
-  // ======================================================
+    console.log(
+      `✅ STEP 4 COMPLETE - Enriched Collections: ${enrichedCollections.length}`
+    );
 
-  const results =
-    await saveLandingPages(
+    // ======================================================
+    // STEP 5
+    // Save Landing Pages
+    // ======================================================
+
+    console.log("STEP 5: Saving landing pages...");
+
+    const results = await saveLandingPages(
       enrichedCollections
     );
 
-  return {
-    properties: properties.length,
+    console.log("✅ STEP 5 COMPLETE");
+    console.log("========== LANDING PAGE GENERATION FINISHED ==========\n");
 
-    indexes: {
-      developers:
-        indexes.developers.length,
+    return {
+      properties: properties.length,
 
-      locations:
-        indexes.locations.length,
+      indexes: {
+        developers: indexes.developers.length,
+        locations: indexes.locations.length,
+        categories: indexes.categories.length,
+      },
 
-      categories:
-        indexes.categories.length,
-    },
+      discoveredCollections: collections.length,
 
-    discoveredCollections:
-      collections.length,
+      generatedCollections: enrichedCollections.length,
 
-    generatedCollections:
-      enrichedCollections.length,
-
-    ...results,
-  };
+      ...results,
+    };
+  } catch (error) {
+    console.error("\n❌ LANDING PAGE GENERATION FAILED");
+    console.error("Message:", error.message);
+    console.error("Stack:");
+    console.error(error.stack);
+    throw error;
+  }
 };
 
-module.exports =
-  landingPageGenerator;
+module.exports = landingPageGenerator;

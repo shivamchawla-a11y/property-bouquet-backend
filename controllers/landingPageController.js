@@ -77,7 +77,9 @@ exports.generateLandingPages = async (req, res) => {
       summary: result,
     });
   } catch (error) {
-    console.error("Collection Generation Error:", error);
+    console.error("Collection Generation Error");
+console.error(error);
+console.error(error.stack);
 
     res.status(500).json({
       success: false,
