@@ -27,6 +27,7 @@ const createFingerprint = (pageType, values = {}) => {
         parts.push(`${key}:${normalize(value)}`);
       }
     });
+    
 
   return crypto
     .createHash("sha256")

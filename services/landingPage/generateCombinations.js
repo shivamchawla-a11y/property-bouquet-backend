@@ -45,6 +45,7 @@ const generationRules = [
 // GENERATE COMBINATIONS
 // ======================================================
 
+
 const generateCombinations = (properties = []) => {
   const opportunities = [];
   const fingerprints = new Set();

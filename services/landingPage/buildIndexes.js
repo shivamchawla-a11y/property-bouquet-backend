@@ -78,4 +78,5 @@ const buildIndexes = (properties = []) => {
   return indexes;
 };
 
+
 module.exports = buildIndexes;
