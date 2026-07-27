@@ -6,6 +6,7 @@ const {
   getLandingPages,
   getLandingPage,
   generateLandingPages,
+  getLandingPageBySlug,
   updateLandingPage,
   publishLandingPage,
   unpublishLandingPage,
@@ -19,48 +20,55 @@ const { protect } = require("../middleware/authMiddleware");
 // =====================================================
 
 // Generate Draft Collections
+// Generate
 router.post(
   "/generate",
   protect,
   generateLandingPages
 );
 
-// Get All Collections
+// Get All
 router.get(
   "/",
   protect,
   getLandingPages
 );
 
-// Get Single Collection
+// Get By Slug (Public)
+router.get(
+  "/slug/:slug",
+  getLandingPageBySlug
+);
+
+// Get By ID (Admin)
 router.get(
   "/:id",
   protect,
   getLandingPage
 );
 
-// Update Collection
+// Update
 router.patch(
   "/:id",
   protect,
   updateLandingPage
 );
 
-// Publish Collection
+// Publish
 router.patch(
   "/:id/publish",
   protect,
   publishLandingPage
 );
 
-// Unpublish Collection
+// Unpublish
 router.patch(
   "/:id/unpublish",
   protect,
   unpublishLandingPage
 );
 
-// Soft Delete Collection
+// Delete
 router.delete(
   "/:id",
   protect,

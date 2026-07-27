@@ -22,42 +22,37 @@ const saveLandingPages = async (collections = []) => {
     // =====================================================
 
     const document = {
-      title: collection.title,
+  title: collection.title,
 
-      slug: collection.slug,
+  slug: collection.slug,
 
-      fingerprint: collection.fingerprint,
+  fingerprint: collection.fingerprint,
 
-      pageType: collection.pageType,
+  pageType: collection.pageType,
 
-      filters: collection.filters,
+  values: collection.values,
 
-      propertyCount: collection.propertyCount,
+  filters: collection.filters,
 
-      matchingProperties:
-        collection.matchingProperties,
+  propertyCount: collection.propertyCount,
 
-      statistics:
-        collection.statistics,
+  matchingProperties: collection.matchingProperties,
 
-      seoScore:
-        collection.seoScore,
+  statistics: collection.statistics,
 
-      seo:
-        collection.seo,
+  seoScore: collection.seoScore,
 
-      previewImage:
-        collection.previewImage,
+  seo: collection.seo,
 
-      generated: true,
+  previewImage: collection.previewImage,
 
-      status:
-        collection.status || "draft",
+  generated: true,
 
-      lastGeneratedAt:
-        collection.lastGeneratedAt ||
-        new Date(),
-    };
+  status: collection.status || "draft",
+
+  lastGeneratedAt:
+    collection.lastGeneratedAt || new Date(),
+};
 
     // =====================================================
     // UPDATE

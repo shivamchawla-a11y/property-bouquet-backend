@@ -132,6 +132,35 @@ exports.updateLandingPage = async (req, res) => {
   }
 };
 
+exports.getLandingPageBySlug = async (req, res) => {
+  try {
+    const page = await LandingPage.findOne({
+      slug: req.params.slug,
+      status: "published",
+      isDeleted: false,
+    }).lean();
+
+    if (!page) {
+      return res.status(404).json({
+        success: false,
+        message: "Landing page not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      data: page,
+    });
+  } catch (err) {
+    console.error(err);
+
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
+  }
+};
+
 // =====================================================
 // PUBLISH LANDING PAGE
 // =====================================================
