@@ -13,9 +13,17 @@ const saveLandingPages = async (collections = []) => {
   };
 
   for (const collection of collections) {
-    const existing = await LandingPage.findOne({
-      fingerprint: collection.fingerprint,
+    let existing =
+  await LandingPage.findOne({
+    fingerprint: collection.fingerprint,
+  });
+
+if (!existing) {
+  existing =
+    await LandingPage.findOne({
+      slug: collection.slug,
     });
+}
 
     // =====================================================
     // DOCUMENT TO SAVE
@@ -23,35 +31,28 @@ const saveLandingPages = async (collections = []) => {
 
     const document = {
   title: collection.title,
-
   slug: collection.slug,
-
   fingerprint: collection.fingerprint,
-
   pageType: collection.pageType,
-
   values: collection.values,
-
   filters: collection.filters,
-
   propertyCount: collection.propertyCount,
-
   matchingProperties: collection.matchingProperties,
-
   statistics: collection.statistics,
-
   seoScore: collection.seoScore,
-
   seo: collection.seo,
-
   previewImage: collection.previewImage,
-
   generated: true,
 
-  status: collection.status || "draft",
+  status:
+    existing?.status ??
+    collection.status ??
+    "draft",
 
-  lastGeneratedAt:
-    collection.lastGeneratedAt || new Date(),
+  publishedAt:
+    existing?.publishedAt ?? null,
+
+  lastGeneratedAt: new Date(),
 };
 
     // =====================================================
