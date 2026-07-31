@@ -238,19 +238,13 @@ exports.unpublishLandingPage = async (req, res) => {
 };
 
 // =====================================================
-// SOFT DELETE
+// PERMANENT DELETE
 // =====================================================
 
 exports.deleteLandingPage = async (req, res) => {
   try {
-    const page = await LandingPage.findByIdAndUpdate(
-      req.params.id,
-      {
-        isDeleted: true,
-      },
-      {
-        new: true,
-      }
+    const page = await LandingPage.findByIdAndDelete(
+      req.params.id
     );
 
     if (!page) {
@@ -262,7 +256,7 @@ exports.deleteLandingPage = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: "Landing page moved to trash.",
+      message: "Landing page permanently deleted.",
     });
   } catch (error) {
     console.error("Delete Landing Page Error:", error);

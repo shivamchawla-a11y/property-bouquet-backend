@@ -12,6 +12,67 @@ const slugify = (text = "") => {
     .replace(/-+/g, "-");
 };
 
+// ======================================================
+// LOCATION FOR URL
+//
+// Gurgaon
+// -> Gurgaon
+//
+// Gurgaon > Sector 56
+// -> Sector 56 Gurgaon
+//
+// Gurgaon > Golf Course Extension Road > Sector 53
+// -> Sector 53 Golf Course Extension Road Gurgaon
+// ======================================================
+
+const formatLocationForSlug = (location = "") => {
+  if (!location) return "";
+
+  const parts = location
+    .split(">")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (parts.length <= 1) {
+    return location.trim();
+  }
+
+  const parent = parts[0];
+  const children = parts.slice(1).reverse();
+
+  return [...children, parent].join(" ");
+};
+
+// ======================================================
+// LOCATION FOR HUMAN READING
+//
+// Gurgaon
+// -> Gurgaon
+//
+// Gurgaon > Sector 56
+// -> Sector 56, Gurgaon
+//
+// Gurgaon > Golf Course Extension Road > Sector 53
+// -> Sector 53, Golf Course Extension Road, Gurgaon
+// ======================================================
+
+const formatLocationForText = (location = "") => {
+  if (!location) return "";
+
+  const parts = location
+    .split(">")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (parts.length <= 1) {
+    return location.trim();
+  }
+
+  const parent = parts[0];
+  const children = parts.slice(1).reverse();
+
+  return [...children, parent].join(", ");
+};
 
 // ======================================================
 // APPLY TEMPLATE
@@ -22,15 +83,22 @@ const applyTemplate = (
   values = {},
   options = {}
 ) => {
-  const {
-    slug = false,
-  } = options;
+  const { slug = false } = options;
+
+  const processedValues = {
+    ...values,
+  };
+
+  if (processedValues.location) {
+    processedValues.location = slug
+      ? formatLocationForSlug(processedValues.location)
+      : formatLocationForText(processedValues.location);
+  }
 
   let result = template;
 
-  Object.keys(values).forEach((key) => {
-    const value =
-      values[key] || "";
+  Object.keys(processedValues).forEach((key) => {
+    const value = processedValues[key] || "";
 
     result = result.replace(
       new RegExp(`\\{${key}\\}`, "g"),
@@ -39,10 +107,7 @@ const applyTemplate = (
   });
 
   // Remove unused placeholders
-  result = result.replace(
-    /\{.*?\}/g,
-    ""
-  );
+  result = result.replace(/{.*?}/g, "");
 
   // Clean spaces
   result = result

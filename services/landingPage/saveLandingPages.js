@@ -56,27 +56,37 @@ if (!existing) {
 };
 
     // =====================================================
-    // UPDATE
-    // =====================================================
+// UPDATE
+// =====================================================
 
-    if (existing) {
-      // Preserve manual SEO edits
-      if (existing.seo?.hasCustomSEO) {
-        document.seo = existing.seo;
-      }
+if (existing) {
+  // Preserve manual SEO edits
+  if (existing.seo?.hasCustomSEO) {
+    document.seo = existing.seo;
+  }
 
-      await LandingPage.findByIdAndUpdate(
-        existing._id,
-        document,
-        {
-          new: true,
-        }
-      );
+  // Preserve admin controlled fields
+  document.status = existing.status;
+  document.publishedAt = existing.publishedAt;
+  document.createdBy = existing.createdBy;
+  document.version = existing.version;
+  document.generated = existing.generated;
+  document.ignoreGeneration = existing.ignoreGeneration;
+  document.isDeleted = existing.isDeleted;
 
-      results.updated++;
-
-      continue;
+  await LandingPage.findByIdAndUpdate(
+    existing._id,
+    document,
+    {
+      new: true,
+      runValidators: true,
     }
+  );
+
+  results.updated++;
+
+  continue;
+}
 
     // =====================================================
     // CREATE
