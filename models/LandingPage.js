@@ -220,46 +220,89 @@ values: {
     },
 
     // ======================================================
-    // SEO
-    // ======================================================
+// SEO
+// ======================================================
 
-    seoScore: {
-      type: Number,
-      default: 0,
+seoScore: {
+  type: Number,
+  default: 0,
+},
+
+seo: {
+  hasCustomSEO: {
+    type: Boolean,
+    default: false,
+  },
+
+  // --------------------------
+  // AUTO GENERATED SEO
+  // --------------------------
+
+  generated: {
+    metaTitle: {
+      type: String,
+      default: "",
     },
 
-    seo: {
-      hasCustomSEO: {
-        type: Boolean,
-        default: false,
-      },
-
-      metaTitle: {
-        type: String,
-        default: "",
-      },
-
-      metaDescription: {
-        type: String,
-        default: "",
-      },
-
-      keywords: [
-        {
-          type: String,
-        },
-      ],
-
-      h1: {
-        type: String,
-        default: "",
-      },
-
-      canonical: {
-        type: String,
-        default: "",
-      },
+    metaDescription: {
+      type: String,
+      default: "",
     },
+
+    keywords: [
+      {
+        type: String,
+      },
+    ],
+
+    h1: {
+      type: String,
+      default: "",
+    },
+
+    canonical: {
+      type: String,
+      default: "",
+    },
+  },
+
+  // --------------------------
+  // CUSTOM SEO
+  // --------------------------
+
+  custom: {
+    metaTitle: {
+      type: String,
+      default: "",
+    },
+
+    metaDescription: {
+      type: String,
+      default: "",
+    },
+
+    keywords: [
+      {
+        type: String,
+      },
+    ],
+
+    h1: {
+      type: String,
+      default: "",
+    },
+
+    canonical: {
+      type: String,
+      default: "",
+    },
+
+    updatedAt: {
+      type: Date,
+      default: null,
+    },
+  },
+},
 
     // ======================================================
     // PREVIEW

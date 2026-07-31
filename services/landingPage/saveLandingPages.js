@@ -40,7 +40,32 @@ if (!existing) {
   matchingProperties: collection.matchingProperties,
   statistics: collection.statistics,
   seoScore: collection.seoScore,
-  seo: collection.seo,
+  seo: {
+  hasCustomSEO:
+    existing?.seo?.hasCustomSEO || false,
+
+  generated: collection.seo,
+
+  custom: {
+    metaTitle:
+      existing?.seo?.custom?.metaTitle || "",
+
+    metaDescription:
+      existing?.seo?.custom?.metaDescription || "",
+
+    keywords:
+      existing?.seo?.custom?.keywords || [],
+
+    h1:
+      existing?.seo?.custom?.h1 || "",
+
+    canonical:
+      existing?.seo?.custom?.canonical || "",
+
+    updatedAt:
+      existing?.seo?.custom?.updatedAt || null,
+  },
+},
   previewImage: collection.previewImage,
   generated: true,
 
@@ -60,11 +85,7 @@ if (!existing) {
 // =====================================================
 
 if (existing) {
-  // Preserve manual SEO edits
-  if (existing.seo?.hasCustomSEO) {
-    document.seo = existing.seo;
-  }
-
+  
   // Preserve admin controlled fields
   document.status = existing.status;
   document.publishedAt = existing.publishedAt;
