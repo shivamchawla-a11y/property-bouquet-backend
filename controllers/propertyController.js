@@ -60,18 +60,31 @@ const cleanedConfigurations =
     }
 
     // ================= FLOOR PLAN CLEAN =================
-    const cleanedFloorPlans =
-      gatedContent?.floorPlans?.map((fp) => ({
-        unitType: fp?.unitType || "",
-        area: fp?.area || "",
-        price: fp?.price || "",
-        paymentPlan: fp?.paymentPlan || "",
-        bedrooms: fp?.bedrooms || "",
-        bathrooms: fp?.bathrooms || "",
-        balconies: fp?.balconies || "",
-        image: fp?.image || "",
-      })) || [];
+    // ================= FLOOR PLAN CLEAN =================
 
+const cleanedFloorPlans =
+  gatedContent?.floorPlans?.map((fp) => ({
+    unitType: fp?.unitType || "",
+    area: fp?.area || "",
+    price: fp?.price || "",
+    paymentPlan: fp?.paymentPlan || "",
+    bedrooms: fp?.bedrooms || "",
+    bathrooms: fp?.bathrooms || "",
+    balconies: fp?.balconies || "",
+    image: fp?.image || "",
+  })) || [];
+
+
+// ================= PLOT CONFIGURATION CLEAN =================
+
+const cleanedPlotConfigurations =
+  gatedContent?.plotConfigurations?.map((plot) => ({
+    plotType: plot?.plotType || "",
+    plotArea: plot?.plotArea || "",
+    price: plot?.price || "",
+    paymentPlan: plot?.paymentPlan || "",
+    image: plot?.image || "",
+  })) || [];
     // ================= HERO CLEAN =================
     const cleanedHeroSection = {
       ...heroSection,
@@ -193,9 +206,16 @@ seoEngine: {
       unitConfigurations: cleanedConfigurations,
 
       gatedContent: {
-        ...gatedContent,
-        floorPlans: cleanedFloorPlans,
-      },
+  ...gatedContent,
+
+  configurationType:
+    gatedContent?.configurationType || "Apartments",
+
+  floorPlans: cleanedFloorPlans,
+
+  plotConfigurations:
+    cleanedPlotConfigurations,
+},
 
       createdBy: req.user?.id,
     });
@@ -478,19 +498,35 @@ const cleanedOverview = overview
         : property.configurationSection;
 
     // ================= FLOOR PLAN CLEAN =================
-    const cleanedFloorPlans =
-      gatedContent?.floorPlans?.map((fp) => ({
-        unitType: fp?.unitType || "",
-        area: fp?.area || "",
-        price: fp?.price || "",
-        paymentPlan: fp?.paymentPlan || "",
-        bedrooms: fp?.bedrooms || "",
-        bathrooms: fp?.bathrooms || "",
-        balconies: fp?.balconies || "",
-        image: fp?.image || "",
-      })) ||
-      property.gatedContent?.floorPlans ||
-      [];
+    // ================= FLOOR PLAN CLEAN =================
+
+const cleanedFloorPlans =
+  gatedContent?.floorPlans?.map((fp) => ({
+    unitType: fp?.unitType || "",
+    area: fp?.area || "",
+    price: fp?.price || "",
+    paymentPlan: fp?.paymentPlan || "",
+    bedrooms: fp?.bedrooms || "",
+    bathrooms: fp?.bathrooms || "",
+    balconies: fp?.balconies || "",
+    image: fp?.image || "",
+  })) ||
+  property.gatedContent?.floorPlans ||
+  [];
+
+
+// ================= PLOT CONFIGURATION CLEAN =================
+
+const cleanedPlotConfigurations =
+  gatedContent?.plotConfigurations?.map((plot) => ({
+    plotType: plot?.plotType || "",
+    plotArea: plot?.plotArea || "",
+    price: plot?.price || "",
+    paymentPlan: plot?.paymentPlan || "",
+    image: plot?.image || "",
+  })) ||
+  property.gatedContent?.plotConfigurations ||
+  [];
 
       // ================= SEO =================
 const seoKeywords =
@@ -607,14 +643,24 @@ if (!Array.isArray(finalPropertyTag)) {
             req.body.media || property.media,
 
           // ================= GATED CONTENT =================
-          gatedContent: gatedContent
-            ? {
-                ...gatedContent,
+          // ================= GATED CONTENT =================
 
-                floorPlans:
-                  cleanedFloorPlans,
-              }
-            : property.gatedContent,
+gatedContent: gatedContent
+  ? {
+      ...gatedContent,
+
+      configurationType:
+        gatedContent?.configurationType ||
+        property.gatedContent?.configurationType ||
+        "Apartments",
+
+      floorPlans:
+        cleanedFloorPlans,
+
+      plotConfigurations:
+        cleanedPlotConfigurations,
+    }
+  : property.gatedContent,
 
           // ================= SEO =================
 seoEngine: req.body.seoEngine

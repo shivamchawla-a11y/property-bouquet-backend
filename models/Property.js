@@ -735,60 +735,113 @@ masterPlanSection: {
   ],
 },
 
-  // ================= GATED CONTENT =================
-  gatedContent: {
+// ================= GATED CONTENT =================
 
-    brochurePdfUrl: String,
+gatedContent: {
 
-    floorPlans: [
-      {
-        unitType: {
-          type: String,
-          default: "",
-        },
+  brochurePdfUrl: String,
 
-        area: {
-          type: String,
-          default: "",
-        },
+  // ================= CONFIGURATION TYPE =================
 
-        price: {
-          type: String,
-          default: "",
-        },
-
-        paymentPlan: {
-          type: String,
-          default: "",
-        },
-
-        bedrooms: {
-          type: String,
-          default: "",
-        },
-
-        bathrooms: {
-          type: String,
-          default: "",
-        },
-
-        balconies: {
-          type: String,
-          default: "",
-        },
-
-        image: {
-          type: String,
-          default: "",
-        },
-      }
-    ],
-
-    requireLogin: {
-      type: Boolean,
-      default: true,
-    },
+  configurationType: {
+    type: String,
+    enum: ["Apartments", "Plots"],
+    default: "Apartments",
   },
+
+  // ================= APARTMENT FLOOR PLANS =================
+
+  floorPlans: [
+
+    {
+
+      unitType: {
+        type: String,
+        default: "",
+      },
+
+      area: {
+        type: String,
+        default: "",
+      },
+
+      price: {
+        type: String,
+        default: "",
+      },
+
+      paymentPlan: {
+        type: String,
+        default: "",
+      },
+
+      bedrooms: {
+        type: String,
+        default: "",
+      },
+
+      bathrooms: {
+        type: String,
+        default: "",
+      },
+
+      balconies: {
+        type: String,
+        default: "",
+      },
+
+      image: {
+        type: String,
+        default: "",
+      },
+
+    }
+
+  ],
+
+  // ================= PLOT CONFIGURATIONS =================
+
+  plotConfigurations: [
+
+    {
+
+      plotType: {
+        type: String,
+        default: "",
+      },
+
+      plotArea: {
+        type: String,
+        default: "",
+      },
+
+      price: {
+        type: String,
+        default: "",
+      },
+
+      paymentPlan: {
+        type: String,
+        default: "",
+      },
+
+      image: {
+        type: String,
+        default: "",
+      },
+
+    }
+
+  ],
+
+  // ================= LOGIN REQUIREMENT =================
+
+  requireLogin: {
+    type: Boolean,
+    default: true,
+  },
+
+},
 
   // ================= SEO ENGINE =================
   seoEngine: {
