@@ -51,7 +51,7 @@ exports.sendContactEnquiry = async (req, res) => {
     // ==========================
 
     await resend.emails.send({
-      from: "Property Bouquet <no-reply@propertybouquet.com>",
+      from: "Property Bouquet <contact@propertybouquet.com>",
 
       to: [
         "kushank.pal@amethystlandbase.com",

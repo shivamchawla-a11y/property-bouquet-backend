@@ -53,7 +53,7 @@ exports.createLead = async (req, res) => {
     // ================= EMAIL NOTIFICATION =================
     try {
       await resend.emails.send({
-  from: "Property Bouquet <no-reply@propertybouquet.com>",
+  from: "Property Bouquet <info@propertybouquet.com>",
   to: "kushank.pal@amethystlandbase.com",
   subject: `🏡 New Property Lead • ${property || "General Enquiry"}`,
   html: `
