@@ -1452,6 +1452,16 @@ exports.permanentDeleteProperty =
 // ============================================================
 // GET PROPERTY BY SLUG
 // PUBLIC
+//
+// ONLY:
+//   ✅ Published
+//   ✅ Active
+//   ✅ Not Deleted
+//
+// NEVER:
+//   ❌ Draft
+//   ❌ Trash
+//   ❌ Inactive
 // ============================================================
 
 exports.getPropertyBySlug = async (
@@ -1459,34 +1469,14 @@ exports.getPropertyBySlug = async (
   res
 ) => {
   try {
-    const { slug } =
-      req.params;
+    const { slug } = req.params;
 
     const property =
       await Property.findOne({
         slug,
-
+        status: "published",
         isActive: true,
-
         isDeleted: false,
-
-        $or: [
-          {
-            status:
-              "published",
-          },
-          {
-            status: {
-              $exists: false,
-            },
-          },
-          {
-            status: null,
-          },
-          {
-            status: "",
-          },
-        ],
       })
         .populate("createdBy")
         .populate(
@@ -1505,12 +1495,11 @@ exports.getPropertyBySlug = async (
     if (!property) {
       return res.status(404).json({
         success: false,
-        message:
-          "Property not found ❌",
+        message: "Property not found",
       });
     }
 
-    res.json({
+    res.status(200).json({
       success: true,
       data: property,
     });
@@ -1527,10 +1516,21 @@ exports.getPropertyBySlug = async (
   }
 };
 
-
 // ============================================================
 // GET PROPERTY PREVIEW
-// PUBLIC
+// AGENT + SUPERADMIN
+//
+// Used for ADMIN PREVIEW only.
+//
+// Agent:
+//   ✅ Published
+//   ✅ Draft
+//   ❌ Trash
+//
+// SuperAdmin:
+//   ✅ Published
+//   ✅ Draft
+//   ✅ Trash
 // ============================================================
 
 exports.getPropertyPreview = async (
@@ -1540,8 +1540,7 @@ exports.getPropertyPreview = async (
   try {
     const property =
       await Property.findOne({
-        slug:
-          req.params.slug,
+        slug: req.params.slug,
       })
         .populate("createdBy")
         .populate(
@@ -1560,12 +1559,25 @@ exports.getPropertyPreview = async (
     if (!property) {
       return res.status(404).json({
         success: false,
-        message:
-          "Property not found",
+        message: "Property not found",
       });
     }
 
-    res.json({
+    // --------------------------------------------------------
+    // Agent cannot preview Trash
+    // --------------------------------------------------------
+
+    if (
+      property.isDeleted &&
+      !canAccessTrash(req)
+    ) {
+      return res.status(404).json({
+        success: false,
+        message: "Property not found",
+      });
+    }
+
+    res.status(200).json({
       success: true,
       data: property,
     });
@@ -1581,6 +1593,7 @@ exports.getPropertyPreview = async (
     });
   }
 };
+
 
 
 // ============================================================

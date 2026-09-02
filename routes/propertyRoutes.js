@@ -40,8 +40,13 @@ router.get(
 // Public property by slug
 router.get("/slug/:slug", getPropertyBySlug);
 
-// Public property preview
-router.get("/preview/:slug", getPropertyPreview);
+router.get(
+  "/preview/:slug",
+  protect,
+  authorize("SuperAdmin", "Agent"),
+  getPropertyPreview
+);
+
 
 
 // ============================================================
