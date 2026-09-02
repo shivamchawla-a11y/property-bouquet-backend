@@ -290,35 +290,366 @@ exports.createProperty = async (req, res) => {
   }
 };
 
-
 // ============================================================
 // SAVE DRAFT
 // Agent + SuperAdmin
+//
+// BEHAVIOUR:
+//
+// 1. No draftId
+//    → Create a NEW draft
+//    → Return its _id
+//
+// 2. Existing draftId
+//    → Find the SAME property
+//    → Update that property
+//    → NEVER create another draft
+//
+// 3. Agent
+//    → Can save Live/Draft
+//    → Cannot modify Trash
+//
+// 4. SuperAdmin
+//    → Can save everything
+//
+// IMPORTANT:
+// draftId is a FRONTEND helper only.
+// It is NOT stored inside the Property document.
 // ============================================================
 
 exports.saveDraft = async (req, res) => {
   try {
+    // ========================================================
+    // GET DRAFT ID
+    // ========================================================
+
     const { draftId } = req.body;
 
     let property;
 
     // ========================================================
-    // EXISTING PROPERTY / DRAFT
+    // PREPARE REQUEST DATA
+    //
+    // Remove draftId because it is only used to identify
+    // the existing MongoDB document.
+    // ========================================================
+
+    const {
+      draftId: ignoredDraftId,
+      ...requestData
+    } = req.body;
+
+    // ========================================================
+    // CLEAN PROPERTY TAG
+    // ========================================================
+
+    let finalPropertyTag =
+      requestData.propertyTag;
+
+    if (
+      typeof finalPropertyTag === "string"
+    ) {
+      try {
+        finalPropertyTag =
+          JSON.parse(finalPropertyTag);
+      } catch {
+        finalPropertyTag = [
+          finalPropertyTag,
+        ];
+      }
+    }
+
+    if (
+      !Array.isArray(finalPropertyTag)
+    ) {
+      finalPropertyTag = ["Normal"];
+    }
+
+    // ========================================================
+    // CLEAN UNIT CONFIGURATIONS
+    // ========================================================
+
+    const cleanedConfigurations =
+      (
+        requestData.unitConfigurations ||
+        []
+      ).map((u) => ({
+        unitType:
+          u?.unitType || "",
+
+        area:
+          u?.area || "",
+
+        price:
+          u?.price || "",
+
+        paymentPlan:
+          u?.paymentPlan || "",
+
+        bedrooms:
+          u?.bedrooms || "",
+
+        bathrooms:
+          u?.bathrooms || "",
+
+        balconies:
+          u?.balconies || "",
+      }));
+
+    // ========================================================
+    // CLEAN FLOOR PLANS
+    // ========================================================
+
+    const cleanedFloorPlans =
+      requestData.gatedContent?.floorPlans?.map(
+        (fp) => ({
+          unitType:
+            fp?.unitType || "",
+
+          area:
+            fp?.area || "",
+
+          price:
+            fp?.price || "",
+
+          paymentPlan:
+            fp?.paymentPlan || "",
+
+          bedrooms:
+            fp?.bedrooms || "",
+
+          bathrooms:
+            fp?.bathrooms || "",
+
+          balconies:
+            fp?.balconies || "",
+
+          image:
+            fp?.image || "",
+        })
+      ) || [];
+
+    // ========================================================
+    // CLEAN PLOT CONFIGURATIONS
+    // ========================================================
+
+    const cleanedPlotConfigurations =
+      requestData.gatedContent?.plotConfigurations?.map(
+        (plot) => ({
+          plotType:
+            plot?.plotType || "",
+
+          plotArea:
+            plot?.plotArea || "",
+
+          price:
+            plot?.price || "",
+
+          paymentPlan:
+            plot?.paymentPlan || "",
+
+          image:
+            plot?.image || "",
+        })
+      ) || [];
+
+    // ========================================================
+    // CLEAN HERO SECTION
+    // ========================================================
+
+    const cleanedHeroSection = {
+      ...(requestData.heroSection || {}),
+
+      taglineItems:
+        requestData.heroSection?.taglineItems?.filter(
+          (item) =>
+            typeof item === "string" &&
+            item.trim() !== ""
+        ) || [],
+    };
+
+    // ========================================================
+    // CLEAN OVERVIEW
+    // ========================================================
+
+    const cleanedOverview = {
+      ...(requestData.overview || {}),
+
+      highlights:
+        requestData.overview?.highlights?.filter(
+          (item) =>
+            item?.heading?.trim() !== ""
+        ) || [],
+
+      amenities:
+        requestData.overview?.amenities?.filter(
+          (item) =>
+            item?.heading?.trim() !== ""
+        ) || [],
+
+      featureBar:
+        requestData.overview?.featureBar?.filter(
+          (item) =>
+            item?.title?.trim() !== ""
+        ) || [],
+    };
+
+    // ========================================================
+    // CLEAN CONFIGURATION SECTION
+    // ========================================================
+
+    const cleanedConfigurationSection = {
+      ...(requestData.configurationSection || {}),
+
+      features:
+        requestData.configurationSection?.features?.filter(
+          (item) =>
+            typeof item === "string" &&
+            item.trim() !== ""
+        ) || [],
+    };
+
+    // ========================================================
+    // CLEAN SEO
+    // ========================================================
+
+    const seoKeywords =
+      typeof requestData.seoEngine?.keywords ===
+      "string"
+        ? requestData.seoEngine.keywords
+            .split(",")
+            .map((k) => k.trim())
+            .filter(Boolean)
+        : Array.isArray(
+            requestData.seoEngine?.keywords
+          )
+        ? requestData.seoEngine.keywords
+        : [];
+
+    const hasCustomSEO =
+      !!(
+        requestData.seoEngine?.metaTitle?.trim() &&
+        requestData.seoEngine?.metaDescription?.trim() &&
+        seoKeywords.length
+      );
+
+    // ========================================================
+    // PREPARE CLEAN DATA
+    // ========================================================
+
+    const cleanedData = {
+      ...requestData,
+
+      // ------------------------------------------------------
+      // PROPERTY TAG
+      // ------------------------------------------------------
+
+      propertyTag:
+        finalPropertyTag,
+
+      // ------------------------------------------------------
+      // STATUS
+      // ------------------------------------------------------
+
+      status: "draft",
+
+      // ------------------------------------------------------
+      // TRASH
+      //
+      // An active draft must never remain in Trash.
+      // ------------------------------------------------------
+
+      isDeleted: false,
+
+      // ------------------------------------------------------
+      // HERO
+      // ------------------------------------------------------
+
+      heroSection:
+        cleanedHeroSection,
+
+      // ------------------------------------------------------
+      // OVERVIEW
+      // ------------------------------------------------------
+
+      overview:
+        cleanedOverview,
+
+      // ------------------------------------------------------
+      // CONFIGURATION SECTION
+      // ------------------------------------------------------
+
+      configurationSection:
+        cleanedConfigurationSection,
+
+      // ------------------------------------------------------
+      // UNIT CONFIGURATIONS
+      // ------------------------------------------------------
+
+      unitConfigurations:
+        cleanedConfigurations,
+
+      // ------------------------------------------------------
+      // GATED CONTENT
+      // ------------------------------------------------------
+
+      gatedContent: {
+        ...(requestData.gatedContent || {}),
+
+        configurationType:
+          requestData.gatedContent
+            ?.configurationType ||
+          "Apartments",
+
+        floorPlans:
+          cleanedFloorPlans,
+
+        plotConfigurations:
+          cleanedPlotConfigurations,
+      },
+
+      // ------------------------------------------------------
+      // SEO
+      // ------------------------------------------------------
+
+      seoEngine: {
+        hasCustomSEO,
+
+        metaTitle:
+          requestData.seoEngine?.metaTitle?.trim() ||
+          "",
+
+        metaDescription:
+          requestData.seoEngine?.metaDescription?.trim() ||
+          "",
+
+        keywords:
+          seoKeywords,
+      },
+    };
+
+    // ========================================================
+    // EXISTING DRAFT / EXISTING PROPERTY
     // ========================================================
 
     if (draftId) {
       property =
         await Property.findById(draftId);
 
+      // ------------------------------------------------------
+      // ID NOT FOUND
+      // ------------------------------------------------------
+
       if (!property) {
         return res.status(404).json({
           success: false,
-          message: "Draft not found",
+          message:
+            "Draft not found",
         });
       }
 
       // ------------------------------------------------------
-      // Agent cannot modify Trash
+      // AGENT CANNOT MODIFY TRASH
       // ------------------------------------------------------
 
       if (
@@ -332,52 +663,116 @@ exports.saveDraft = async (req, res) => {
         });
       }
 
-      // ------------------------------------------------------
-      // Update existing property as Draft
-      // ------------------------------------------------------
+      // ======================================================
+      // IMPORTANT:
+      //
+      // Preserve database-controlled fields.
+      // Do NOT allow the frontend to overwrite them.
+      // ======================================================
+
+      delete cleanedData._id;
+      delete cleanedData.createdAt;
+      delete cleanedData.updatedAt;
+      delete cleanedData.createdBy;
+      delete cleanedData.isDeleted;
+      delete cleanedData.deletedFromStatus;
+
+      // ======================================================
+      // UPDATE SAME PROPERTY
+      // ======================================================
 
       property.set({
-        ...req.body,
+        ...cleanedData,
+
+        // Always remain a Draft during autosave.
         status: "draft",
+
+        // Always remove Trash state.
+        isDeleted: false,
       });
 
-      // Never allow draftId itself to become a DB field
-      if (property.draftId !== undefined) {
-        property.draftId = undefined;
+      // ------------------------------------------------------
+      // Keep original creator
+      // ------------------------------------------------------
+
+      if (!property.createdBy) {
+        property.createdBy =
+          req.user?.id;
       }
+
+      // ------------------------------------------------------
+      // A property being saved as a draft is no longer
+      // considered to be restored from Trash.
+      // ------------------------------------------------------
+
+      property.deletedFromStatus =
+        null;
+
+      // ------------------------------------------------------
+      // SAVE
+      // ------------------------------------------------------
 
       await property.save();
     }
 
     // ========================================================
-    // NEW DRAFT
+    // CREATE NEW DRAFT
     // ========================================================
 
     else {
       property =
         await Property.create({
-          ...req.body,
+          ...cleanedData,
+
+          // --------------------------------------------------
+          // Explicit draft state
+          // --------------------------------------------------
 
           status: "draft",
+
+          // --------------------------------------------------
+          // Never create a new draft inside Trash
+          // --------------------------------------------------
+
+          isDeleted: false,
+
+          // --------------------------------------------------
+          // Current logged-in user
+          // --------------------------------------------------
 
           createdBy:
             req.user?.id,
         });
     }
 
-    res.status(200).json({
+    // ========================================================
+    // RESPONSE
+    // ========================================================
+
+    return res.status(200).json({
       success: true,
+
+      message:
+        "Draft saved successfully",
+
+      // Main property object
       data: property,
+
+      // Explicit ID for frontend autosave
+      draftId:
+        property._id,
     });
+
   } catch (err) {
     console.error(
       "SAVE DRAFT ERROR:",
       err
     );
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: err.message,
+      message:
+        err.message,
     });
   }
 };
