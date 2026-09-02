@@ -780,20 +780,20 @@ exports.saveDraft = async (req, res) => {
 
 // ============================================================
 // CHECK PROPERTY DUPLICATES
-//
-// Used by Add Property Step 1.
+// ============================================================
 //
 // Checks:
-//   ✅ Exact slug match
-//   ✅ Similar property titles
-//   ❌ Trash is ignored
+// 1. Exact slug
+// 2. Similar slugs while typing
+// 3. Similar titles while typing
 //
-// Optional:
-//   draftId → excludes the current draft from the results
+// Trash properties are NOT included.
+//
+// Current draft is excluded using draftId.
 // ============================================================
 
 // ============================================================
-// CHECK PROPERTY DUPLICATES
+// CHECK PROPERTY DUPLICATES / SIMILAR PROPERTIES
 // ============================================================
 
 exports.checkPropertyDuplicates = async (req, res) => {
@@ -804,14 +804,27 @@ exports.checkPropertyDuplicates = async (req, res) => {
       draftId = "",
     } = req.query;
 
-    const cleanSlug = String(slug).trim().toLowerCase();
-    const cleanTitle = String(title).trim();
+    const cleanSlug = String(slug)
+      .trim()
+      .toLowerCase();
 
-    // ----------------------------------------------------------
-    // EXCLUDE CURRENT PROPERTY/DRAFT WHEN EDITING
-    // ----------------------------------------------------------
+    const cleanTitle = String(title)
+      .trim();
 
-    const baseFilter = {};
+    // ========================================================
+    // BASE FILTER
+    //
+    // Trash is intentionally excluded.
+    // Published + Draft are included.
+    // ========================================================
+
+    const baseFilter = {
+      isDeleted: false,
+    };
+
+    // ========================================================
+    // EXCLUDE CURRENT PROPERTY / DRAFT
+    // ========================================================
 
     if (
       draftId &&
@@ -822,108 +835,118 @@ exports.checkPropertyDuplicates = async (req, res) => {
       };
     }
 
-    // ==========================================================
+    // ========================================================
+    // ESCAPE REGEX
+    // ========================================================
+
+    const escapeRegex = (value) => {
+      return value.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+      );
+    };
+
+    // ========================================================
     // SLUG CHECK
-    // ==========================================================
+    // ========================================================
 
     let slugProperty = null;
     let similarSlugs = [];
 
     if (cleanSlug.length >= 2) {
-      const escapedSlug = cleanSlug.replace(
-        /[.*+?^${}()|[\]\\]/g,
-        "\\$&"
-      );
 
-      // --------------------------------------------------------
-      // 1. EXACT SLUG
-      // --------------------------------------------------------
+      const escapedSlug =
+        escapeRegex(cleanSlug);
 
-      slugProperty = await Property.findOne({
-        ...baseFilter,
-        slug: {
-          $regex: `^${escapedSlug}$`,
-          $options: "i",
-        },
-      })
-        .select(
-          "_id slug status isDeleted coreDetails.title"
-        )
-        .lean();
+      // ------------------------------------------------------
+      // EXACT SLUG
+      // ------------------------------------------------------
 
-      // --------------------------------------------------------
-      // 2. SIMILAR SLUGS
+      slugProperty =
+        await Property.findOne({
+          ...baseFilter,
+
+          slug: {
+            $regex: `^${escapedSlug}$`,
+            $options: "i",
+          },
+        })
+          .select(
+            "_id slug status isDeleted coreDetails.title"
+          )
+          .lean();
+
+      // ------------------------------------------------------
+      // SIMILAR SLUGS
       //
       // Example:
+      // User types: m3m
       //
-      // User types:
-      // m3m-alt
-      //
-      // Results:
+      // Returns:
       // m3m-altima
-      // m3m-altima-sector-89
-      // m3m-altima-gurgaon
-      // alt-m3m-residences
-      // --------------------------------------------------------
+      // m3m-crown
+      // m3m-mercury
+      // ------------------------------------------------------
 
-      similarSlugs = await Property.find({
-        ...baseFilter,
-        slug: {
-          $regex: escapedSlug,
-          $options: "i",
-        },
-      })
-        .select(
-          "_id slug status isDeleted coreDetails.title"
-        )
-        .sort({
-          updatedAt: -1,
+      similarSlugs =
+        await Property.find({
+          ...baseFilter,
+
+          slug: {
+            $regex: escapedSlug,
+            $options: "i",
+          },
         })
-        .limit(8)
-        .lean();
+          .select(
+            "_id slug status isDeleted coreDetails.title"
+          )
+          .sort({
+            updatedAt: -1,
+          })
+          .limit(8)
+          .lean();
     }
 
-    // ==========================================================
-    // TITLE CHECK
-    // ==========================================================
+    // ========================================================
+    // TITLE SIMILARITY
+    // ========================================================
 
     let similarTitles = [];
 
     if (cleanTitle.length >= 2) {
-      const escapedTitle = cleanTitle.replace(
-        /[.*+?^${}()|[\]\\]/g,
-        "\\$&"
-      );
 
-      similarTitles = await Property.find({
-        ...baseFilter,
-        isDeleted: false,
-        "coreDetails.title": {
-          $regex: escapedTitle,
-          $options: "i",
-        },
-      })
-        .select(
-          "_id slug status isDeleted coreDetails.title"
-        )
-        .sort({
-          updatedAt: -1,
+      const escapedTitle =
+        escapeRegex(cleanTitle);
+
+      similarTitles =
+        await Property.find({
+          ...baseFilter,
+
+          "coreDetails.title": {
+            $regex: escapedTitle,
+            $options: "i",
+          },
         })
-        .limit(8)
-        .lean();
+          .select(
+            "_id slug status isDeleted coreDetails.title"
+          )
+          .sort({
+            updatedAt: -1,
+          })
+          .limit(8)
+          .lean();
     }
 
-    // ==========================================================
+    // ========================================================
     // RESPONSE
-    // ==========================================================
+    // ========================================================
 
     return res.status(200).json({
       success: true,
 
-      // Exact duplicate
+      // Exact slug duplicate
       slugExists: Boolean(slugProperty),
 
-      // Exact matching property
       slugProperty,
 
       // Similar slug suggestions
@@ -932,7 +955,9 @@ exports.checkPropertyDuplicates = async (req, res) => {
       // Similar title suggestions
       similarTitles,
     });
+
   } catch (err) {
+
     console.error(
       "CHECK PROPERTY DUPLICATES ERROR:",
       err
@@ -940,7 +965,8 @@ exports.checkPropertyDuplicates = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Failed to check property duplicates",
+      message:
+        "Failed to check property duplicates",
     });
   }
 };
