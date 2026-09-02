@@ -35,10 +35,26 @@ exports.createProperty = async (req, res) => {
 
     const missingFields = [];
 
-    if (!slug) missingFields.push("slug");
-    if (!marketType) missingFields.push("marketType");
+    if (!slug) {
+      missingFields.push("slug");
+    }
+
+    if (!marketType) {
+      missingFields.push("marketType");
+    }
+
     if (!coreDetails?.title) {
       missingFields.push("coreDetails.title");
+    }
+
+    // ================= VALIDATION =================
+
+    if (missingFields.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed ❌",
+        missingFields,
+      });
     }
 
     // ================= CLEAN CONFIGURATIONS =================
@@ -53,16 +69,6 @@ exports.createProperty = async (req, res) => {
         bathrooms: u?.bathrooms || "",
         balconies: u?.balconies || "",
       }));
-
-    // ================= VALIDATION =================
-
-    if (missingFields.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Validation failed ❌",
-        missingFields,
-      });
-    }
 
     // ================= UNIQUE SLUG =================
 
@@ -107,6 +113,7 @@ exports.createProperty = async (req, res) => {
 
     const cleanedHeroSection = {
       ...heroSection,
+
       taglineItems:
         heroSection?.taglineItems?.filter(
           (item) => item?.trim() !== ""
@@ -154,9 +161,14 @@ exports.createProperty = async (req, res) => {
       typeof coreDetails.developerRef === "object"
     ) {
       developerData = {
-        developerName: coreDetails.developerRef.name || "",
-        developerLogo: coreDetails.developerRef.logo || "",
-        developerImage: coreDetails.developerRef.image || "",
+        developerName:
+          coreDetails.developerRef.name || "",
+
+        developerLogo:
+          coreDetails.developerRef.logo || "",
+
+        developerImage:
+          coreDetails.developerRef.image || "",
       };
     }
 
@@ -183,9 +195,13 @@ exports.createProperty = async (req, res) => {
 
     if (typeof finalPropertyTag === "string") {
       try {
-        finalPropertyTag = JSON.parse(finalPropertyTag);
+        finalPropertyTag = JSON.parse(
+          finalPropertyTag
+        );
       } catch {
-        finalPropertyTag = [finalPropertyTag];
+        finalPropertyTag = [
+          finalPropertyTag,
+        ];
       }
     }
 
@@ -202,9 +218,13 @@ exports.createProperty = async (req, res) => {
 
       seoEngine: {
         hasCustomSEO,
-        metaTitle: req.body.seoEngine?.metaTitle || "",
+
+        metaTitle:
+          req.body.seoEngine?.metaTitle || "",
+
         metaDescription:
           req.body.seoEngine?.metaDescription || "",
+
         keywords: seoKeywords,
       },
 
@@ -223,9 +243,11 @@ exports.createProperty = async (req, res) => {
         ...locationData,
       },
 
-      heroSection: cleanedHeroSection,
+      heroSection:
+        cleanedHeroSection,
 
-      overview: cleanedOverview,
+      overview:
+        cleanedOverview,
 
       configurationSection:
         cleanedConfigurationSection,
@@ -247,7 +269,8 @@ exports.createProperty = async (req, res) => {
           cleanedPlotConfigurations,
       },
 
-      createdBy: req.user?.id,
+      createdBy:
+        req.user?.id,
     });
 
     res.status(201).json({
@@ -267,6 +290,7 @@ exports.createProperty = async (req, res) => {
   }
 };
 
+
 // ============================================================
 // SAVE DRAFT
 // Agent + SuperAdmin
@@ -278,10 +302,13 @@ exports.saveDraft = async (req, res) => {
 
     let property;
 
-    // ================= EXISTING DRAFT =================
+    // ========================================================
+    // EXISTING PROPERTY / DRAFT
+    // ========================================================
 
     if (draftId) {
-      property = await Property.findById(draftId);
+      property =
+        await Property.findById(draftId);
 
       if (!property) {
         return res.status(404).json({
@@ -290,31 +317,52 @@ exports.saveDraft = async (req, res) => {
         });
       }
 
+      // ------------------------------------------------------
       // Agent cannot modify Trash
+      // ------------------------------------------------------
+
       if (
         property.isDeleted &&
         !canAccessTrash(req)
       ) {
         return res.status(403).json({
           success: false,
-          message: "You cannot access a trashed property",
+          message:
+            "You cannot access a trashed property",
         });
       }
+
+      // ------------------------------------------------------
+      // Update existing property as Draft
+      // ------------------------------------------------------
 
       property.set({
         ...req.body,
         status: "draft",
       });
 
-      await property.save();
-    } else {
-      // ================= NEW DRAFT =================
+      // Never allow draftId itself to become a DB field
+      if (property.draftId !== undefined) {
+        property.draftId = undefined;
+      }
 
-      property = await Property.create({
-        ...req.body,
-        status: "draft",
-        createdBy: req.user.id,
-      });
+      await property.save();
+    }
+
+    // ========================================================
+    // NEW DRAFT
+    // ========================================================
+
+    else {
+      property =
+        await Property.create({
+          ...req.body,
+
+          status: "draft",
+
+          createdBy:
+            req.user?.id,
+        });
     }
 
     res.status(200).json({
@@ -334,6 +382,7 @@ exports.saveDraft = async (req, res) => {
   }
 };
 
+
 // ============================================================
 // PUBLISH DRAFT
 // Agent + SuperAdmin
@@ -342,7 +391,9 @@ exports.saveDraft = async (req, res) => {
 exports.publishDraft = async (req, res) => {
   try {
     const property =
-      await Property.findById(req.params.id);
+      await Property.findById(
+        req.params.id
+      );
 
     if (!property) {
       return res.status(404).json({
@@ -351,7 +402,10 @@ exports.publishDraft = async (req, res) => {
       });
     }
 
+    // --------------------------------------------------------
     // Agent cannot publish Trash
+    // --------------------------------------------------------
+
     if (
       property.isDeleted &&
       !canAccessTrash(req)
@@ -363,14 +417,18 @@ exports.publishDraft = async (req, res) => {
       });
     }
 
-    // ================= UNIQUE SLUG =================
+    // ========================================================
+    // UNIQUE SLUG
+    // ========================================================
 
     const existingSlug =
       await Property.findOne({
         slug: property.slug,
+
         _id: {
           $ne: property._id,
         },
+
         isDeleted: false,
       });
 
@@ -381,7 +439,8 @@ exports.publishDraft = async (req, res) => {
       });
     }
 
-    property.status = "published";
+    property.status =
+      "published";
 
     await property.save();
 
@@ -402,24 +461,34 @@ exports.publishDraft = async (req, res) => {
   }
 };
 
+
 // ============================================================
 // UPDATE PROPERTY
 // Agent + SuperAdmin
 // ============================================================
 
-exports.updateProperty = async (req, res) => {
+exports.updateProperty = async (
+  req,
+  res
+) => {
   try {
     const property =
-      await Property.findById(req.params.id);
+      await Property.findById(
+        req.params.id
+      );
 
     if (!property) {
       return res.status(404).json({
         success: false,
-        message: "Property not found ❌",
+        message:
+          "Property not found ❌",
       });
     }
 
+    // --------------------------------------------------------
     // Agent cannot edit Trash
+    // --------------------------------------------------------
+
     if (
       property.isDeleted &&
       !canAccessTrash(req)
@@ -445,17 +514,23 @@ exports.updateProperty = async (req, res) => {
       configurationSection,
     } = req.body;
 
-    // ================= CONFIG CLEAN =================
+    // ========================================================
+    // CONFIGURATIONS
+    // ========================================================
 
     const cleanedConfigurations =
       (unitConfigurations || []).map((u) => ({
         unitType: u?.unitType || "",
         area: u?.area || "",
         price: u?.price || "",
-        paymentPlan: u?.paymentPlan || "",
-        bedrooms: u?.bedrooms || "",
-        bathrooms: u?.bathrooms || "",
-        balconies: u?.balconies || "",
+        paymentPlan:
+          u?.paymentPlan || "",
+        bedrooms:
+          u?.bedrooms || "",
+        bathrooms:
+          u?.bathrooms || "",
+        balconies:
+          u?.balconies || "",
       }));
 
     let validConfigurations =
@@ -487,31 +562,39 @@ exports.updateProperty = async (req, res) => {
       }
     }
 
-    // ================= CATEGORY =================
+    // ========================================================
+    // CATEGORY
+    // ========================================================
 
     let categoryFinal =
       property.categoryData || {};
 
     if (categoryData) {
-      if (categoryData?.categoryRef) {
+      if (
+        categoryData?.categoryRef
+      ) {
         categoryFinal = {
           categoryRef:
             categoryData.categoryRef,
 
           categoryName:
-            categoryData.categoryName || "",
+            categoryData.categoryName ||
+            "",
         };
       } else {
         categoryFinal = {
           categoryRef: null,
 
           categoryName:
-            categoryData?.categoryName || "",
+            categoryData?.categoryName ||
+            "",
         };
       }
     }
 
-    // ================= LOCATION =================
+    // ========================================================
+    // LOCATION
+    // ========================================================
 
     let locationFinal =
       property.locationData || {};
@@ -519,23 +602,27 @@ exports.updateProperty = async (req, res) => {
     if (locationData) {
       locationFinal = {
         ...property.locationData,
-
         ...locationData,
 
         locationRef:
-          locationData.locationRef || null,
+          locationData.locationRef ||
+          null,
 
         locationName:
-          locationData.locationName || "",
+          locationData.locationName ||
+          "",
 
         customLocation:
           locationData.locationRef
             ? ""
-            : locationData.customLocation || "",
+            : locationData.customLocation ||
+              "",
       };
     }
 
-    // ================= HERO CLEAN =================
+    // ========================================================
+    // HERO
+    // ========================================================
 
     const cleanedHeroSection =
       heroSection
@@ -544,12 +631,15 @@ exports.updateProperty = async (req, res) => {
 
             taglineItems:
               heroSection?.taglineItems?.filter(
-                (item) => item?.trim() !== ""
+                (item) =>
+                  item?.trim() !== ""
               ) || [],
           }
         : property.heroSection;
 
-    // ================= OVERVIEW CLEAN =================
+    // ========================================================
+    // OVERVIEW
+    // ========================================================
 
     const cleanedOverview =
       overview
@@ -562,25 +652,33 @@ exports.updateProperty = async (req, res) => {
                 (item) =>
                   item?.heading?.trim()
               ) ||
-              property.overview.highlights,
+              property.overview
+                ?.highlights ||
+              [],
 
             amenities:
               overview.amenities?.filter(
                 (item) =>
                   item?.heading?.trim()
               ) ||
-              property.overview.amenities,
+              property.overview
+                ?.amenities ||
+              [],
 
             featureBar:
               overview.featureBar?.filter(
                 (item) =>
                   item?.title?.trim()
               ) ||
-              property.overview.featureBar,
+              property.overview
+                ?.featureBar ||
+              [],
           }
         : property.overview;
 
-    // ================= CONFIG SECTION =================
+    // ========================================================
+    // CONFIGURATION SECTION
+    // ========================================================
 
     const cleanedConfigurationSection =
       configurationSection
@@ -595,45 +693,61 @@ exports.updateProperty = async (req, res) => {
           }
         : property.configurationSection;
 
-    // ================= FLOOR PLANS =================
+    // ========================================================
+    // FLOOR PLANS
+    // ========================================================
 
     const cleanedFloorPlans =
       gatedContent?.floorPlans?.map(
         (fp) => ({
           unitType:
             fp?.unitType || "",
+
           area:
             fp?.area || "",
+
           price:
             fp?.price || "",
+
           paymentPlan:
             fp?.paymentPlan || "",
+
           bedrooms:
             fp?.bedrooms || "",
+
           bathrooms:
             fp?.bathrooms || "",
+
           balconies:
             fp?.balconies || "",
+
           image:
             fp?.image || "",
         })
       ) ||
-      property.gatedContent?.floorPlans ||
+      property.gatedContent
+        ?.floorPlans ||
       [];
 
-    // ================= PLOT CONFIGURATIONS =================
+    // ========================================================
+    // PLOT CONFIGURATIONS
+    // ========================================================
 
     const cleanedPlotConfigurations =
       gatedContent?.plotConfigurations?.map(
         (plot) => ({
           plotType:
             plot?.plotType || "",
+
           plotArea:
             plot?.plotArea || "",
+
           price:
             plot?.price || "",
+
           paymentPlan:
             plot?.paymentPlan || "",
+
           image:
             plot?.image || "",
         })
@@ -642,25 +756,31 @@ exports.updateProperty = async (req, res) => {
         ?.plotConfigurations ||
       [];
 
-    // ================= SEO =================
+    // ========================================================
+    // SEO
+    // ========================================================
 
     const seoKeywords =
-      typeof req.body.seoEngine?.keywords ===
-      "string"
+      typeof req.body.seoEngine
+        ?.keywords === "string"
         ? req.body.seoEngine.keywords
             .split(",")
             .map((k) => k.trim())
             .filter(Boolean)
-        : req.body.seoEngine?.keywords || [];
+        : req.body.seoEngine?.keywords ||
+          [];
 
     const hasCustomSEO =
       !!(
         req.body.seoEngine?.metaTitle?.trim() &&
-        req.body.seoEngine?.metaDescription?.trim() &&
+        req.body.seoEngine
+          ?.metaDescription?.trim() &&
         seoKeywords.length
       );
 
-    // ================= PROPERTY TAG =================
+    // ========================================================
+    // PROPERTY TAG
+    // ========================================================
 
     let finalPropertyTag =
       propertyTag;
@@ -696,11 +816,14 @@ exports.updateProperty = async (req, res) => {
           : ["Normal"];
     }
 
-    // ================= UPDATE =================
+    // ========================================================
+    // UPDATE
+    // ========================================================
 
     const updated =
       await Property.findByIdAndUpdate(
         req.params.id,
+
         {
           marketType:
             marketType ||
@@ -713,58 +836,45 @@ exports.updateProperty = async (req, res) => {
           propertyTag:
             finalPropertyTag,
 
-          // ================= CORE DETAILS =================
-
           coreDetails:
             coreDetails
               ? {
                   ...coreDetails,
 
                   developerName:
-                    coreDetails?.developerName ||
+                    coreDetails
+                      ?.developerName ||
                     "",
 
                   developerLogo:
-                    coreDetails?.developerLogo ||
+                    coreDetails
+                      ?.developerLogo ||
                     "",
 
                   developerImage:
-                    coreDetails?.developerImage ||
+                    coreDetails
+                      ?.developerImage ||
                     "",
                 }
               : property.coreDetails,
 
-          // ================= CATEGORY =================
-
           categoryData:
             categoryFinal,
-
-          // ================= LOCATION =================
 
           locationData:
             locationFinal,
 
-          // ================= HERO =================
-
           heroSection:
             cleanedHeroSection,
-
-          // ================= OVERVIEW =================
 
           overview:
             cleanedOverview,
 
-          // ================= CONFIG SECTION =================
-
           configurationSection:
             cleanedConfigurationSection,
 
-          // ================= CONFIGURATIONS =================
-
           unitConfigurations:
             validConfigurations,
-
-          // ================= KEY METRICS =================
 
           keyMetrics:
             req.body.keyMetrics
@@ -785,13 +895,9 @@ exports.updateProperty = async (req, res) => {
                 }
               : property.keyMetrics,
 
-          // ================= MEDIA =================
-
           media:
             req.body.media ||
             property.media,
-
-          // ================= GATED CONTENT =================
 
           gatedContent:
             gatedContent
@@ -813,8 +919,6 @@ exports.updateProperty = async (req, res) => {
                 }
               : property.gatedContent,
 
-          // ================= SEO =================
-
           seoEngine:
             req.body.seoEngine
               ? {
@@ -826,25 +930,23 @@ exports.updateProperty = async (req, res) => {
 
                   metaDescription:
                     req.body.seoEngine
-                      .metaDescription || "",
+                      .metaDescription ||
+                    "",
 
                   keywords:
                     seoKeywords,
                 }
               : property.seoEngine,
 
-          // ================= FAQ =================
-
           faqs:
             req.body.faqs ||
             property.faqs,
-
-          // ================= CTA =================
 
           cta:
             req.body.cta ||
             property.cta,
         },
+
         {
           new: true,
           runValidators: true,
@@ -873,7 +975,7 @@ exports.updateProperty = async (req, res) => {
 // GET PROPERTIES
 //
 // PUBLIC:
-//   Only Live / Published / Active / Non-Deleted
+//   Published + Active + Non-Deleted
 //
 // AGENT:
 //   all=true → Live + Draft
@@ -882,8 +984,12 @@ exports.updateProperty = async (req, res) => {
 // SUPERADMIN:
 //   all=true → Live + Draft + Trash
 //
-// This endpoint uses optionalProtect in propertyRoutes.js
-// so public users can still access it.
+// IMPORTANT:
+// propertyRoutes.js must use:
+//
+// optionalProtect,
+// getProperties
+//
 // ============================================================
 
 exports.getProperties = async (
@@ -911,44 +1017,34 @@ exports.getProperties = async (
 
     // ========================================================
     // SUPERADMIN
-    //
-    // Admin Inventory:
-    // Live + Draft + Trash
     // ========================================================
 
     if (
       isSuperAdmin &&
       all === "true"
     ) {
+      // SuperAdmin can see EVERYTHING
+      // including Trash.
       filter = {};
     }
 
     // ========================================================
     // AGENT
-    //
-    // Agent Inventory:
-    // Live + Draft
-    // NEVER Trash
     // ========================================================
 
     else if (
       isAgent &&
       all === "true"
     ) {
+      // Agent can see Live + Draft
+      // but NEVER Trash.
       filter = {
         isDeleted: false,
       };
     }
 
     // ========================================================
-    // AUTHENTICATED ADMIN STATUS FILTER
-    //
-    // Used when frontend specifically asks:
-    //
-    // ?status=published
-    // ?status=draft
-    //
-    // Both Agent and SuperAdmin can use this.
+    // ADMIN STATUS FILTER
     // ========================================================
 
     else if (
@@ -962,7 +1058,7 @@ exports.getProperties = async (
     }
 
     // ========================================================
-    // INACTIVE ADMIN PROPERTIES
+    // ADMIN INACTIVE FILTER
     // ========================================================
 
     else if (
@@ -977,11 +1073,6 @@ exports.getProperties = async (
 
     // ========================================================
     // PUBLIC
-    //
-    // IMPORTANT:
-    // This is what normal website visitors receive.
-    //
-    // They NEVER receive Draft or Trash.
     // ========================================================
 
     else {
@@ -1022,7 +1113,7 @@ exports.getProperties = async (
     }
 
     // ========================================================
-    // FETCH PROPERTIES
+    // FETCH
     // ========================================================
 
     const properties =
@@ -1034,8 +1125,10 @@ exports.getProperties = async (
         )
         .populate({
           path: "locationData.locationRef",
+
           populate: {
             path: "parent",
+
             populate: {
               path: "parent",
             },
@@ -1050,7 +1143,6 @@ exports.getProperties = async (
       success: true,
       data: properties,
     });
-
   } catch (error) {
     console.error(
       "GET PROPERTIES ERROR:",
@@ -1083,7 +1175,8 @@ exports.deleteProperty = async (
     if (!property) {
       return res.status(404).json({
         success: false,
-        message: "Property not found",
+        message:
+          "Property not found",
       });
     }
 
@@ -1099,7 +1192,11 @@ exports.deleteProperty = async (
       });
     }
 
-    property.status = "draft";
+    // IMPORTANT:
+    // This is NOT Trash.
+    // It only changes Live → Draft.
+    property.status =
+      "draft";
 
     await property.save();
 
@@ -1107,6 +1204,7 @@ exports.deleteProperty = async (
       success: true,
       message:
         "Property moved to draft",
+      data: property,
     });
   } catch (err) {
     console.error(
@@ -1120,6 +1218,7 @@ exports.deleteProperty = async (
     });
   }
 };
+
 
 // ============================================================
 // DRAFT → LIVE
@@ -1139,11 +1238,13 @@ exports.restoreProperty = async (
     if (!property) {
       return res.status(404).json({
         success: false,
-        message: "Property not found",
+        message:
+          "Property not found",
       });
     }
 
-    // Agent cannot restore Trash using this route
+    // Agent cannot restore Trash
+    // using the Draft → Live route.
     if (
       property.isDeleted &&
       !canAccessTrash(req)
@@ -1155,7 +1256,8 @@ exports.restoreProperty = async (
       });
     }
 
-    property.status = "published";
+    property.status =
+      "published";
 
     await property.save();
 
@@ -1163,6 +1265,7 @@ exports.restoreProperty = async (
       success: true,
       message:
         "Property published",
+      data: property,
     });
   } catch (err) {
     console.error(
@@ -1176,6 +1279,7 @@ exports.restoreProperty = async (
     });
   }
 };
+
 
 // ============================================================
 // MOVE TO TRASH
@@ -1195,11 +1299,15 @@ exports.moveToTrash = async (
     if (!property) {
       return res.status(404).json({
         success: false,
-        message: "Property not found",
+        message:
+          "Property not found",
       });
     }
 
+    // --------------------------------------------------------
     // Already Trash
+    // --------------------------------------------------------
+
     if (property.isDeleted) {
       return res.status(400).json({
         success: false,
@@ -1208,10 +1316,15 @@ exports.moveToTrash = async (
       });
     }
 
+    // --------------------------------------------------------
+    // Remember whether it was Live or Draft
+    // --------------------------------------------------------
+
     property.deletedFromStatus =
       property.status;
 
-    property.isDeleted = true;
+    property.isDeleted =
+      true;
 
     await property.save();
 
@@ -1219,6 +1332,7 @@ exports.moveToTrash = async (
       success: true,
       message:
         "Moved to trash",
+      data: property,
     });
   } catch (err) {
     console.error(
@@ -1232,6 +1346,7 @@ exports.moveToTrash = async (
     });
   }
 };
+
 
 // ============================================================
 // RESTORE FROM TRASH
@@ -1251,15 +1366,18 @@ exports.restoreTrash = async (
     if (!property) {
       return res.status(404).json({
         success: false,
-        message: "Property not found",
+        message:
+          "Property not found",
       });
     }
 
-    property.isDeleted = false;
+    property.isDeleted =
+      false;
 
     property.status =
       property.deletedFromStatus ||
-      property.status;
+      property.status ||
+      "draft";
 
     property.deletedFromStatus =
       null;
@@ -1270,6 +1388,7 @@ exports.restoreTrash = async (
       success: true,
       message:
         "Property restored",
+      data: property,
     });
   } catch (err) {
     console.error(
@@ -1283,6 +1402,7 @@ exports.restoreTrash = async (
     });
   }
 };
+
 
 // ============================================================
 // DELETE FOREVER
@@ -1322,10 +1442,12 @@ exports.permanentDeleteProperty =
 
       res.status(500).json({
         success: false,
-        message: err.message,
+        message:
+          err.message,
       });
     }
   };
+
 
 // ============================================================
 // GET PROPERTY BY SLUG
@@ -1337,17 +1459,21 @@ exports.getPropertyBySlug = async (
   res
 ) => {
   try {
-    const { slug } = req.params;
+    const { slug } =
+      req.params;
 
     const property =
       await Property.findOne({
         slug,
+
         isActive: true,
+
         isDeleted: false,
 
         $or: [
           {
-            status: "published",
+            status:
+              "published",
           },
           {
             status: {
@@ -1401,6 +1527,7 @@ exports.getPropertyBySlug = async (
   }
 };
 
+
 // ============================================================
 // GET PROPERTY PREVIEW
 // PUBLIC
@@ -1413,7 +1540,8 @@ exports.getPropertyPreview = async (
   try {
     const property =
       await Property.findOne({
-        slug: req.params.slug,
+        slug:
+          req.params.slug,
       })
         .populate("createdBy")
         .populate(
@@ -1454,6 +1582,7 @@ exports.getPropertyPreview = async (
   }
 };
 
+
 // ============================================================
 // GET PROPERTY BY ID
 // Agent + SuperAdmin
@@ -1489,7 +1618,10 @@ exports.getPropertyById = async (
       });
     }
 
+    // --------------------------------------------------------
     // Agent cannot access Trash
+    // --------------------------------------------------------
+
     if (
       property.isDeleted &&
       !canAccessTrash(req)
@@ -1513,7 +1645,8 @@ exports.getPropertyById = async (
 
     res.status(500).json({
       success: false,
-      message: err.message,
+      message:
+        err.message,
     });
   }
 };
