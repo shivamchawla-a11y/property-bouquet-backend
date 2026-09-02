@@ -4,6 +4,7 @@ const router = express.Router();
 
 const {
   protect,
+  optionalProtect,
   authorize,
 } = require("../middleware/authMiddleware");
 
@@ -29,7 +30,12 @@ const {
 // ============================================================
 
 // Public property listing
-router.get("/", getProperties);
+router.get(
+  "/",
+  optionalProtect,
+  getProperties
+);
+
 
 // Public property by slug
 router.get("/slug/:slug", getPropertyBySlug);

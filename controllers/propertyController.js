@@ -868,18 +868,22 @@ exports.updateProperty = async (req, res) => {
   }
 };
 
+
 // ============================================================
 // GET PROPERTIES
 //
 // PUBLIC:
-//   Only active published/non-deleted properties
+//   Only Live / Published / Active / Non-Deleted
 //
 // AGENT:
-//   Live + Draft
-//   Never Trash
+//   all=true → Live + Draft
+//   NEVER Trash
 //
 // SUPERADMIN:
-//   Live + Draft + Trash
+//   all=true → Live + Draft + Trash
+//
+// This endpoint uses optionalProtect in propertyRoutes.js
+// so public users can still access it.
 // ============================================================
 
 exports.getProperties = async (
@@ -903,10 +907,13 @@ exports.getProperties = async (
     const isAgent =
       role === "Agent";
 
-    let filter;
+    let filter = {};
 
-    // ======================================================== 
+    // ========================================================
     // SUPERADMIN
+    //
+    // Admin Inventory:
+    // Live + Draft + Trash
     // ========================================================
 
     if (
@@ -918,6 +925,10 @@ exports.getProperties = async (
 
     // ========================================================
     // AGENT
+    //
+    // Agent Inventory:
+    // Live + Draft
+    // NEVER Trash
     // ========================================================
 
     else if (
@@ -930,27 +941,19 @@ exports.getProperties = async (
     }
 
     // ========================================================
-    // INACTIVE
+    // AUTHENTICATED ADMIN STATUS FILTER
+    //
+    // Used when frontend specifically asks:
+    //
+    // ?status=published
+    // ?status=draft
+    //
+    // Both Agent and SuperAdmin can use this.
     // ========================================================
 
     else if (
-      inactive === "true" &&
-      (isAgent || isSuperAdmin)
-    ) {
-      filter = {
-        isActive: false,
-        isDeleted: false,
-      };
-    }
-
-    // ========================================================
-    // ADMIN STATUS FILTER
-    // Agent + SuperAdmin
-    // ========================================================
-
-    else if (
-      status &&
-      (isAgent || isSuperAdmin)
+      (isAgent || isSuperAdmin) &&
+      status
     ) {
       filter = {
         status,
@@ -959,7 +962,26 @@ exports.getProperties = async (
     }
 
     // ========================================================
+    // INACTIVE ADMIN PROPERTIES
+    // ========================================================
+
+    else if (
+      (isAgent || isSuperAdmin) &&
+      inactive === "true"
+    ) {
+      filter = {
+        isActive: false,
+        isDeleted: false,
+      };
+    }
+
+    // ========================================================
     // PUBLIC
+    //
+    // IMPORTANT:
+    // This is what normal website visitors receive.
+    //
+    // They NEVER receive Draft or Trash.
     // ========================================================
 
     else {
@@ -1000,7 +1022,7 @@ exports.getProperties = async (
     }
 
     // ========================================================
-    // FETCH
+    // FETCH PROPERTIES
     // ========================================================
 
     const properties =
@@ -1020,10 +1042,15 @@ exports.getProperties = async (
           },
         });
 
+    // ========================================================
+    // RESPONSE
+    // ========================================================
+
     res.status(200).json({
       success: true,
       data: properties,
     });
+
   } catch (error) {
     console.error(
       "GET PROPERTIES ERROR:",
@@ -1036,6 +1063,7 @@ exports.getProperties = async (
     });
   }
 };
+
 
 // ============================================================
 // LIVE → DRAFT
