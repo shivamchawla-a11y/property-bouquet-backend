@@ -1,43 +1,61 @@
 const Property = require("../models/Property");
 
-// ✅ CREATE PROPERTY
-// ✅ CREATE PROPERTY
+// ============================================================
+// HELPERS
+// ============================================================
+
+// Agent cannot access properties that are already in Trash.
+// SuperAdmin can access everything.
+const canAccessTrash = (req) => {
+  return req.user?.role === "SuperAdmin";
+};
+
+// ============================================================
+// CREATE PROPERTY
+// Agent + SuperAdmin
+// ============================================================
+
 exports.createProperty = async (req, res) => {
   try {
     const {
-  marketType,
-  coreDetails,
-  categoryData,
-  locationData,
-  unitConfigurations,
-  heroSection,
-  overview,
-  gatedContent,
-  configurationSection,
-  slug,
-  propertyTag,
-} = req.body;
+      marketType,
+      coreDetails,
+      categoryData,
+      locationData,
+      unitConfigurations,
+      heroSection,
+      overview,
+      gatedContent,
+      configurationSection,
+      slug,
+      propertyTag,
+    } = req.body;
 
     // ================= DETAILED REQUIRED CHECK =================
+
     const missingFields = [];
 
     if (!slug) missingFields.push("slug");
     if (!marketType) missingFields.push("marketType");
-    if (!coreDetails?.title) missingFields.push("coreDetails.title");
+    if (!coreDetails?.title) {
+      missingFields.push("coreDetails.title");
+    }
 
     // ================= CLEAN CONFIGURATIONS =================
-const cleanedConfigurations =
-  (unitConfigurations || []).map((u) => ({
-    unitType: u?.unitType || "",
-    area: u?.area || "",
-    price: u?.price || "",
-    paymentPlan: u?.paymentPlan || "",
-    bedrooms: u?.bedrooms || "",
-    bathrooms: u?.bathrooms || "",
-    balconies: u?.balconies || "",
-  }));
 
-    // ❌ STOP REQUEST IF ANYTHING MISSING
+    const cleanedConfigurations =
+      (unitConfigurations || []).map((u) => ({
+        unitType: u?.unitType || "",
+        area: u?.area || "",
+        price: u?.price || "",
+        paymentPlan: u?.paymentPlan || "",
+        bedrooms: u?.bedrooms || "",
+        bathrooms: u?.bathrooms || "",
+        balconies: u?.balconies || "",
+      }));
+
+    // ================= VALIDATION =================
+
     if (missingFields.length > 0) {
       return res.status(400).json({
         success: false,
@@ -47,10 +65,11 @@ const cleanedConfigurations =
     }
 
     // ================= UNIQUE SLUG =================
+
     const existing = await Property.findOne({
-  slug,
-  isDeleted: false,
-});
+      slug,
+      isDeleted: false,
+    });
 
     if (existing) {
       return res.status(400).json({
@@ -59,33 +78,33 @@ const cleanedConfigurations =
       });
     }
 
-    // ================= FLOOR PLAN CLEAN =================
-    // ================= FLOOR PLAN CLEAN =================
+    // ================= FLOOR PLANS =================
 
-const cleanedFloorPlans =
-  gatedContent?.floorPlans?.map((fp) => ({
-    unitType: fp?.unitType || "",
-    area: fp?.area || "",
-    price: fp?.price || "",
-    paymentPlan: fp?.paymentPlan || "",
-    bedrooms: fp?.bedrooms || "",
-    bathrooms: fp?.bathrooms || "",
-    balconies: fp?.balconies || "",
-    image: fp?.image || "",
-  })) || [];
+    const cleanedFloorPlans =
+      gatedContent?.floorPlans?.map((fp) => ({
+        unitType: fp?.unitType || "",
+        area: fp?.area || "",
+        price: fp?.price || "",
+        paymentPlan: fp?.paymentPlan || "",
+        bedrooms: fp?.bedrooms || "",
+        bathrooms: fp?.bathrooms || "",
+        balconies: fp?.balconies || "",
+        image: fp?.image || "",
+      })) || [];
 
+    // ================= PLOT CONFIGURATIONS =================
 
-// ================= PLOT CONFIGURATION CLEAN =================
+    const cleanedPlotConfigurations =
+      gatedContent?.plotConfigurations?.map((plot) => ({
+        plotType: plot?.plotType || "",
+        plotArea: plot?.plotArea || "",
+        price: plot?.price || "",
+        paymentPlan: plot?.paymentPlan || "",
+        image: plot?.image || "",
+      })) || [];
 
-const cleanedPlotConfigurations =
-  gatedContent?.plotConfigurations?.map((plot) => ({
-    plotType: plot?.plotType || "",
-    plotArea: plot?.plotArea || "",
-    price: plot?.price || "",
-    paymentPlan: plot?.paymentPlan || "",
-    image: plot?.image || "",
-  })) || [];
     // ================= HERO CLEAN =================
+
     const cleanedHeroSection = {
       ...heroSection,
       taglineItems:
@@ -95,28 +114,31 @@ const cleanedPlotConfigurations =
     };
 
     // ================= OVERVIEW CLEAN =================
+
     const cleanedOverview = {
-  ...overview,
+      ...overview,
 
-  highlights:
-    overview?.highlights?.filter(
-      (item) => item?.heading?.trim() !== ""
-    ) || [],
+      highlights:
+        overview?.highlights?.filter(
+          (item) => item?.heading?.trim() !== ""
+        ) || [],
 
-  amenities:
-    overview?.amenities?.filter(
-      (item) => item?.heading?.trim() !== ""
-    ) || [],
+      amenities:
+        overview?.amenities?.filter(
+          (item) => item?.heading?.trim() !== ""
+        ) || [],
 
-  featureBar:
-    overview?.featureBar?.filter(
-      (item) => item?.title?.trim() !== ""
-    ) || [],
-};
+      featureBar:
+        overview?.featureBar?.filter(
+          (item) => item?.title?.trim() !== ""
+        ) || [],
+    };
 
-    // ================= CONFIG SECTION CLEAN =================
+    // ================= CONFIGURATION SECTION =================
+
     const cleanedConfigurationSection = {
       ...configurationSection,
+
       features:
         configurationSection?.features?.filter(
           (item) => item?.trim() !== ""
@@ -124,6 +146,7 @@ const cleanedPlotConfigurations =
     };
 
     // ================= DEVELOPER SNAPSHOT =================
+
     let developerData = {};
 
     if (
@@ -138,51 +161,54 @@ const cleanedPlotConfigurations =
     }
 
     // ================= SEO =================
-const seoKeywords =
-  typeof req.body.seoEngine?.keywords === "string"
-    ? req.body.seoEngine.keywords
-        .split(",")
-        .map((k) => k.trim())
-        .filter(Boolean)
-    : req.body.seoEngine?.keywords || [];
 
-const hasCustomSEO =
-  !!(
-    req.body.seoEngine?.metaTitle?.trim() &&
-    req.body.seoEngine?.metaDescription?.trim() &&
-    seoKeywords.length
-  );
+    const seoKeywords =
+      typeof req.body.seoEngine?.keywords === "string"
+        ? req.body.seoEngine.keywords
+            .split(",")
+            .map((k) => k.trim())
+            .filter(Boolean)
+        : req.body.seoEngine?.keywords || [];
 
-  // ================= PROPERTY TAG CLEAN =================
-let finalPropertyTag = propertyTag;
+    const hasCustomSEO =
+      !!(
+        req.body.seoEngine?.metaTitle?.trim() &&
+        req.body.seoEngine?.metaDescription?.trim() &&
+        seoKeywords.length
+      );
 
-if (typeof finalPropertyTag === "string") {
-  try {
-    finalPropertyTag = JSON.parse(finalPropertyTag);
-  } catch {
-    finalPropertyTag = [finalPropertyTag];
-  }
-}
+    // ================= PROPERTY TAG =================
 
-if (!Array.isArray(finalPropertyTag)) {
-  finalPropertyTag = ["Normal"];
-}
+    let finalPropertyTag = propertyTag;
 
-    // ================= CREATE PROPERTY =================
+    if (typeof finalPropertyTag === "string") {
+      try {
+        finalPropertyTag = JSON.parse(finalPropertyTag);
+      } catch {
+        finalPropertyTag = [finalPropertyTag];
+      }
+    }
+
+    if (!Array.isArray(finalPropertyTag)) {
+      finalPropertyTag = ["Normal"];
+    }
+
+    // ================= CREATE =================
+
     const property = await Property.create({
-  ...req.body,
+      ...req.body,
 
-propertyTag: finalPropertyTag,
+      propertyTag: finalPropertyTag,
 
-seoEngine: {
-  hasCustomSEO,
-  metaTitle: req.body.seoEngine?.metaTitle || "",
-  metaDescription:
-    req.body.seoEngine?.metaDescription || "",
-  keywords: seoKeywords,
-},
+      seoEngine: {
+        hasCustomSEO,
+        metaTitle: req.body.seoEngine?.metaTitle || "",
+        metaDescription:
+          req.body.seoEngine?.metaDescription || "",
+        keywords: seoKeywords,
+      },
 
-  status: "published",
+      status: "published",
 
       coreDetails: {
         ...coreDetails,
@@ -201,21 +227,25 @@ seoEngine: {
 
       overview: cleanedOverview,
 
-      configurationSection: cleanedConfigurationSection,
+      configurationSection:
+        cleanedConfigurationSection,
 
-      unitConfigurations: cleanedConfigurations,
+      unitConfigurations:
+        cleanedConfigurations,
 
       gatedContent: {
-  ...gatedContent,
+        ...gatedContent,
 
-  configurationType:
-    gatedContent?.configurationType || "Apartments",
+        configurationType:
+          gatedContent?.configurationType ||
+          "Apartments",
 
-  floorPlans: cleanedFloorPlans,
+        floorPlans:
+          cleanedFloorPlans,
 
-  plotConfigurations:
-    cleanedPlotConfigurations,
-},
+        plotConfigurations:
+          cleanedPlotConfigurations,
+      },
 
       createdBy: req.user?.id,
     });
@@ -225,7 +255,10 @@ seoEngine: {
       data: property,
     });
   } catch (err) {
-    console.error("CREATE PROPERTY ERROR:", err);
+    console.error(
+      "CREATE PROPERTY ERROR:",
+      err
+    );
 
     res.status(500).json({
       success: false,
@@ -234,45 +267,61 @@ seoEngine: {
   }
 };
 
+// ============================================================
+// SAVE DRAFT
+// Agent + SuperAdmin
+// ============================================================
+
 exports.saveDraft = async (req, res) => {
   try {
-
     const { draftId } = req.body;
 
     let property;
 
+    // ================= EXISTING DRAFT =================
+
     if (draftId) {
+      property = await Property.findById(draftId);
 
-      property =
-        await Property.findByIdAndUpdate(
-          draftId,
-          {
-            ...req.body,
-            status: "draft",
-          },
-          {
-            new: true,
-          }
-        );
-
-    } else {
-
-      property =
-        await Property.create({
-          ...req.body,
-          status: "draft",
-          createdBy: req.user.id,
+      if (!property) {
+        return res.status(404).json({
+          success: false,
+          message: "Draft not found",
         });
+      }
 
+      // Agent cannot modify Trash
+      if (
+        property.isDeleted &&
+        !canAccessTrash(req)
+      ) {
+        return res.status(403).json({
+          success: false,
+          message: "You cannot access a trashed property",
+        });
+      }
+
+      property.set({
+        ...req.body,
+        status: "draft",
+      });
+
+      await property.save();
+    } else {
+      // ================= NEW DRAFT =================
+
+      property = await Property.create({
+        ...req.body,
+        status: "draft",
+        createdBy: req.user.id,
+      });
     }
 
     res.status(200).json({
       success: true,
       data: property,
     });
-
   } catch (err) {
-
     console.error(
       "SAVE DRAFT ERROR:",
       err
@@ -282,13 +331,16 @@ exports.saveDraft = async (req, res) => {
       success: false,
       message: err.message,
     });
-
   }
 };
 
+// ============================================================
+// PUBLISH DRAFT
+// Agent + SuperAdmin
+// ============================================================
+
 exports.publishDraft = async (req, res) => {
   try {
-
     const property =
       await Property.findById(req.params.id);
 
@@ -299,12 +351,28 @@ exports.publishDraft = async (req, res) => {
       });
     }
 
+    // Agent cannot publish Trash
+    if (
+      property.isDeleted &&
+      !canAccessTrash(req)
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "You cannot publish a trashed property",
+      });
+    }
+
+    // ================= UNIQUE SLUG =================
+
     const existingSlug =
-  await Property.findOne({
-    slug: property.slug,
-    _id: { $ne: property._id },
-    isDeleted: false,
-  });
+      await Property.findOne({
+        slug: property.slug,
+        _id: {
+          $ne: property._id,
+        },
+        isDeleted: false,
+      });
 
     if (existingSlug) {
       return res.status(400).json({
@@ -321,9 +389,7 @@ exports.publishDraft = async (req, res) => {
       success: true,
       data: property,
     });
-
   } catch (err) {
-
     console.error(
       "PUBLISH DRAFT ERROR:",
       err
@@ -333,21 +399,35 @@ exports.publishDraft = async (req, res) => {
       success: false,
       message: err.message,
     });
-
   }
 };
 
-// ✅ UPDATE PROPERTY
+// ============================================================
+// UPDATE PROPERTY
+// Agent + SuperAdmin
+// ============================================================
+
 exports.updateProperty = async (req, res) => {
   try {
-    const property = await Property.findById(
-      req.params.id
-    );
+    const property =
+      await Property.findById(req.params.id);
 
     if (!property) {
       return res.status(404).json({
         success: false,
         message: "Property not found ❌",
+      });
+    }
+
+    // Agent cannot edit Trash
+    if (
+      property.isDeleted &&
+      !canAccessTrash(req)
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "You cannot edit a trashed property",
       });
     }
 
@@ -366,42 +446,49 @@ exports.updateProperty = async (req, res) => {
     } = req.body;
 
     // ================= CONFIG CLEAN =================
-const cleanedConfigurations =
-  (unitConfigurations || []).map((u) => ({
-    unitType: u?.unitType || "",
-    area: u?.area || "",
-    price: u?.price || "",
-    paymentPlan: u?.paymentPlan || "",
-    bedrooms: u?.bedrooms || "",
-    bathrooms: u?.bathrooms || "",
-    balconies: u?.balconies || "",
-  }));
 
-// ✅ ALLOW EMPTY CONFIGURATIONS
-let validConfigurations =
-  property.unitConfigurations || [];
+    const cleanedConfigurations =
+      (unitConfigurations || []).map((u) => ({
+        unitType: u?.unitType || "",
+        area: u?.area || "",
+        price: u?.price || "",
+        paymentPlan: u?.paymentPlan || "",
+        bedrooms: u?.bedrooms || "",
+        bathrooms: u?.bathrooms || "",
+        balconies: u?.balconies || "",
+      }));
 
-if (unitConfigurations) {
+    let validConfigurations =
+      property.unitConfigurations || [];
 
-  validConfigurations =
-    cleanedConfigurations.filter(
-      (u) =>
-        u.unitType?.trim() ||
-        u.area?.trim() ||
-        u.price?.trim() ||
-        u.paymentPlan?.trim() ||
-        u.bedrooms?.toString().trim() ||
-        u.bathrooms?.toString().trim() ||
-        u.balconies?.toString().trim()
-    );
+    if (unitConfigurations) {
+      validConfigurations =
+        cleanedConfigurations.filter(
+          (u) =>
+            u.unitType?.trim() ||
+            u.area?.trim() ||
+            u.price?.trim() ||
+            u.paymentPlan?.trim() ||
+            u.bedrooms
+              ?.toString()
+              .trim() ||
+            u.bathrooms
+              ?.toString()
+              .trim() ||
+            u.balconies
+              ?.toString()
+              .trim()
+        );
 
-  // ✅ IF EVERYTHING EMPTY → STORE EMPTY ARRAY
-  if (validConfigurations.length === 0) {
-    validConfigurations = [];
-  }
-}
+      if (
+        validConfigurations.length === 0
+      ) {
+        validConfigurations = [];
+      }
+    }
 
     // ================= CATEGORY =================
+
     let categoryFinal =
       property.categoryData || {};
 
@@ -424,67 +511,77 @@ if (unitConfigurations) {
       }
     }
 
-// ================= LOCATION =================
-let locationFinal = property.locationData || {};
+    // ================= LOCATION =================
 
-if (locationData) {
-  locationFinal = {
-    // Preserve every existing location field
-    ...property.locationData,
+    let locationFinal =
+      property.locationData || {};
 
-    // Apply every updated field from the request
-    ...locationData,
+    if (locationData) {
+      locationFinal = {
+        ...property.locationData,
 
-    // Handle location reference
-    locationRef: locationData.locationRef || null,
+        ...locationData,
 
-    // Location name
-    locationName:
-      locationData.locationName || "",
+        locationRef:
+          locationData.locationRef || null,
 
-    // Custom location
-    customLocation: locationData.locationRef
-      ? ""
-      : locationData.customLocation || "",
-  };
-}
+        locationName:
+          locationData.locationName || "",
+
+        customLocation:
+          locationData.locationRef
+            ? ""
+            : locationData.customLocation || "",
+      };
+    }
 
     // ================= HERO CLEAN =================
-    const cleanedHeroSection = heroSection
-      ? {
-          ...heroSection,
 
-          taglineItems:
-            heroSection?.taglineItems?.filter(
-              (item) => item?.trim() !== ""
-            ) || [],
-        }
-      : property.heroSection;
+    const cleanedHeroSection =
+      heroSection
+        ? {
+            ...heroSection,
+
+            taglineItems:
+              heroSection?.taglineItems?.filter(
+                (item) => item?.trim() !== ""
+              ) || [],
+          }
+        : property.heroSection;
 
     // ================= OVERVIEW CLEAN =================
-const cleanedOverview = overview
-  ? {
-      ...property.overview,
-      ...overview,
 
-      highlights:
-        overview.highlights?.filter(
-          item => item?.heading?.trim()
-        ) || property.overview.highlights,
+    const cleanedOverview =
+      overview
+        ? {
+            ...property.overview,
+            ...overview,
 
-      amenities:
-        overview.amenities?.filter(
-          item => item?.heading?.trim()
-        ) || property.overview.amenities,
+            highlights:
+              overview.highlights?.filter(
+                (item) =>
+                  item?.heading?.trim()
+              ) ||
+              property.overview.highlights,
 
-      featureBar:
-        overview.featureBar?.filter(
-          item => item?.title?.trim()
-        ) || property.overview.featureBar,
-    }
-  : property.overview;
+            amenities:
+              overview.amenities?.filter(
+                (item) =>
+                  item?.heading?.trim()
+              ) ||
+              property.overview.amenities,
 
-    // ================= CONFIG SECTION CLEAN =================
+            featureBar:
+              overview.featureBar?.filter(
+                (item) =>
+                  item?.title?.trim()
+              ) ||
+              property.overview.featureBar,
+          }
+        : property.overview;
+
+    // ================= CONFIG SECTION =================
+
     const cleanedConfigurationSection =
       configurationSection
         ? {
@@ -492,194 +589,261 @@ const cleanedOverview = overview
 
             features:
               configurationSection?.features?.filter(
-                (item) => item?.trim() !== ""
+                (item) =>
+                  item?.trim() !== ""
               ) || [],
           }
         : property.configurationSection;
 
-    // ================= FLOOR PLAN CLEAN =================
-    // ================= FLOOR PLAN CLEAN =================
+    // ================= FLOOR PLANS =================
 
-const cleanedFloorPlans =
-  gatedContent?.floorPlans?.map((fp) => ({
-    unitType: fp?.unitType || "",
-    area: fp?.area || "",
-    price: fp?.price || "",
-    paymentPlan: fp?.paymentPlan || "",
-    bedrooms: fp?.bedrooms || "",
-    bathrooms: fp?.bathrooms || "",
-    balconies: fp?.balconies || "",
-    image: fp?.image || "",
-  })) ||
-  property.gatedContent?.floorPlans ||
-  [];
+    const cleanedFloorPlans =
+      gatedContent?.floorPlans?.map(
+        (fp) => ({
+          unitType:
+            fp?.unitType || "",
+          area:
+            fp?.area || "",
+          price:
+            fp?.price || "",
+          paymentPlan:
+            fp?.paymentPlan || "",
+          bedrooms:
+            fp?.bedrooms || "",
+          bathrooms:
+            fp?.bathrooms || "",
+          balconies:
+            fp?.balconies || "",
+          image:
+            fp?.image || "",
+        })
+      ) ||
+      property.gatedContent?.floorPlans ||
+      [];
 
+    // ================= PLOT CONFIGURATIONS =================
 
-// ================= PLOT CONFIGURATION CLEAN =================
+    const cleanedPlotConfigurations =
+      gatedContent?.plotConfigurations?.map(
+        (plot) => ({
+          plotType:
+            plot?.plotType || "",
+          plotArea:
+            plot?.plotArea || "",
+          price:
+            plot?.price || "",
+          paymentPlan:
+            plot?.paymentPlan || "",
+          image:
+            plot?.image || "",
+        })
+      ) ||
+      property.gatedContent
+        ?.plotConfigurations ||
+      [];
 
-const cleanedPlotConfigurations =
-  gatedContent?.plotConfigurations?.map((plot) => ({
-    plotType: plot?.plotType || "",
-    plotArea: plot?.plotArea || "",
-    price: plot?.price || "",
-    paymentPlan: plot?.paymentPlan || "",
-    image: plot?.image || "",
-  })) ||
-  property.gatedContent?.plotConfigurations ||
-  [];
+    // ================= SEO =================
 
-      // ================= SEO =================
-const seoKeywords =
-  typeof req.body.seoEngine?.keywords === "string"
-    ? req.body.seoEngine.keywords
-        .split(",")
-        .map((k) => k.trim())
-        .filter(Boolean)
-    : req.body.seoEngine?.keywords || [];
+    const seoKeywords =
+      typeof req.body.seoEngine?.keywords ===
+      "string"
+        ? req.body.seoEngine.keywords
+            .split(",")
+            .map((k) => k.trim())
+            .filter(Boolean)
+        : req.body.seoEngine?.keywords || [];
 
-const hasCustomSEO =
-  !!(
-    req.body.seoEngine?.metaTitle?.trim() &&
-    req.body.seoEngine?.metaDescription?.trim() &&
-    seoKeywords.length
-  );
+    const hasCustomSEO =
+      !!(
+        req.body.seoEngine?.metaTitle?.trim() &&
+        req.body.seoEngine?.metaDescription?.trim() &&
+        seoKeywords.length
+      );
 
-  console.log("REQ BODY PROPERTY TAG:", req.body.propertyTag);
-console.log("TYPE:", typeof req.body.propertyTag);
-console.log("IS ARRAY:", Array.isArray(req.body.propertyTag));
+    // ================= PROPERTY TAG =================
 
-// ================= PROPERTY TAG CLEAN =================
-let finalPropertyTag = propertyTag;
+    let finalPropertyTag =
+      propertyTag;
 
-if (typeof finalPropertyTag === "string") {
-  try {
-    finalPropertyTag = JSON.parse(finalPropertyTag);
-  } catch {
-    finalPropertyTag = [finalPropertyTag];
-  }
-}
+    if (
+      typeof finalPropertyTag ===
+      "string"
+    ) {
+      try {
+        finalPropertyTag =
+          JSON.parse(
+            finalPropertyTag
+          );
+      } catch {
+        finalPropertyTag = [
+          finalPropertyTag,
+        ];
+      }
+    }
 
-if (!Array.isArray(finalPropertyTag)) {
-  finalPropertyTag = Array.isArray(property.propertyTag)
-    ? property.propertyTag
-    : property.propertyTag
-    ? [property.propertyTag]
-    : ["Normal"];
-}
+    if (
+      !Array.isArray(
+        finalPropertyTag
+      )
+    ) {
+      finalPropertyTag =
+        Array.isArray(
+          property.propertyTag
+        )
+          ? property.propertyTag
+          : property.propertyTag
+          ? [property.propertyTag]
+          : ["Normal"];
+    }
 
     // ================= UPDATE =================
+
     const updated =
       await Property.findByIdAndUpdate(
         req.params.id,
         {
           marketType:
-            marketType || property.marketType,
+            marketType ||
+            property.marketType,
 
-          slug: slug || property.slug,
+          slug:
+            slug ||
+            property.slug,
 
-          propertyTag: finalPropertyTag,
-
+          propertyTag:
+            finalPropertyTag,
 
           // ================= CORE DETAILS =================
-          coreDetails: coreDetails
-            ? {
-                ...coreDetails,
 
-                developerName:
-                  coreDetails?.developerName ||
-                  "",
+          coreDetails:
+            coreDetails
+              ? {
+                  ...coreDetails,
 
-                developerLogo:
-                  coreDetails?.developerLogo ||
-                  "",
+                  developerName:
+                    coreDetails?.developerName ||
+                    "",
 
-                developerImage:
-                  coreDetails?.developerImage ||
-                  "",
-              }
-            : property.coreDetails,
+                  developerLogo:
+                    coreDetails?.developerLogo ||
+                    "",
+
+                  developerImage:
+                    coreDetails?.developerImage ||
+                    "",
+                }
+              : property.coreDetails,
 
           // ================= CATEGORY =================
-          categoryData: categoryFinal,
+
+          categoryData:
+            categoryFinal,
 
           // ================= LOCATION =================
-          locationData: locationFinal,
+
+          locationData:
+            locationFinal,
 
           // ================= HERO =================
-          heroSection: cleanedHeroSection,
+
+          heroSection:
+            cleanedHeroSection,
 
           // ================= OVERVIEW =================
-          overview: cleanedOverview,
+
+          overview:
+            cleanedOverview,
 
           // ================= CONFIG SECTION =================
+
           configurationSection:
             cleanedConfigurationSection,
 
           // ================= CONFIGURATIONS =================
+
           unitConfigurations:
             validConfigurations,
 
           // ================= KEY METRICS =================
-          keyMetrics: req.body.keyMetrics
-            ? {
-                ...req.body.keyMetrics,
 
-                totalUnits:
-                  Number(
-                    req.body.keyMetrics
-                      ?.totalUnits
-                  ) || 0,
+          keyMetrics:
+            req.body.keyMetrics
+              ? {
+                  ...req.body.keyMetrics,
 
-                totalTowers:
-                  Number(
-                    req.body.keyMetrics
-                      ?.totalTowers
-                  ) || 0,
-              }
-            : property.keyMetrics,
+                  totalUnits:
+                    Number(
+                      req.body.keyMetrics
+                        ?.totalUnits
+                    ) || 0,
+
+                  totalTowers:
+                    Number(
+                      req.body.keyMetrics
+                        ?.totalTowers
+                    ) || 0,
+                }
+              : property.keyMetrics,
 
           // ================= MEDIA =================
+
           media:
-            req.body.media || property.media,
+            req.body.media ||
+            property.media,
 
           // ================= GATED CONTENT =================
-          // ================= GATED CONTENT =================
 
-gatedContent: gatedContent
-  ? {
-      ...gatedContent,
+          gatedContent:
+            gatedContent
+              ? {
+                  ...gatedContent,
 
-      configurationType:
-        gatedContent?.configurationType ||
-        property.gatedContent?.configurationType ||
-        "Apartments",
+                  configurationType:
+                    gatedContent
+                      ?.configurationType ||
+                    property.gatedContent
+                      ?.configurationType ||
+                    "Apartments",
 
-      floorPlans:
-        cleanedFloorPlans,
+                  floorPlans:
+                    cleanedFloorPlans,
 
-      plotConfigurations:
-        cleanedPlotConfigurations,
-    }
-  : property.gatedContent,
+                  plotConfigurations:
+                    cleanedPlotConfigurations,
+                }
+              : property.gatedContent,
 
           // ================= SEO =================
-seoEngine: req.body.seoEngine
-  ? {
-      hasCustomSEO,
-      metaTitle:
-        req.body.seoEngine.metaTitle || "",
-      metaDescription:
-        req.body.seoEngine.metaDescription || "",
-      keywords: seoKeywords,
-    }
-  : property.seoEngine,
+
+          seoEngine:
+            req.body.seoEngine
+              ? {
+                  hasCustomSEO,
+
+                  metaTitle:
+                    req.body.seoEngine
+                      .metaTitle || "",
+
+                  metaDescription:
+                    req.body.seoEngine
+                      .metaDescription || "",
+
+                  keywords:
+                    seoKeywords,
+                }
+              : property.seoEngine,
 
           // ================= FAQ =================
+
           faqs:
-            req.body.faqs || property.faqs,
+            req.body.faqs ||
+            property.faqs,
 
           // ================= CTA =================
-          cta: req.body.cta || property.cta,
+
+          cta:
+            req.body.cta ||
+            property.cta,
         },
         {
           new: true,
@@ -691,9 +855,11 @@ seoEngine: req.body.seoEngine
       success: true,
       data: updated,
     });
-
   } catch (err) {
-    console.error("UPDATE ERROR:", err);
+    console.error(
+      "UPDATE ERROR:",
+      err
+    );
 
     res.status(500).json({
       success: false,
@@ -702,69 +868,162 @@ seoEngine: req.body.seoEngine
   }
 };
 
-// ✅ GET PROPERTIES
-exports.getProperties = async (req, res) => {
+// ============================================================
+// GET PROPERTIES
+//
+// PUBLIC:
+//   Only active published/non-deleted properties
+//
+// AGENT:
+//   Live + Draft
+//   Never Trash
+//
+// SUPERADMIN:
+//   Live + Draft + Trash
+// ============================================================
+
+exports.getProperties = async (
+  req,
+  res
+) => {
   try {
-    const { all, inactive, propertyTag, status } =
-  req.query;
+    const {
+      all,
+      inactive,
+      propertyTag,
+      status,
+    } = req.query;
 
-    let filter = {
-  isDeleted: false,
-};
+    const role =
+      req.user?.role || null;
 
-if (all === "true") {
-  filter = {};
-}
-else if (inactive === "true") {
-  filter = {
-    isActive: false,
-  };
-}
-else {
-  filter = {
-    isActive: true,
-    $or: [
-      { status: "published" },
-      { status: { $exists: false } },
-      { status: null },
-      { status: "" }
-    ]
-  };
-}
+    const isSuperAdmin =
+      role === "SuperAdmin";
 
-if (status) {
-  filter.status = status;
-}
+    const isAgent =
+      role === "Agent";
 
-    // ================= PROPERTY TAG FILTER =================
-    if (propertyTag && propertyTag !== "All") {
-  filter.propertyTag = {
-    $in: [propertyTag],
-  };
-}
+    let filter;
+
+    // ======================================================== 
+    // SUPERADMIN
+    // ========================================================
+
+    if (
+      isSuperAdmin &&
+      all === "true"
+    ) {
+      filter = {};
+    }
+
+    // ========================================================
+    // AGENT
+    // ========================================================
+
+    else if (
+      isAgent &&
+      all === "true"
+    ) {
+      filter = {
+        isDeleted: false,
+      };
+    }
+
+    // ========================================================
+    // INACTIVE
+    // ========================================================
+
+    else if (
+      inactive === "true" &&
+      (isAgent || isSuperAdmin)
+    ) {
+      filter = {
+        isActive: false,
+        isDeleted: false,
+      };
+    }
+
+    // ========================================================
+    // ADMIN STATUS FILTER
+    // Agent + SuperAdmin
+    // ========================================================
+
+    else if (
+      status &&
+      (isAgent || isSuperAdmin)
+    ) {
+      filter = {
+        status,
+        isDeleted: false,
+      };
+    }
+
+    // ========================================================
+    // PUBLIC
+    // ========================================================
+
+    else {
+      filter = {
+        isActive: true,
+        isDeleted: false,
+
+        $or: [
+          {
+            status: "published",
+          },
+          {
+            status: {
+              $exists: false,
+            },
+          },
+          {
+            status: null,
+          },
+          {
+            status: "",
+          },
+        ],
+      };
+    }
+
+    // ========================================================
+    // PROPERTY TAG FILTER
+    // ========================================================
+
+    if (
+      propertyTag &&
+      propertyTag !== "All"
+    ) {
+      filter.propertyTag = {
+        $in: [propertyTag],
+      };
+    }
+
+    // ========================================================
+    // FETCH
+    // ========================================================
 
     const properties =
-  await Property.find(filter)
-    .populate("createdBy")
-    .populate(
-      "coreDetails.developerRef",
-      "name logo image"
-    )
-    .populate({
-      path: "locationData.locationRef",
-      populate: {
-        path: "parent",
-        populate: {
-          path: "parent",
-        },
-      },
-    });
+      await Property.find(filter)
+        .populate("createdBy")
+        .populate(
+          "coreDetails.developerRef",
+          "name logo image"
+        )
+        .populate({
+          path: "locationData.locationRef",
+          populate: {
+            path: "parent",
+            populate: {
+              path: "parent",
+            },
+          },
+        });
 
     res.status(200).json({
       success: true,
       data: properties,
     });
-
   } catch (error) {
     console.error(
       "GET PROPERTIES ERROR:",
@@ -778,15 +1037,37 @@ if (status) {
   }
 };
 
-// ✅ SOFT DELETE
-exports.deleteProperty = async (req, res) => {
+// ============================================================
+// LIVE → DRAFT
+// Agent + SuperAdmin
+// ============================================================
+
+exports.deleteProperty = async (
+  req,
+  res
+) => {
   try {
-    const property = await Property.findById(req.params.id);
+    const property =
+      await Property.findById(
+        req.params.id
+      );
 
     if (!property) {
       return res.status(404).json({
         success: false,
         message: "Property not found",
+      });
+    }
+
+    // Agent cannot operate on Trash
+    if (
+      property.isDeleted &&
+      !canAccessTrash(req)
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "You cannot access a trashed property",
       });
     }
 
@@ -796,10 +1077,15 @@ exports.deleteProperty = async (req, res) => {
 
     res.json({
       success: true,
-      message: "Property moved to draft",
+      message:
+        "Property moved to draft",
     });
-
   } catch (err) {
+    console.error(
+      "DELETE PROPERTY ERROR:",
+      err
+    );
+
     res.status(500).json({
       success: false,
       message: err.message,
@@ -807,15 +1093,37 @@ exports.deleteProperty = async (req, res) => {
   }
 };
 
-// ✅ RESTORE PROPERTY
-exports.restoreProperty = async (req, res) => {
+// ============================================================
+// DRAFT → LIVE
+// Agent + SuperAdmin
+// ============================================================
+
+exports.restoreProperty = async (
+  req,
+  res
+) => {
   try {
-    const property = await Property.findById(req.params.id);
+    const property =
+      await Property.findById(
+        req.params.id
+      );
 
     if (!property) {
       return res.status(404).json({
         success: false,
         message: "Property not found",
+      });
+    }
+
+    // Agent cannot restore Trash using this route
+    if (
+      property.isDeleted &&
+      !canAccessTrash(req)
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "You cannot restore a trashed property",
       });
     }
 
@@ -825,10 +1133,15 @@ exports.restoreProperty = async (req, res) => {
 
     res.json({
       success: true,
-      message: "Property published",
+      message:
+        "Property published",
     });
-
   } catch (err) {
+    console.error(
+      "RESTORE PROPERTY ERROR:",
+      err
+    );
+
     res.status(500).json({
       success: false,
       message: err.message,
@@ -836,16 +1149,34 @@ exports.restoreProperty = async (req, res) => {
   }
 };
 
-exports.moveToTrash = async (req, res) => {
-  try {
+// ============================================================
+// MOVE TO TRASH
+// Agent + SuperAdmin
+// ============================================================
 
+exports.moveToTrash = async (
+  req,
+  res
+) => {
+  try {
     const property =
-      await Property.findById(req.params.id);
+      await Property.findById(
+        req.params.id
+      );
 
     if (!property) {
       return res.status(404).json({
         success: false,
         message: "Property not found",
+      });
+    }
+
+    // Already Trash
+    if (property.isDeleted) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Property is already in Trash",
       });
     }
 
@@ -858,24 +1189,36 @@ exports.moveToTrash = async (req, res) => {
 
     res.json({
       success: true,
-      message: "Moved to trash",
+      message:
+        "Moved to trash",
     });
-
   } catch (err) {
+    console.error(
+      "MOVE TO TRASH ERROR:",
+      err
+    );
 
     res.status(500).json({
       success: false,
       message: err.message,
     });
-
   }
 };
 
-exports.restoreTrash = async (req, res) => {
-  try {
+// ============================================================
+// RESTORE FROM TRASH
+// SuperAdmin ONLY
+// ============================================================
 
+exports.restoreTrash = async (
+  req,
+  res
+) => {
+  try {
     const property =
-      await Property.findById(req.params.id);
+      await Property.findById(
+        req.params.id
+      );
 
     if (!property) {
       return res.status(404).json({
@@ -890,28 +1233,49 @@ exports.restoreTrash = async (req, res) => {
       property.deletedFromStatus ||
       property.status;
 
-    property.deletedFromStatus = null;
+    property.deletedFromStatus =
+      null;
 
     await property.save();
 
     res.json({
       success: true,
-      message: "Property restored",
+      message:
+        "Property restored",
     });
-
   } catch (err) {
+    console.error(
+      "RESTORE TRASH ERROR:",
+      err
+    );
 
     res.status(500).json({
       success: false,
       message: err.message,
     });
-
   }
 };
+
+// ============================================================
+// DELETE FOREVER
+// SuperAdmin ONLY
+// ============================================================
 
 exports.permanentDeleteProperty =
   async (req, res) => {
     try {
+      const property =
+        await Property.findById(
+          req.params.id
+        );
+
+      if (!property) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Property not found",
+        });
+      }
 
       await Property.findByIdAndDelete(
         req.params.id
@@ -922,18 +1286,24 @@ exports.permanentDeleteProperty =
         message:
           "Property permanently deleted",
       });
-
     } catch (err) {
+      console.error(
+        "PERMANENT DELETE ERROR:",
+        err
+      );
 
       res.status(500).json({
         success: false,
         message: err.message,
       });
-
     }
   };
 
-// ✅ GET PROPERTY BY SLUG
+// ============================================================
+// GET PROPERTY BY SLUG
+// PUBLIC
+// ============================================================
+
 exports.getPropertyBySlug = async (
   req,
   res
@@ -941,35 +1311,48 @@ exports.getPropertyBySlug = async (
   try {
     const { slug } = req.params;
 
-    const property = await Property.findOne({
-  slug,
-  isActive: true,
-  isDeleted: false,
-  $or: [
-    { status: "published" },
-    { status: { $exists: false } },
-    { status: null },
-    { status: "" }
-  ]
-})
-.populate("createdBy")
-.populate(
-  "coreDetails.developerRef",
-  "name logo image"
-)
-.populate(
-  "categoryData.categoryRef",
-  "name"
-)
-.populate(
-  "locationData.locationRef",
-  "name"
-);
+    const property =
+      await Property.findOne({
+        slug,
+        isActive: true,
+        isDeleted: false,
+
+        $or: [
+          {
+            status: "published",
+          },
+          {
+            status: {
+              $exists: false,
+            },
+          },
+          {
+            status: null,
+          },
+          {
+            status: "",
+          },
+        ],
+      })
+        .populate("createdBy")
+        .populate(
+          "coreDetails.developerRef",
+          "name logo image"
+        )
+        .populate(
+          "categoryData.categoryRef",
+          "name"
+        )
+        .populate(
+          "locationData.locationRef",
+          "name"
+        );
 
     if (!property) {
       return res.status(404).json({
         success: false,
-        message: "Property not found ❌",
+        message:
+          "Property not found ❌",
       });
     }
 
@@ -977,7 +1360,6 @@ exports.getPropertyBySlug = async (
       success: true,
       data: property,
     });
-
   } catch (err) {
     console.error(
       "GET PROPERTY BY SLUG ERROR:",
@@ -991,57 +1373,25 @@ exports.getPropertyBySlug = async (
   }
 };
 
+// ============================================================
 // GET PROPERTY PREVIEW
-exports.getPropertyPreview = async (req, res) => {
-  try {
-    const property = await Property.findOne({
-      slug: req.params.slug,
-    })
-      .populate("createdBy")
-      .populate(
-        "coreDetails.developerRef",
-        "name logo image"
-      )
-      .populate(
-        "categoryData.categoryRef",
-        "name"
-      )
-      .populate(
-        "locationData.locationRef",
-        "name"
-      );
+// PUBLIC
+// ============================================================
 
-    if (!property) {
-      return res.status(404).json({
-        success: false,
-        message: "Property not found",
-      });
-    }
-
-    res.json({
-      success: true,
-      data: property,
-    });
-  } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: err.message,
-    });
-  }
-};
-
-// ✅ GET PROPERTY BY ID
-exports.getPropertyById = async (
+exports.getPropertyPreview = async (
   req,
   res
 ) => {
   try {
     const property =
-      await Property.findById(req.params.id)
+      await Property.findOne({
+        slug: req.params.slug,
+      })
+        .populate("createdBy")
         .populate(
-  "coreDetails.developerRef",
-  "name logo image"
-)
+          "coreDetails.developerRef",
+          "name logo image"
+        )
         .populate(
           "categoryData.categoryRef",
           "name"
@@ -1054,7 +1404,8 @@ exports.getPropertyById = async (
     if (!property) {
       return res.status(404).json({
         success: false,
-        message: "Property not found ❌",
+        message:
+          "Property not found",
       });
     }
 
@@ -1062,9 +1413,75 @@ exports.getPropertyById = async (
       success: true,
       data: property,
     });
-
   } catch (err) {
-    console.error("GET BY ID ERROR:", err);
+    console.error(
+      "GET PROPERTY PREVIEW ERROR:",
+      err
+    );
+
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// ============================================================
+// GET PROPERTY BY ID
+// Agent + SuperAdmin
+// ============================================================
+
+exports.getPropertyById = async (
+  req,
+  res
+) => {
+  try {
+    const property =
+      await Property.findById(
+        req.params.id
+      )
+        .populate(
+          "coreDetails.developerRef",
+          "name logo image"
+        )
+        .populate(
+          "categoryData.categoryRef",
+          "name"
+        )
+        .populate(
+          "locationData.locationRef",
+          "name"
+        );
+
+    if (!property) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Property not found ❌",
+      });
+    }
+
+    // Agent cannot access Trash
+    if (
+      property.isDeleted &&
+      !canAccessTrash(req)
+    ) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Property not found ❌",
+      });
+    }
+
+    res.json({
+      success: true,
+      data: property,
+    });
+  } catch (err) {
+    console.error(
+      "GET BY ID ERROR:",
+      err
+    );
 
     res.status(500).json({
       success: false,
