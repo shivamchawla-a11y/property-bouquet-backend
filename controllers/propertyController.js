@@ -796,6 +796,40 @@ exports.saveDraft = async (req, res) => {
 // CHECK PROPERTY DUPLICATES / SIMILAR PROPERTIES
 // ============================================================
 
+// ============================================================
+// CHECK PROPERTY DUPLICATES / SIMILAR PROPERTIES
+// ============================================================
+//
+// Checks:
+//
+// 1. Exact slug
+// 2. Similar slugs while typing
+// 3. Similar titles while typing
+//
+// Trash properties are NOT included.
+//
+// Current property/draft is excluded using draftId.
+//
+// IMPORTANT:
+//
+// Slug similarity is SUBSTRING based.
+//
+// Example:
+//
+// spiti
+//     ↓
+// spiti-floors-sector-99a-gurgaon
+//
+// spiti-floors
+//     ↓
+// spiti-floors-sector-99a-gurgaon
+//
+// spiti-floors-sector
+//     ↓
+// spiti-floors-sector-99a-gurgaon
+//
+// ============================================================
+
 exports.checkPropertyDuplicates = async (req, res) => {
   try {
     const {
@@ -803,6 +837,10 @@ exports.checkPropertyDuplicates = async (req, res) => {
       title = "",
       draftId = "",
     } = req.query;
+
+    // ========================================================
+    // CLEAN INPUT
+    // ========================================================
 
     const cleanSlug = String(slug)
       .trim()
@@ -814,8 +852,8 @@ exports.checkPropertyDuplicates = async (req, res) => {
     // ========================================================
     // BASE FILTER
     //
-    // Trash is intentionally excluded.
     // Published + Draft are included.
+    // Trash is excluded.
     // ========================================================
 
     const baseFilter = {
@@ -823,7 +861,9 @@ exports.checkPropertyDuplicates = async (req, res) => {
     };
 
     // ========================================================
-    // EXCLUDE CURRENT PROPERTY / DRAFT
+    // EXCLUDE CURRENT PROPERTY
+    //
+    // Important when editing an existing draft/property.
     // ========================================================
 
     if (
@@ -836,15 +876,15 @@ exports.checkPropertyDuplicates = async (req, res) => {
     }
 
     // ========================================================
-    // ESCAPE REGEX
+    // SAFE REGEX HELPER
     // ========================================================
 
-    const escapeRegex = (value) => {
-      return value.replace(
-        /[.*+?^${}()|[\]\\]/g,
-        "\\$&"
-      );
-    };
+    const escapeRegex = (value = "") => {
+  return String(value).replace(
+    /[.*+?^${}()|[\]\\]/g,
+    "\\$&"
+  );
+};
 
     // ========================================================
     // SLUG CHECK
@@ -854,57 +894,69 @@ exports.checkPropertyDuplicates = async (req, res) => {
     let similarSlugs = [];
 
     if (cleanSlug.length >= 2) {
+      const escapedSlug = escapeRegex(cleanSlug);
 
-      const escapedSlug =
-        escapeRegex(cleanSlug);
-
-      // ------------------------------------------------------
+      // ======================================================
       // EXACT SLUG
-      // ------------------------------------------------------
-
-      slugProperty =
-        await Property.findOne({
-          ...baseFilter,
-
-          slug: {
-            $regex: `^${escapedSlug}$`,
-            $options: "i",
-          },
-        })
-          .select(
-            "_id slug status isDeleted coreDetails.title"
-          )
-          .lean();
-
-      // ------------------------------------------------------
-      // SIMILAR SLUGS
       //
       // Example:
-      // User types: m3m
       //
-      // Returns:
-      // m3m-altima
-      // m3m-crown
-      // m3m-mercury
-      // ------------------------------------------------------
+      // User types:
+      // spiti-floors-sector-99a-gurgaon
+      //
+      // This detects the exact duplicate.
+      // ======================================================
 
-      similarSlugs =
-        await Property.find({
-          ...baseFilter,
+      slugProperty = await Property.findOne({
+        ...baseFilter,
 
-          slug: {
-            $regex: escapedSlug,
-            $options: "i",
-          },
+        slug: {
+          $regex: `^${escapedSlug}$`,
+          $options: "i",
+        },
+      })
+        .select(
+          "_id slug status isDeleted coreDetails.title"
+        )
+        .lean();
+
+      // ======================================================
+      // SIMILAR SLUGS
+      //
+      // IMPORTANT:
+      //
+      // There is NO ^ and NO $ here.
+      //
+      // Therefore the typed text can occur anywhere
+      // inside the existing slug.
+      //
+      // Example:
+      //
+      // spiti
+      // spiti-floors
+      // spiti-floors-sector
+      //
+      // All will find:
+      //
+      // spiti-floors-sector-99a-gurgaon
+      // ======================================================
+
+      similarSlugs = await Property.find({
+        ...baseFilter,
+
+        slug: {
+          $regex: escapedSlug,
+          $options: "i",
+        },
+      })
+        .select(
+          "_id slug status isDeleted coreDetails.title"
+        )
+        .sort({
+          updatedAt: -1,
         })
-          .select(
-            "_id slug status isDeleted coreDetails.title"
-          )
-          .sort({
-            updatedAt: -1,
-          })
-          .limit(8)
-          .lean();
+        .limit(8)
+        .lean();
     }
 
     // ========================================================
@@ -914,27 +966,24 @@ exports.checkPropertyDuplicates = async (req, res) => {
     let similarTitles = [];
 
     if (cleanTitle.length >= 2) {
+      const escapedTitle = escapeRegex(cleanTitle);
 
-      const escapedTitle =
-        escapeRegex(cleanTitle);
+      similarTitles = await Property.find({
+        ...baseFilter,
 
-      similarTitles =
-        await Property.find({
-          ...baseFilter,
-
-          "coreDetails.title": {
-            $regex: escapedTitle,
-            $options: "i",
-          },
+        "coreDetails.title": {
+          $regex: escapedTitle,
+          $options: "i",
+        },
+      })
+        .select(
+          "_id slug status isDeleted coreDetails.title"
+        )
+        .sort({
+          updatedAt: -1,
         })
-          .select(
-            "_id slug status isDeleted coreDetails.title"
-          )
-          .sort({
-            updatedAt: -1,
-          })
-          .limit(8)
-          .lean();
+        .limit(8)
+        .lean();
     }
 
     // ========================================================
@@ -955,9 +1004,7 @@ exports.checkPropertyDuplicates = async (req, res) => {
       // Similar title suggestions
       similarTitles,
     });
-
   } catch (err) {
-
     console.error(
       "CHECK PROPERTY DUPLICATES ERROR:",
       err
