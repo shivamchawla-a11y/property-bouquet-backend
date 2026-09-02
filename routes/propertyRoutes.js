@@ -11,6 +11,7 @@ const {
 const {
   createProperty,
   saveDraft,
+  checkPropertyDuplicates,
   publishDraft,
   getProperties,
   deleteProperty,
@@ -24,7 +25,6 @@ const {
   getPropertyById,
 } = require("../controllers/propertyController");
 
-
 // ============================================================
 // PUBLIC
 // ============================================================
@@ -36,10 +36,13 @@ router.get(
   getProperties
 );
 
-
 // Public property by slug
-router.get("/slug/:slug", getPropertyBySlug);
+router.get(
+  "/slug/:slug",
+  getPropertyBySlug
+);
 
+// Property preview
 router.get(
   "/preview/:slug",
   protect,
@@ -47,7 +50,17 @@ router.get(
   getPropertyPreview
 );
 
+// ============================================================
+// DUPLICATE PROPERTY CHECK
+// IMPORTANT: THIS MUST BE BEFORE /:id
+// ============================================================
 
+router.get(
+  "/check-duplicate",
+  protect,
+  authorize("SuperAdmin", "Agent"),
+  checkPropertyDuplicates
+);
 
 // ============================================================
 // AGENT + SUPERADMIN
@@ -55,8 +68,8 @@ router.get(
 
 // ------------------------------------------------------------
 // ADD PROPERTY
-// Agent + SuperAdmin
 // ------------------------------------------------------------
+
 router.post(
   "/",
   protect,
@@ -64,11 +77,10 @@ router.post(
   createProperty
 );
 
-
 // ------------------------------------------------------------
 // SAVE DRAFT
-// Agent + SuperAdmin
 // ------------------------------------------------------------
+
 router.post(
   "/draft",
   protect,
@@ -76,11 +88,10 @@ router.post(
   saveDraft
 );
 
-
 // ------------------------------------------------------------
 // DRAFT → LIVE
-// Agent + SuperAdmin
 // ------------------------------------------------------------
+
 router.patch(
   "/publish/:id",
   protect,
@@ -88,11 +99,10 @@ router.patch(
   publishDraft
 );
 
-
 // ------------------------------------------------------------
 // LIVE → DRAFT
-// Agent + SuperAdmin
 // ------------------------------------------------------------
+
 router.delete(
   "/:id",
   protect,
@@ -100,11 +110,10 @@ router.delete(
   deleteProperty
 );
 
-
 // ------------------------------------------------------------
 // DRAFT → LIVE
-// Agent + SuperAdmin
 // ------------------------------------------------------------
+
 router.patch(
   "/:id/restore",
   protect,
@@ -112,13 +121,11 @@ router.patch(
   restoreProperty
 );
 
-
 // ------------------------------------------------------------
 // GET SINGLE PROPERTY
-// Required for Edit Property
-//
-// Agent + SuperAdmin
+// IMPORTANT: KEEP THIS AFTER /check-duplicate
 // ------------------------------------------------------------
+
 router.get(
   "/:id",
   protect,
@@ -126,11 +133,10 @@ router.get(
   getPropertyById
 );
 
-
 // ------------------------------------------------------------
 // UPDATE PROPERTY
-// Agent + SuperAdmin
 // ------------------------------------------------------------
+
 router.patch(
   "/:id",
   protect,
@@ -138,15 +144,10 @@ router.patch(
   updateProperty
 );
 
-
 // ------------------------------------------------------------
 // MOVE TO TRASH
-//
-// Agent + SuperAdmin
-// Agent CAN move Live/Draft → Trash.
-//
-// Agent CANNOT see or restore Trash afterward.
 // ------------------------------------------------------------
+
 router.patch(
   "/:id/trash",
   protect,
@@ -154,16 +155,14 @@ router.patch(
   moveToTrash
 );
 
-
 // ============================================================
 // SUPERADMIN ONLY
 // ============================================================
 
 // ------------------------------------------------------------
 // RESTORE FROM TRASH
-//
-// SuperAdmin ONLY
 // ------------------------------------------------------------
+
 router.patch(
   "/:id/restore-trash",
   protect,
@@ -171,18 +170,15 @@ router.patch(
   restoreTrash
 );
 
-
 // ------------------------------------------------------------
 // DELETE FOREVER
-//
-// SuperAdmin ONLY
 // ------------------------------------------------------------
+
 router.delete(
   "/:id/permanent-delete",
   protect,
   authorize("SuperAdmin"),
   permanentDeleteProperty
 );
-
 
 module.exports = router;

@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Property = require("../models/Property");
 
 // ============================================================
@@ -773,6 +774,128 @@ exports.saveDraft = async (req, res) => {
       success: false,
       message:
         err.message,
+    });
+  }
+};
+
+// ============================================================
+// CHECK PROPERTY DUPLICATES
+//
+// Used by Add Property Step 1.
+//
+// Checks:
+//   ✅ Exact slug match
+//   ✅ Similar property titles
+//   ❌ Trash is ignored
+//
+// Optional:
+//   draftId → excludes the current draft from the results
+// ============================================================
+
+exports.checkPropertyDuplicates = async (req, res) => {
+  try {
+    const {
+      slug = "",
+      title = "",
+      draftId = "",
+    } = req.query;
+
+    const cleanSlug = slug.trim().toLowerCase();
+    const cleanTitle = title.trim();
+
+    // ========================================================
+    // BASE FILTER
+    // ========================================================
+
+    const baseFilter = {
+      isDeleted: false,
+    };
+
+    // ========================================================
+    // EXCLUDE CURRENT DRAFT
+    // ========================================================
+
+    if (draftId && mongoose.isValidObjectId(draftId)) {
+      baseFilter._id = {
+        $ne: draftId,
+      };
+    }
+
+    // ========================================================
+    // EXACT SLUG CHECK
+    // ========================================================
+
+    let slugProperty = null;
+
+    if (cleanSlug) {
+      slugProperty = await Property.findOne({
+        ...baseFilter,
+
+        slug: {
+          $regex: `^${cleanSlug.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          )}$`,
+          $options: "i",
+        },
+      })
+        .select(
+          "_id slug status isDeleted coreDetails.title"
+        )
+        .lean();
+    }
+
+    // ========================================================
+    // SIMILAR TITLE CHECK
+    // ========================================================
+
+    let similarTitles = [];
+
+    if (cleanTitle.length >= 2) {
+      similarTitles = await Property.find({
+        ...baseFilter,
+
+        "coreDetails.title": {
+          $regex: cleanTitle.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          ),
+          $options: "i",
+        },
+      })
+        .select(
+          "_id slug status isDeleted coreDetails.title"
+        )
+        .sort({
+          updatedAt: -1,
+        })
+        .limit(8)
+        .lean();
+    }
+
+    // ========================================================
+    // RESPONSE
+    // ========================================================
+
+    return res.status(200).json({
+      success: true,
+
+      slugExists: !!slugProperty,
+
+      slugProperty,
+
+      similarTitles,
+    });
+
+  } catch (err) {
+    console.error(
+      "CHECK PROPERTY DUPLICATES ERROR:",
+      err
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to check property duplicates",
     });
   }
 };
