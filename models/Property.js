@@ -981,31 +981,43 @@ faqs: [
 // ============================================================
 // UNIQUE PUBLISHED SLUG
 // ============================================================
-// Only NON-DELETED + PUBLISHED properties must have a unique slug.
 //
-// Trash properties:
+// Only NON-DELETED + PUBLISHED properties reserve a slug.
+//
+// Trash:
 //   isDeleted: true
-//   → DO NOT reserve the slug
+//   → DOES NOT reserve the slug
 //
-// Draft properties:
+// Draft:
 //   isDeleted: false
 //   status: "draft"
-//   → DO NOT reserve the slug
+//   → DOES NOT reserve the slug
 //
-// Published properties:
+// Published:
 //   isDeleted: false
 //   status: "published"
-//   → MUST have a unique slug
+//   → MUST have a unique non-empty slug
+//
+// Existing property documents are NOT modified by this index.
 // ============================================================
 
 propertySchema.index(
   { slug: 1 },
   {
     unique: true,
+
     partialFilterExpression: {
+      slug: {
+        $exists: true,
+        $type: "string",
+      },
+
       isDeleted: false,
+
       status: "published",
     },
+
+    name: "published_active_slug_unique",
   }
 );
 

@@ -71,19 +71,39 @@ exports.createProperty = async (req, res) => {
         balconies: u?.balconies || "",
       }));
 
-    // ================= UNIQUE SLUG =================
+    // ================= UNIQUE PUBLISHED SLUG =================
+// Only a NON-DELETED + PUBLISHED property reserves a slug.
+//
+// Draft:
+//   isDeleted: false
+//   status: "draft"
+//   → DOES NOT block the slug
+//
+// Trash:
+//   isDeleted: true
+//   → DOES NOT block the slug
+//
+// Published:
+//   isDeleted: false
+//   status: "published"
+//   → MUST be unique
 
-    const existing = await Property.findOne({
-      slug,
-      isDeleted: false,
-    });
+const normalizedSlug = String(slug || "")
+  .trim()
+  .toLowerCase();
 
-    if (existing) {
-      return res.status(400).json({
-        success: false,
-        message: "Slug already exists ❌",
-      });
-    }
+const existing = await Property.findOne({
+  slug: normalizedSlug,
+  isDeleted: false,
+  status: "published",
+});
+
+if (existing) {
+  return res.status(409).json({
+    success: false,
+    message: "A published property already uses this slug ❌",
+  });
+}
 
     // ================= FLOOR PLANS =================
 
@@ -215,6 +235,9 @@ exports.createProperty = async (req, res) => {
     const property = await Property.create({
       ...req.body,
 
+      // Always store normalized slug
+      slug: normalizedSlug,
+
       propertyTag: finalPropertyTag,
 
       seoEngine: {
@@ -279,16 +302,32 @@ exports.createProperty = async (req, res) => {
       data: property,
     });
   } catch (err) {
-    console.error(
-      "CREATE PROPERTY ERROR:",
-      err
-    );
 
-    res.status(500).json({
+  console.error(
+    "CREATE PROPERTY ERROR:",
+    err
+  );
+
+  // ========================================================
+  // MONGODB DUPLICATE PUBLISHED SLUG
+  // ========================================================
+
+  if (
+    err?.code === 11000 &&
+    err?.keyPattern?.slug
+  ) {
+    return res.status(409).json({
       success: false,
-      message: err.message,
+      message:
+        "A published property already uses this slug ❌",
     });
   }
+
+  return res.status(500).json({
+    success: false,
+    message: err.message,
+  });
+}
 };
 
 // ============================================================
@@ -1056,23 +1095,33 @@ exports.publishDraft = async (req, res) => {
     // UNIQUE SLUG
     // ========================================================
 
-    const existingSlug =
-      await Property.findOne({
-        slug: property.slug,
+    // ========================================================
+// UNIQUE PUBLISHED SLUG
+// ========================================================
+//
+// Only another NON-DELETED + PUBLISHED property
+// can block this slug.
+//
+// Drafts do NOT block.
+// Trash does NOT block.
 
-        _id: {
-          $ne: property._id,
-        },
+const existingSlug =
+  await Property.findOne({
+    slug: property.slug,
+    _id: {
+      $ne: property._id,
+    },
+    isDeleted: false,
+    status: "published",
+  });
 
-        isDeleted: false,
-      });
-
-    if (existingSlug) {
-      return res.status(400).json({
-        success: false,
-        message: "Slug already exists",
-      });
-    }
+if (existingSlug) {
+  return res.status(409).json({
+    success: false,
+    message:
+      "A published property already uses this slug ❌",
+  });
+}
 
     property.status =
       "published";
@@ -1083,13 +1132,25 @@ exports.publishDraft = async (req, res) => {
       success: true,
       data: property,
     });
-  } catch (err) {
+    } catch (err) {
+
     console.error(
       "PUBLISH DRAFT ERROR:",
       err
     );
 
-    res.status(500).json({
+    if (
+      err?.code === 11000 &&
+      err?.keyPattern?.slug
+    ) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "A published property already uses this slug ❌",
+      });
+    }
+
+    return res.status(500).json({
       success: false,
       message: err.message,
     });
@@ -1593,16 +1654,32 @@ exports.updateProperty = async (
       data: updated,
     });
   } catch (err) {
-    console.error(
-      "UPDATE ERROR:",
-      err
-    );
 
-    res.status(500).json({
+  console.error(
+    "UPDATE ERROR:",
+    err
+  );
+
+  // ========================================================
+  // MONGODB DUPLICATE PUBLISHED SLUG
+  // ========================================================
+
+  if (
+    err?.code === 11000 &&
+    err?.keyPattern?.slug
+  ) {
+    return res.status(409).json({
       success: false,
-      message: err.message,
+      message:
+        "A published property already uses this slug ❌",
     });
   }
+
+  return res.status(500).json({
+    success: false,
+    message: err.message,
+  });
+}
 };
 
 
@@ -1878,8 +1955,11 @@ exports.restoreProperty = async (
       });
     }
 
+    // --------------------------------------------------------
     // Agent cannot restore Trash
     // using the Draft → Live route.
+    // --------------------------------------------------------
+
     if (
       property.isDeleted &&
       !canAccessTrash(req)
@@ -1891,26 +1971,88 @@ exports.restoreProperty = async (
       });
     }
 
-    property.status =
-      "published";
+    // ========================================================
+    // NORMALIZE SLUG
+    // ========================================================
+
+    const normalizedSlug =
+      String(property.slug || "")
+        .trim()
+        .toLowerCase();
+
+    // ========================================================
+    // CHECK ONLY PUBLISHED PROPERTIES
+    //
+    // Drafts do NOT block.
+    // Trash does NOT block.
+    // ========================================================
+
+    const existingPublished =
+      await Property.findOne({
+        _id: {
+          $ne: property._id,
+        },
+        slug: normalizedSlug,
+        isDeleted: false,
+        status: "published",
+      })
+        .select(
+          "_id slug status isDeleted coreDetails.title"
+        )
+        .lean();
+
+    if (existingPublished) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "A published property already uses this slug ❌",
+        conflictProperty:
+          existingPublished,
+      });
+    }
+
+    // ========================================================
+    // PUBLISH
+    // ========================================================
+
+    property.slug = normalizedSlug;
+    property.status = "published";
 
     await property.save();
 
-    res.json({
+    return res.json({
       success: true,
       message:
         "Property published",
       data: property,
     });
+
   } catch (err) {
     console.error(
       "RESTORE PROPERTY ERROR:",
       err
     );
 
-    res.status(500).json({
+    // ========================================================
+    // MONGODB DUPLICATE PUBLISHED SLUG
+    // Race-condition protection
+    // ========================================================
+
+    if (
+      err?.code === 11000 &&
+      err?.keyPattern?.slug
+    ) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "A published property already uses this slug ❌",
+      });
+    }
+
+    return res.status(500).json({
       success: false,
-      message: err.message,
+      message:
+        err.message,
     });
   }
 };
@@ -2006,34 +2148,107 @@ exports.restoreTrash = async (
       });
     }
 
-    property.isDeleted =
-      false;
+    // ========================================================
+    // DETERMINE RESTORED STATUS
+    // ========================================================
 
-    property.status =
+    const restoredStatus =
       property.deletedFromStatus ||
       property.status ||
       "draft";
 
-    property.deletedFromStatus =
-      null;
+    // ========================================================
+    // NORMALIZE SLUG
+    // ========================================================
+
+    const normalizedSlug =
+      String(property.slug || "")
+        .trim()
+        .toLowerCase();
+
+    // ========================================================
+    // ONLY PUBLISHED RESTORATION NEEDS SLUG CHECK
+    //
+    // If restoring as DRAFT:
+    //     ✅ Always allowed
+    //
+    // If restoring as PUBLISHED:
+    //     ❌ Block only when another active published
+    //        property already uses the slug.
+    // ========================================================
+
+    if (
+      restoredStatus === "published"
+    ) {
+      const existingPublished =
+        await Property.findOne({
+          _id: {
+            $ne: property._id,
+          },
+          slug: normalizedSlug,
+          isDeleted: false,
+          status: "published",
+        })
+          .select(
+            "_id slug status isDeleted coreDetails.title"
+          )
+          .lean();
+
+      if (existingPublished) {
+        return res.status(409).json({
+          success: false,
+          message:
+            "A published property already uses this slug ❌",
+          conflictProperty:
+            existingPublished,
+        });
+      }
+    }
+
+    // ========================================================
+    // RESTORE
+    // ========================================================
+
+    property.slug = normalizedSlug;
+    property.isDeleted = false;
+    property.status = restoredStatus;
+    property.deletedFromStatus = null;
 
     await property.save();
 
-    res.json({
+    return res.json({
       success: true,
       message:
         "Property restored",
       data: property,
     });
+
   } catch (err) {
     console.error(
       "RESTORE TRASH ERROR:",
       err
     );
 
-    res.status(500).json({
+    // ========================================================
+    // MONGODB DUPLICATE PUBLISHED SLUG
+    // Race-condition protection
+    // ========================================================
+
+    if (
+      err?.code === 11000 &&
+      err?.keyPattern?.slug
+    ) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "A published property already uses this slug ❌",
+      });
+    }
+
+    return res.status(500).json({
       success: false,
-      message: err.message,
+      message:
+        err.message,
     });
   }
 };
