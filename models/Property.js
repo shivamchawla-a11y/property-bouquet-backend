@@ -3,10 +3,10 @@ const mongoose = require("mongoose");
 const propertySchema = new mongoose.Schema({
 
   // 🔥 BASIC INFO
-  slug: {
+slug: {
   type: String,
-  unique: true,
-  sparse: true,
+  trim: true,
+  lowercase: true,
 },
 
   marketType: {
@@ -976,5 +976,38 @@ faqs: [
   }
 
 }, { timestamps: true });
+
+
+// ============================================================
+// UNIQUE PUBLISHED SLUG
+// ============================================================
+// Only NON-DELETED + PUBLISHED properties must have a unique slug.
+//
+// Trash properties:
+//   isDeleted: true
+//   → DO NOT reserve the slug
+//
+// Draft properties:
+//   isDeleted: false
+//   status: "draft"
+//   → DO NOT reserve the slug
+//
+// Published properties:
+//   isDeleted: false
+//   status: "published"
+//   → MUST have a unique slug
+// ============================================================
+
+propertySchema.index(
+  { slug: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      isDeleted: false,
+      status: "published",
+    },
+  }
+);
+
 
 module.exports = mongoose.model("Property", propertySchema);
