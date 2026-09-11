@@ -23,6 +23,11 @@ const {
   getPropertyPreview,
   updateProperty,
   getPropertyById,
+
+  // ============================================================
+  // AI CREATE PROPERTY
+  // ============================================================
+  aiCreateProperty,
 } = require("../controllers/propertyController");
 
 // ============================================================
@@ -78,6 +83,20 @@ router.post(
 );
 
 // ------------------------------------------------------------
+// AI CREATE PROPERTY
+// IMPORTANT:
+// This route must be BEFORE /:id routes.
+// n8n will eventually call this endpoint.
+// ------------------------------------------------------------
+
+router.post(
+  "/ai-create",
+  protect,
+  authorize("SuperAdmin", "Agent"),
+  aiCreateProperty
+);
+
+// ------------------------------------------------------------
 // SAVE DRAFT
 // ------------------------------------------------------------
 
@@ -124,6 +143,7 @@ router.patch(
 // ------------------------------------------------------------
 // GET SINGLE PROPERTY
 // IMPORTANT: KEEP THIS AFTER /check-duplicate
+// AND AFTER ALL SPECIFIC /:id SUB-ROUTES
 // ------------------------------------------------------------
 
 router.get(

@@ -10,10 +10,11 @@ slug: {
 },
 
   marketType: {
-    type: String,
-    enum: ["Primary", "Resale"],
-    required: true,
-  },
+  type: String,
+  enum: ["Primary", "Resale", null],
+  default: null,
+  required: false,
+},
 
   isActive: {
     type: Boolean,

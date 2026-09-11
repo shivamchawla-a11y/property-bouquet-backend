@@ -1,5 +1,8 @@
 const mongoose = require("mongoose");
 const Property = require("../models/Property");
+const Developer = require("../models/Developer");
+const Category = require("../models/Category");
+const Location = require("../models/Location");
 
 // ============================================================
 // HELPERS
@@ -2510,6 +2513,678 @@ exports.getPropertyById = async (
       success: false,
       message:
         err.message,
+    });
+  }
+};
+
+
+// ============================================================
+// AI CREATE PROPERTY
+// ============================================================
+// Creates an AI-generated PROPERTY DRAFT only.
+//
+// IMPORTANT:
+// - AI does NOT create MongoDB ObjectIds.
+// - AI does NOT create the slug.
+// - AI does NOT decide marketType.
+// - AI does NOT control status/isDeleted/isActive/propertyTag.
+// - Backend resolves Developer / Category / Location references.
+// - Property is ALWAYS created as a draft.
+// ============================================================
+
+exports.aiCreateProperty = async (req, res) => {
+  try {
+    const aiData = req.body?.aiData;
+
+    // --------------------------------------------------------
+    // BASIC VALIDATION
+    // --------------------------------------------------------
+
+    if (!aiData || typeof aiData !== "object") {
+      return res.status(400).json({
+        success: false,
+        message: "AI property data is required.",
+      });
+    }
+
+    if (!req.user?.id) {
+      return res.status(401).json({
+        success: false,
+        message: "Authenticated user is required.",
+      });
+    }
+
+    // --------------------------------------------------------
+    // EXTRACT AI VALUES
+    // --------------------------------------------------------
+
+    const {
+      title,
+      marketType,
+      developerName,
+      categoryName,
+      startingPrice,
+      maxPrice,
+      priceOnRequest,
+      locationName,
+      address,
+      heroDescription,
+      propertyStatus,
+      landArea,
+      possession,
+      totalUnits,
+      totalTowers,
+      floors,
+      reraNumber,
+      configurationType,
+      unitConfigurations,
+      plotConfigurations,
+      highlights,
+      amenities,
+      landmarks,
+      overviewDescription,
+      seoKeywords,
+    } = aiData;
+
+    // --------------------------------------------------------
+    // TITLE IS REQUIRED BY PROPERTY SCHEMA
+    // --------------------------------------------------------
+
+    if (!title || !String(title).trim()) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "AI could not identify the property/project name. Please provide a clearer property name.",
+      });
+    }
+
+    // --------------------------------------------------------
+    // MARKET TYPE
+    // --------------------------------------------------------
+    // DO NOT GUESS.
+    //
+    // If AI returned null, keep it null.
+    // The Property schema must therefore permit null for AI drafts.
+    // Admin will select Primary / Resale during review.
+    // --------------------------------------------------------
+
+    let normalizedMarketType = null;
+
+    if (marketType === "Primary" || marketType === "Resale") {
+      normalizedMarketType = marketType;
+    }
+
+    // --------------------------------------------------------
+    // DEVELOPER LOOKUP
+    // --------------------------------------------------------
+
+    let developer = null;
+
+    if (developerName && String(developerName).trim()) {
+      const cleanDeveloperName = String(developerName).trim();
+
+      // Exact case-insensitive name match first.
+      developer = await Developer.findOne({
+        name: {
+          $regex: `^${cleanDeveloperName.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          )}$`,
+          $options: "i",
+        },
+      }).lean();
+    }
+
+    // --------------------------------------------------------
+    // CATEGORY LOOKUP
+    // --------------------------------------------------------
+
+    let category = null;
+
+    if (categoryName && String(categoryName).trim()) {
+      const cleanCategoryName = String(categoryName).trim();
+
+      category = await Category.findOne({
+        name: {
+          $regex: `^${cleanCategoryName.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          )}$`,
+          $options: "i",
+        },
+      }).lean();
+
+      // If exact name wasn't found, try fullPath.
+      if (!category) {
+        category = await Category.findOne({
+          fullPath: {
+            $regex: `^${cleanCategoryName.replace(
+              /[.*+?^${}()|[\]\\]/g,
+              "\\$&"
+            )}$`,
+            $options: "i",
+          },
+        }).lean();
+      }
+    }
+
+    // --------------------------------------------------------
+    // LOCATION LOOKUP
+    // --------------------------------------------------------
+    //
+    // Location names can exist under different parents.
+    // Therefore we first try an exact case-insensitive name.
+    //
+    // If multiple locations have the same name, we do NOT guess.
+    // --------------------------------------------------------
+
+    let location = null;
+
+    if (locationName && String(locationName).trim()) {
+      const cleanLocationName = String(locationName).trim();
+
+      const locationMatches = await Location.find({
+        name: {
+          $regex: `^${cleanLocationName.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          )}$`,
+          $options: "i",
+        },
+      })
+        .limit(2)
+        .lean();
+
+      if (locationMatches.length === 1) {
+        location = locationMatches[0];
+      }
+
+      if (locationMatches.length > 1) {
+        return res.status(400).json({
+          success: false,
+          message:
+            `Multiple locations named "${cleanLocationName}" were found. ` +
+            "Please select the correct location manually in the admin panel.",
+          code: "AMBIGUOUS_LOCATION",
+        });
+      }
+    }
+
+    // --------------------------------------------------------
+    // SLUG GENERATION
+    // --------------------------------------------------------
+    //
+    // Slug is generated by backend.
+    // AI never controls it.
+    // --------------------------------------------------------
+
+    const slugBase = String(title)
+      .trim()
+      .toLowerCase()
+      .replace(/&/g, " and ")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+
+    if (!slugBase) {
+      return res.status(400).json({
+        success: false,
+        message: "Unable to generate a valid property slug.",
+      });
+    }
+
+    let slug = slugBase;
+
+    // Make sure the slug does not collide with an existing property.
+    let slugCounter = 2;
+
+    while (
+      await Property.exists({
+        slug,
+        isDeleted: false,
+      })
+    ) {
+      slug = `${slugBase}-${slugCounter}`;
+      slugCounter++;
+    }
+
+    // --------------------------------------------------------
+    // CLEAN ARRAYS
+    // --------------------------------------------------------
+
+    const safeUnitConfigurations = Array.isArray(unitConfigurations)
+      ? unitConfigurations
+          .filter(
+            (item) =>
+              item &&
+              typeof item === "object" &&
+              item.unitType
+          )
+          .map((item) => ({
+            unitType: item.unitType ?? null,
+            area: item.area ?? null,
+            price: item.price ?? null,
+            paymentPlan: item.paymentPlan ?? null,
+            bedrooms: item.bedrooms ?? null,
+            bathrooms: item.bathrooms ?? null,
+            balconies: item.balconies ?? null,
+          }))
+      : [];
+
+    const safePlotConfigurations = Array.isArray(plotConfigurations)
+      ? plotConfigurations
+          .filter(
+            (item) =>
+              item &&
+              typeof item === "object" &&
+              (
+                item.plotType ||
+                item.plotArea ||
+                item.price ||
+                item.paymentPlan
+              )
+          )
+          .map((item) => ({
+            plotType: item.plotType ?? null,
+            plotArea: item.plotArea ?? null,
+            price: item.price ?? null,
+            paymentPlan: item.paymentPlan ?? null,
+          }))
+      : [];
+
+    const safeHighlights = Array.isArray(highlights)
+      ? highlights
+          .filter(
+            (item) =>
+              item &&
+              typeof item === "object" &&
+              item.heading
+          )
+          .map((item) => ({
+            heading: String(item.heading).trim(),
+            subheading: item.subheading
+              ? String(item.subheading).trim()
+              : "",
+          }))
+      : [];
+
+    const safeAmenities = Array.isArray(amenities)
+      ? amenities
+          .filter(
+            (item) =>
+              item &&
+              typeof item === "object" &&
+              item.heading
+          )
+          .map((item) => ({
+            heading: String(item.heading).trim(),
+            subheading: item.subheading
+              ? String(item.subheading).trim()
+              : "",
+          }))
+      : [];
+
+    const safeLandmarks = Array.isArray(landmarks)
+      ? landmarks
+          .filter(
+            (item) =>
+              item &&
+              typeof item === "object" &&
+              item.name
+          )
+          .map((item) => ({
+            name: String(item.name).trim(),
+            distance: item.distance
+              ? String(item.distance).trim()
+              : "",
+          }))
+      : [];
+
+    const safeSeoKeywords = Array.isArray(seoKeywords)
+      ? seoKeywords
+          .filter(
+            (keyword) =>
+              typeof keyword === "string" &&
+              keyword.trim()
+          )
+          .map((keyword) => keyword.trim())
+      : [];
+
+    // --------------------------------------------------------
+    // BUILD DEVELOPER DATA
+    // --------------------------------------------------------
+
+    const developerData = {
+      developerRef: developer?._id || null,
+      developerName:
+        developer?.name ||
+        (developerName ? String(developerName).trim() : ""),
+      developerLogo:
+        developer?.logo || "",
+      developerImage:
+        developer?.image || "",
+    };
+
+    // --------------------------------------------------------
+    // BUILD CATEGORY DATA
+    // --------------------------------------------------------
+
+    const categoryData = {
+      categoryRef: category?._id || null,
+      categoryName:
+        category?.name ||
+        (categoryName ? String(categoryName).trim() : ""),
+    };
+
+    // --------------------------------------------------------
+    // BUILD LOCATION DATA
+    // --------------------------------------------------------
+
+    const locationData = {
+      locationRef: location?._id || null,
+      locationName:
+        location?.name ||
+        (locationName ? String(locationName).trim() : ""),
+      customLocation: "",
+      address: address ? String(address).trim() : "",
+      mapEmbedUrl: "",
+      presentation: {},
+      landmarks: safeLandmarks,
+      bottomStrip: {},
+    };
+
+    // --------------------------------------------------------
+    // CONFIGURATION TYPE
+    // --------------------------------------------------------
+
+    let safeConfigurationType = null;
+
+    if (
+      configurationType === "Apartments" ||
+      configurationType === "Plots"
+    ) {
+      safeConfigurationType = configurationType;
+    }
+
+    // --------------------------------------------------------
+    // CREATE PROPERTY DRAFT
+    // --------------------------------------------------------
+
+    const propertyPayload = {
+      slug,
+
+      // IMPORTANT:
+      // null is intentional when AI cannot determine Primary/Resale.
+      marketType: normalizedMarketType,
+
+      // Backend-controlled values.
+      isActive: true,
+      status: "draft",
+      isDeleted: false,
+      deletedFromStatus: null,
+
+      // AI-created properties start as Normal.
+      propertyTag: ["Normal"],
+
+      // ------------------------------------------------------
+      // CORE DETAILS
+      // ------------------------------------------------------
+
+      coreDetails: {
+        title: String(title).trim(),
+
+        developerRef: developerData.developerRef,
+        developerName: developerData.developerName,
+        developerImage: developerData.developerImage,
+        developerLogo: developerData.developerLogo,
+
+        startingPrice:
+          typeof startingPrice === "number"
+            ? startingPrice
+            : null,
+
+        maxPrice:
+          typeof maxPrice === "number"
+            ? maxPrice
+            : null,
+
+        priceOnRequest:
+          priceOnRequest === true,
+      },
+
+      // ------------------------------------------------------
+      // CATEGORY
+      // ------------------------------------------------------
+
+      categoryData,
+
+      // ------------------------------------------------------
+      // HERO
+      // ------------------------------------------------------
+
+      heroSection: {
+        propertyStatus:
+          propertyStatus
+            ? String(propertyStatus).trim()
+            : "",
+        heroDescription:
+          heroDescription
+            ? String(heroDescription).trim()
+            : "",
+        brochureButtonText: "",
+        videoButtonText: "",
+        taglineItems: [],
+      },
+
+      // ------------------------------------------------------
+      // KEY METRICS
+      // ------------------------------------------------------
+
+      keyMetrics: {
+        landArea:
+          landArea
+            ? String(landArea).trim()
+            : "",
+
+        possession:
+          possession
+            ? String(possession).trim()
+            : "",
+
+        status:
+          propertyStatus
+            ? String(propertyStatus).trim()
+            : "",
+
+        totalUnits:
+          typeof totalUnits === "number"
+            ? totalUnits
+            : null,
+
+        totalTowers:
+          typeof totalTowers === "number"
+            ? totalTowers
+            : null,
+
+        floors:
+          floors
+            ? String(floors).trim()
+            : "",
+
+        reraNumber:
+          reraNumber
+            ? String(reraNumber).trim()
+            : "",
+
+        customMetrics: [],
+      },
+
+      // ------------------------------------------------------
+      // OVERVIEW
+      // ------------------------------------------------------
+
+      overview: {
+        description:
+          overviewDescription
+            ? String(overviewDescription).trim()
+            : "",
+
+        featureBar: [],
+        highlights: safeHighlights,
+        amenities: safeAmenities,
+      },
+
+      // ------------------------------------------------------
+      // CONFIGURATION
+      // ------------------------------------------------------
+
+      configurationSection: {},
+
+      unitConfigurations: safeUnitConfigurations,
+
+      // ------------------------------------------------------
+      // LOCATION
+      // ------------------------------------------------------
+
+      locationData,
+
+      // ------------------------------------------------------
+      // GATED CONTENT
+      // ------------------------------------------------------
+
+      gatedContent: {
+        brochurePdfUrl: "",
+        configurationType: safeConfigurationType,
+        floorPlans: [],
+        plotConfigurations: safePlotConfigurations,
+        requireLogin: false,
+      },
+
+      // ------------------------------------------------------
+      // MEDIA
+      // ------------------------------------------------------
+
+      media: {
+        heroImageUrl: "",
+        gallery: [],
+        walkthroughUrl: "",
+      },
+
+      // ------------------------------------------------------
+      // SEO
+      // ------------------------------------------------------
+
+      seoEngine: {
+        hasCustomSEO: false,
+        metaTitle: "",
+        metaDescription: "",
+        keywords: safeSeoKeywords,
+      },
+
+      // ------------------------------------------------------
+      // FAQ
+      // ------------------------------------------------------
+
+      faqSection: {},
+      faqs: [],
+
+      // ------------------------------------------------------
+      // CTA
+      // ------------------------------------------------------
+
+      cta: {},
+
+      // ------------------------------------------------------
+      // AUTHENTICATED CREATOR
+      // ------------------------------------------------------
+
+      createdBy: req.user.id,
+    };
+
+    // --------------------------------------------------------
+    // SAVE
+    // --------------------------------------------------------
+
+    const property = await Property.create(propertyPayload);
+
+    // --------------------------------------------------------
+    // RESPONSE
+    // --------------------------------------------------------
+
+    return res.status(201).json({
+      success: true,
+      message: "AI property draft created successfully.",
+      draftId: property._id,
+      data: property,
+
+      resolution: {
+        developer: {
+          requested: developerName || null,
+          resolved: !!developer,
+          id: developer?._id || null,
+          name: developer?.name || null,
+        },
+
+        category: {
+          requested: categoryName || null,
+          resolved: !!category,
+          id: category?._id || null,
+          name: category?.name || null,
+        },
+
+        location: {
+          requested: locationName || null,
+          resolved: !!location,
+          id: location?._id || null,
+          name: location?.name || null,
+        },
+      },
+
+      reviewRequired: {
+        marketType: normalizedMarketType === null,
+        developer: !!developer === false,
+        category: !!category === false,
+        location: !!location === false,
+      },
+    });
+  } catch (error) {
+    console.error("AI CREATE PROPERTY ERROR:", error);
+
+    // --------------------------------------------------------
+    // MONGOOSE VALIDATION ERROR
+    // --------------------------------------------------------
+
+    if (error.name === "ValidationError") {
+      return res.status(400).json({
+        success: false,
+        message: "Property validation failed.",
+        errors: Object.fromEntries(
+          Object.entries(error.errors).map(([key, value]) => [
+            key,
+            value.message,
+          ])
+        ),
+      });
+    }
+
+    // --------------------------------------------------------
+    // DUPLICATE KEY ERROR
+    // --------------------------------------------------------
+
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "A property with the same unique value already exists.",
+        duplicateFields: error.keyValue || {},
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to create AI property draft.",
+      error:
+        process.env.NODE_ENV === "production"
+          ? undefined
+          : error.message,
     });
   }
 };
