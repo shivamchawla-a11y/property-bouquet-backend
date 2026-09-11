@@ -27,21 +27,35 @@ const leadSchema = new mongoose.Schema(
       trim: true,
     },
 
+    /*
+    ========================================================
+    LEAD TYPE
+    ========================================================
+    */
+
     leadType: {
       type: String,
       enum: [
         "General",
         "Property Enquiry",
+        "Website Enquiry",
         "Private Consultation",
         "ROI Calculator",
       ],
       default: "General",
     },
 
+    /*
+    ========================================================
+    LEAD SOURCE
+    ========================================================
+    */
+
     source: {
       type: String,
       enum: [
         "Website",
+        "Website - 4 Second Popup",
         "Facebook",
         "Google",
         "Referral",
@@ -50,6 +64,39 @@ const leadSchema = new mongoose.Schema(
       ],
       default: "Website",
     },
+
+    /*
+    ========================================================
+    PAGE CONTEXT
+    ========================================================
+    Stores the exact website page from which the enquiry
+    was submitted.
+    ========================================================
+    */
+
+    pageUrl: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    pagePath: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    pageTitle: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    /*
+    ========================================================
+    LEAD STATUS
+    ========================================================
+    */
 
     status: {
       type: String,
@@ -63,11 +110,23 @@ const leadSchema = new mongoose.Schema(
       default: "New",
     },
 
+    /*
+    ========================================================
+    PRIORITY
+    ========================================================
+    */
+
     priority: {
       type: String,
       enum: ["Hot", "Warm", "Cold"],
       default: "Warm",
     },
+
+    /*
+    ========================================================
+    ASSIGNED AGENT
+    ========================================================
+    */
 
     assignedTo: {
       type: mongoose.Schema.Types.ObjectId,
@@ -173,7 +232,9 @@ const leadSchema = new mongoose.Schema(
       },
 
       /*
-      Optional calculated results
+      ========================================================
+      OPTIONAL CALCULATED RESULTS
+      ========================================================
       */
 
       totalInvestment: {
@@ -202,13 +263,21 @@ const leadSchema = new mongoose.Schema(
       },
     },
 
+    /*
+    ========================================================
+    NOTES
+    ========================================================
+    */
+
     notes: [
       {
         text: String,
+
         addedBy: {
           type: mongoose.Schema.Types.ObjectId,
           ref: "User",
         },
+
         createdAt: {
           type: Date,
           default: Date.now,
@@ -216,7 +285,10 @@ const leadSchema = new mongoose.Schema(
       },
     ],
   },
-  { timestamps: true }
+
+  {
+    timestamps: true,
+  }
 );
 
 module.exports = mongoose.model("Lead", leadSchema);
