@@ -6,6 +6,7 @@ const {
   protect,
   optionalProtect,
   authorize,
+  aiAutomationAuth,
 } = require("../middleware/authMiddleware");
 
 const {
@@ -91,7 +92,7 @@ router.post(
 
 router.post(
   "/ai-create",
-  protect,
+  aiAutomationAuth,
   authorize("SuperAdmin", "Agent"),
   aiCreateProperty
 );
