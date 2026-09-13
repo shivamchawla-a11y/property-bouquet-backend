@@ -1,4 +1,6 @@
 const Knowledge = require("../models/Knowledge");
+const cloudinary = require("../config/cloudinary");
+const streamifier = require("streamifier");
 
 /*
 |--------------------------------------------------------------------------
@@ -692,6 +694,100 @@ exports.deleteKnowledge = async (req, res) => {
       message:
         err.message ||
         "Failed to permanently delete article.",
+    });
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
+| UPLOAD ARTICLE CONTENT IMAGE
+|--------------------------------------------------------------------------
+|
+| Used by the Knowledge Centre Rich Text Editor.
+|
+| Flow:
+|   Browser
+|      ↓
+|   Express / Multer
+|      ↓
+|   Cloudinary
+|      ↓
+|   secure_url
+|      ↓
+|   Quill
+|
+| Images are NOT stored as base64 inside article HTML.
+|
+|--------------------------------------------------------------------------
+*/
+
+exports.uploadKnowledgeImage = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "No image file uploaded.",
+      });
+    }
+
+    /*
+     * Basic image validation.
+     */
+    if (!req.file.mimetype.startsWith("image/")) {
+      return res.status(400).json({
+        success: false,
+        message: "Only image files are allowed.",
+      });
+    }
+
+    /*
+     * Upload buffer directly to Cloudinary.
+     */
+    const result = await new Promise(
+      (resolve, reject) => {
+        const uploadStream =
+          cloudinary.uploader.upload_stream(
+            {
+              folder:
+                "property-bouquet/knowledge",
+
+              transformation: [
+                {
+                  fetch_format: "webp",
+                  quality: "auto:best",
+                },
+              ],
+            },
+            (error, uploadedResult) => {
+              if (error) {
+                reject(error);
+              } else {
+                resolve(uploadedResult);
+              }
+            }
+          );
+
+        streamifier
+          .createReadStream(req.file.buffer)
+          .pipe(uploadStream);
+      }
+    );
+
+    return res.status(200).json({
+      success: true,
+      url: result.secure_url,
+    });
+  } catch (err) {
+    console.error(
+      "KNOWLEDGE IMAGE UPLOAD ERROR:",
+      err
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        err.message ||
+        "Failed to upload article image.",
     });
   }
 };

@@ -1,4 +1,5 @@
 const express = require("express");
+const multer = require("multer");
 
 const {
   getAllKnowledge,
@@ -10,6 +11,7 @@ const {
   restoreKnowledge,
   getTrashKnowledge,
   deleteKnowledge,
+  uploadKnowledgeImage,
 } = require("../controllers/knowledgeController");
 
 const {
@@ -18,6 +20,37 @@ const {
 } = require("../middleware/authMiddleware");
 
 const router = express.Router();
+
+/*
+|--------------------------------------------------------------------------
+| MULTER
+|--------------------------------------------------------------------------
+|
+| Keep the uploaded image in memory temporarily.
+| Cloudinary receives the buffer directly.
+|
+|--------------------------------------------------------------------------
+*/
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10 MB
+  },
+
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith("image/")) {
+      cb(null, true);
+    } else {
+      cb(
+        new Error(
+          "Only image files are allowed."
+        )
+      );
+    }
+  },
+});
 
 /*
 |--------------------------------------------------------------------------
@@ -55,6 +88,20 @@ router.get("/slug/:slug", getKnowledgeBySlug);
  * Everything below this point requires authentication.
  */
 router.use(protect);
+
+/*
+ * Upload image used inside Knowledge Centre
+ * article content.
+ *
+ * POST:
+ * /api/knowledge/upload-image
+ */
+router.post(
+  "/upload-image",
+  authorize("Agent", "SuperAdmin"),
+  upload.single("image"),
+  uploadKnowledgeImage
+);
 
 /*
  * Get a single article for admin/editing.
