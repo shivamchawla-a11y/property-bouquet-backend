@@ -45,8 +45,22 @@ app.use(cors({
   credentials: true
 }));
 
-// ✅ 2. MIDDLEWARE ORDER FIX
-app.use(express.json());
+// ✅ 2. BODY PARSER
+// Allow Knowledge Centre articles with rich HTML content,
+// tables, links, formatting, etc.
+app.use(
+  express.json({
+    limit: "25mb",
+  })
+);
+
+app.use(
+  express.urlencoded({
+    extended: true,
+    limit: "25mb",
+  })
+);
+
 app.use(cookieParser());
 
 app.use(redirectMiddleware);
