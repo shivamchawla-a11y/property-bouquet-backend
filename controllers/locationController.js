@@ -114,16 +114,83 @@ const getAllChildIds = async (parentId) => {
 // Intermediate parents are intentionally omitted.
 // ============================================================
 
+// ============================================================
+// HELPER — LOCATION URL PREPOSITION
+//
+// Roads / Expressways / Highways → "on"
+// Sectors / Cities / Localities → "in"
+// ============================================================
+
+const getLocationPreposition = (location) => {
+  const name = String(
+    location?.name || ""
+  )
+    .trim()
+    .toLowerCase();
+
+  const slug = String(
+    location?.slug || ""
+  )
+    .trim()
+    .toLowerCase();
+
+  const value = `${name} ${slug}`;
+
+  const onKeywords = [
+    "expressway",
+    "express way",
+    "highway",
+    "road",
+    "street",
+    "avenue",
+    "boulevard",
+    "drive",
+    "marg",
+  ];
+
+  return onKeywords.some((keyword) =>
+    value.includes(keyword)
+  )
+    ? "on"
+    : "in";
+};
+
+
+// ============================================================
+// HELPER — BUILD PUBLIC LOCATION SLUG
+//
+// Examples:
+//
+// Gurgaon
+// → properties-in-gurgaon
+//
+// Dwarka Expressway under Gurgaon
+// → properties-on-dwarka-expressway-gurgaon
+//
+// Golf Course Road under Gurgaon
+// → properties-on-golf-course-road-gurgaon
+//
+// Sector 56 under Golf Course Road under Gurgaon
+// → properties-in-sector-56-gurgaon
+//
+// IMPORTANT:
+// Only CURRENT LOCATION + ROOT LOCATION are used.
+// Intermediate parents are intentionally omitted.
+// ============================================================
+
 const buildLocationPublicSlug = (location) => {
   if (!location) return "";
 
   const currentPart = slugify(
-    location.slug || location.name || ""
+    location.slug ||
+    location.name ||
+    ""
   );
 
   if (!currentPart) return "";
 
   let root = location;
+
   const visited = new Set();
 
   while (root?.parent) {
@@ -148,16 +215,18 @@ const buildLocationPublicSlug = (location) => {
     ""
   );
 
+  const preposition =
+    getLocationPreposition(location);
+
   if (
     rootPart &&
     rootPart !== currentPart
   ) {
-    return `properties-in-${currentPart}-${rootPart}`;
+    return `properties-${preposition}-${currentPart}-${rootPart}`;
   }
 
-  return `properties-in-${currentPart}`;
+  return `properties-${preposition}-${currentPart}`;
 };
-
 
 // ============================================================
 // CREATE
@@ -679,40 +748,46 @@ exports.getLocationByPublicSlug = async (req, res) => {
     // BUILD PUBLIC SLUG FOR EACH LOCATION
     // ========================================================
 
-    const buildPublicSlug = (location) => {
-      if (!location) {
-        return "";
-      }
+// ========================================================
+// BUILD PUBLIC SLUG FOR EACH LOCATION
+// ========================================================
 
-      const currentPart = slugify(
-        location.slug ||
-        location.name ||
-        ""
-      );
+const buildPublicSlug = (location) => {
+  if (!location) {
+    return "";
+  }
 
-      if (!currentPart) {
-        return "";
-      }
+  const currentPart = slugify(
+    location.slug ||
+    location.name ||
+    ""
+  );
 
-      const root =
-        getRootLocation(location);
+  if (!currentPart) {
+    return "";
+  }
 
-      const rootPart = slugify(
-        root?.slug ||
-        root?.name ||
-        ""
-      );
+  const root =
+    getRootLocation(location);
 
-      if (
-        rootPart &&
-        rootPart !== currentPart
-      ) {
-        return `properties-in-${currentPart}-${rootPart}`;
-      }
+  const rootPart = slugify(
+    root?.slug ||
+    root?.name ||
+    ""
+  );
 
-      return `properties-in-${currentPart}`;
-    };
+  const preposition =
+    getLocationPreposition(location);
 
+  if (
+    rootPart &&
+    rootPart !== currentPart
+  ) {
+    return `properties-${preposition}-${currentPart}-${rootPart}`;
+  }
+
+  return `properties-${preposition}-${currentPart}`;
+};
     // ========================================================
     // FIND LOCATION
     // ========================================================
