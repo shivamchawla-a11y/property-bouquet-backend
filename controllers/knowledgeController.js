@@ -32,6 +32,30 @@ const isValidObjectId = (id) => {
 |--------------------------------------------------------------------------
 */
 
+/*
+|--------------------------------------------------------------------------
+| GET ALL ACTIVE ARTICLES
+|--------------------------------------------------------------------------
+|
+| Public:
+|   GET /api/knowledge
+|
+| Admin can also use:
+|   GET /api/knowledge?trash=true
+|
+| IMPORTANT PERFORMANCE FIX:
+|
+| This endpoint is a LISTING endpoint.
+|
+| It must NOT send the full article HTML/content for every article.
+| Individual article content is still available through:
+|
+|   GET /api/knowledge/:id
+|   GET /api/knowledge/slug/:slug
+|
+|--------------------------------------------------------------------------
+*/
+
 exports.getAllKnowledge = async (req, res) => {
   try {
     const {
@@ -48,9 +72,8 @@ exports.getAllKnowledge = async (req, res) => {
      * ------------------------------------------------------------
      * SOFT DELETE FILTER
      * ------------------------------------------------------------
-     *
-     * NEVER return deleted articles in the normal listing.
      */
+
     if (trash === "true") {
       query.isDeleted = true;
     } else {
@@ -118,11 +141,35 @@ exports.getAllKnowledge = async (req, res) => {
       ];
     }
 
-    const articles = await Knowledge.find(query).sort({
-      publishDate: -1,
-      updatedAt: -1,
-      createdAt: -1,
-    });
+    /*
+     * ------------------------------------------------------------
+     * PERFORMANCE FIX
+     * ------------------------------------------------------------
+     *
+     * The Knowledge document contains the full rich-text article.
+     *
+     * Public listing pages do NOT need that large HTML field.
+     *
+     * Exclude content/body/htmlContent if present.
+     *
+     * lean() also avoids the overhead of creating full Mongoose
+     * document instances for a simple listing response.
+     *
+     * NOTE:
+     * If your Knowledge model uses only one of these fields,
+     * MongoDB simply ignores the fields that don't exist.
+     */
+
+    const articles = await Knowledge.find(query)
+      .select(
+        "-content -body -htmlContent -articleContent"
+      )
+      .sort({
+        publishDate: -1,
+        updatedAt: -1,
+        createdAt: -1,
+      })
+      .lean();
 
     return res.json({
       success: true,
