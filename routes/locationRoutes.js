@@ -10,6 +10,8 @@ const {
   getLocationsTree,
   deleteLocation,
   updateLocation,
+  updateLocationPageContent,
+  getLocationById,
 } = require("../controllers/locationController");
 
 
@@ -58,6 +60,20 @@ router.get(
 router.get(
   "/public/:publicSlug",
   getLocationByPublicSlug
+);
+
+router.get(
+  "/by-id/:id",
+  getLocationById
+);
+
+// ============================================================
+// LOCATION PAGE CONTENT
+// ============================================================
+
+router.patch(
+  "/page-content/:id",
+  updateLocationPageContent
 );
 
 

@@ -977,3 +977,148 @@ const buildPublicSlug = (location) => {
     });
   }
 };
+
+// ============================================================
+// GET LOCATION BY ID FOR ADMIN PAGE EDITOR
+//
+// GET /api/locations/by-id/:id
+// ============================================================
+
+exports.getLocationById = async (req, res) => {
+  try {
+    const location = await Location.findById(req.params.id).lean();
+
+    if (!location) {
+      return res.status(404).json({
+        success: false,
+        message: "Location not found ❌",
+      });
+    }
+
+    return res.json({
+      success: true,
+      location,
+    });
+  } catch (err) {
+    console.error("GET LOCATION BY ID ERROR:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message || "Server error ❌",
+    });
+  }
+};
+
+// ============================================================
+// UPDATE LOCATION PAGE CONTENT
+//
+// PATCH /api/locations/page-content/:id
+//
+// This is intentionally separate from updateLocation() so the
+// existing name/image/slug update behavior remains unchanged.
+// ============================================================
+
+exports.updateLocationPageContent = async (req, res) => {
+  try {
+    const locationId = req.params.id;
+    const { pageContent } = req.body;
+
+    if (!locationId) {
+      return res.status(400).json({
+        success: false,
+        message: "Location id is required ❌",
+      });
+    }
+
+    if (!pageContent || typeof pageContent !== "object") {
+      return res.status(400).json({
+        success: false,
+        message: "Valid pageContent is required ❌",
+      });
+    }
+
+    const location = await Location.findById(locationId);
+
+    if (!location) {
+      return res.status(404).json({
+        success: false,
+        message: "Location not found ❌",
+      });
+    }
+
+    // ----------------------------------------------------------
+    // Only save the fields supported by the Location schema.
+    // ----------------------------------------------------------
+
+    const hero = pageContent.hero || {};
+    const about = pageContent.about || {};
+    const sections = Array.isArray(pageContent.sections)
+      ? pageContent.sections
+      : [];
+
+    location.pageContent = {
+      hero: {
+        eyebrow: String(hero.eyebrow || ""),
+        title: String(hero.title || ""),
+        description: String(hero.description || ""),
+        image: String(hero.image || ""),
+        buttonText: String(hero.buttonText || ""),
+        buttonLink: String(hero.buttonLink || ""),
+      },
+
+      about: {
+        enabled: about.enabled !== false,
+        eyebrow: String(
+          about.eyebrow || "About The Location"
+        ),
+        title: String(about.title || ""),
+        content: String(about.content || ""),
+        highlights: Array.isArray(about.highlights)
+          ? about.highlights.map((item) => ({
+              title: String(item?.title || ""),
+              description: String(item?.description || ""),
+            }))
+          : [],
+      },
+
+      sections: sections.map((section) => ({
+        id:
+          String(section?.id || "") ||
+          `${Date.now()}-${Math.random()
+            .toString(36)
+            .slice(2, 9)}`,
+        type: "richText",
+        enabled: section?.enabled !== false,
+        eyebrow: String(section?.eyebrow || ""),
+        title: String(section?.title || ""),
+        subtitle: String(section?.subtitle || ""),
+        content: String(section?.content || ""),
+        image: String(section?.image || ""),
+        imagePosition:
+          section?.imagePosition === "left"
+            ? "left"
+            : "right",
+      })),
+    };
+
+    await location.save();
+
+    return res.json({
+      success: true,
+      message: "Location page content saved successfully ✅",
+      location,
+    });
+  } catch (err) {
+    console.error(
+      "UPDATE LOCATION PAGE CONTENT ERROR:",
+      err
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        err.message ||
+        "Unable to save location page content ❌",
+    });
+  }
+};
