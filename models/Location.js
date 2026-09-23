@@ -18,7 +18,9 @@ const aboutHighlightSchema = new mongoose.Schema(
       trim: true,
     },
   },
-  { _id: false }
+  {
+    _id: false,
+  }
 );
 
 /* ============================================================
@@ -39,7 +41,9 @@ const aboutInsightSchema = new mongoose.Schema(
       trim: true,
     },
   },
-  { _id: false }
+  {
+    _id: false,
+  }
 );
 
 /* ============================================================
@@ -60,7 +64,9 @@ const connectivityItemSchema = new mongoose.Schema(
       trim: true,
     },
   },
-  { _id: false }
+  {
+    _id: false,
+  }
 );
 
 /* ============================================================
@@ -69,6 +75,10 @@ const connectivityItemSchema = new mongoose.Schema(
 
 const locationSchema = new mongoose.Schema(
   {
+    /* ========================================================
+       BASIC LOCATION INFORMATION
+    ======================================================== */
+
     name: {
       type: String,
       required: true,
@@ -77,6 +87,8 @@ const locationSchema = new mongoose.Schema(
 
     slug: {
       type: String,
+      default: "",
+      trim: true,
     },
 
     parent: {
@@ -92,11 +104,20 @@ const locationSchema = new mongoose.Schema(
 
     /* ========================================================
        PUBLIC LOCATION PAGE CONTENT
-       
+
        IMPORTANT:
-       These are OPTIONAL overrides.
+
+       Every field inside pageContent is an OPTIONAL OVERRIDE.
+
        Empty strings mean:
-       "use the existing public-page default".
+
+       "Use the existing/default public page value."
+
+       The frontend is responsible for falling back to its
+       existing default whenever a custom value is empty.
+
+       This allows the admin to customize only the fields
+       they actually want to change.
     ======================================================== */
 
     pageContent: {
@@ -144,15 +165,27 @@ const locationSchema = new mongoose.Schema(
           default: "",
         },
 
+        /* ------------------------------------------------------
+           DESKTOP BENEFITS
+        ------------------------------------------------------ */
+
         benefits: {
           type: [String],
-          default: [],
+          default: () => [],
         },
+
+        /* ------------------------------------------------------
+           MOBILE BENEFITS
+        ------------------------------------------------------ */
 
         mobileBenefits: {
           type: [String],
-          default: [],
+          default: () => [],
         },
+
+        /* ------------------------------------------------------
+           PRIMARY CTA
+        ------------------------------------------------------ */
 
         primaryCtaText: {
           type: String,
@@ -166,6 +199,10 @@ const locationSchema = new mongoose.Schema(
           trim: true,
         },
 
+        /* ------------------------------------------------------
+           SECONDARY CTA
+        ------------------------------------------------------ */
+
         secondaryCtaText: {
           type: String,
           default: "",
@@ -177,6 +214,10 @@ const locationSchema = new mongoose.Schema(
           default: "",
           trim: true,
         },
+
+        /* ------------------------------------------------------
+           HERO FOOTER
+        ------------------------------------------------------ */
 
         footerEyebrow: {
           type: String,
@@ -191,14 +232,22 @@ const locationSchema = new mongoose.Schema(
       },
 
       /* ======================================================
-         ABOUT
+         ABOUT LOCATION
       ====================================================== */
 
       about: {
+        /* ------------------------------------------------------
+           ENABLE / DISABLE
+        ------------------------------------------------------ */
+
         enabled: {
           type: Boolean,
           default: true,
         },
+
+        /* ------------------------------------------------------
+           MAIN ABOUT CONTENT
+        ------------------------------------------------------ */
 
         eyebrow: {
           type: String,
@@ -222,10 +271,18 @@ const locationSchema = new mongoose.Schema(
           default: "",
         },
 
+        /* ------------------------------------------------------
+           LOCATION HIGHLIGHTS / SNAPSHOT
+        ------------------------------------------------------ */
+
         highlights: {
           type: [aboutHighlightSchema],
-          default: [],
+          default: () => [],
         },
+
+        /* ------------------------------------------------------
+           REAL ESTATE MARKET
+        ------------------------------------------------------ */
 
         marketEyebrow: {
           type: String,
@@ -246,8 +303,12 @@ const locationSchema = new mongoose.Schema(
 
         marketInsights: {
           type: [aboutInsightSchema],
-          default: [],
+          default: () => [],
         },
+
+        /* ------------------------------------------------------
+           PERSPECTIVE / QUOTE
+        ------------------------------------------------------ */
 
         perspectiveEyebrow: {
           type: String,
@@ -288,10 +349,18 @@ const locationSchema = new mongoose.Schema(
           default: "",
         },
 
+        /* ------------------------------------------------------
+           CONNECTIVITY CARDS
+        ------------------------------------------------------ */
+
         items: {
           type: [connectivityItemSchema],
-          default: [],
+          default: () => [],
         },
+
+        /* ------------------------------------------------------
+           LOCATION ADVANTAGE
+        ------------------------------------------------------ */
 
         advantageEyebrow: {
           type: String,
@@ -308,8 +377,11 @@ const locationSchema = new mongoose.Schema(
       /* ======================================================
          NEARBY LOCATIONS
          
-         The actual nearby-location calculation remains dynamic.
-         These fields only override the section copy.
+         IMPORTANT:
+
+         Nearby locations themselves remain dynamic.
+
+         These fields only control the section's text/copy.
       ====================================================== */
 
       nearby: {
@@ -333,13 +405,32 @@ const locationSchema = new mongoose.Schema(
     },
   },
 
-  { timestamps: true }
+  /* ==========================================================
+     SCHEMA OPTIONS
+  ========================================================== */
+
+  {
+    timestamps: true,
+  }
 );
 
+/* ============================================================
+   UNIQUE LOCATION NAME WITHIN SAME PARENT
+============================================================ */
+
 locationSchema.index(
-  { name: 1, parent: 1 },
-  { unique: true }
+  {
+    name: 1,
+    parent: 1,
+  },
+  {
+    unique: true,
+  }
 );
+
+/* ============================================================
+   EXPORT
+============================================================ */
 
 module.exports =
   mongoose.models.Location ||
