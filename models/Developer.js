@@ -15,7 +15,7 @@ const developerSchema = new mongoose.Schema(
 
     logo: {
       type: String,
-      default: "/placeholder.png",
+      default: "/placeholder.jpg",
     },
 
     // ✅ DEVELOPER COVER IMAGE

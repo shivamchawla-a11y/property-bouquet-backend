@@ -113,7 +113,7 @@ exports.createDeveloper = async (req, res) => {
 
       logo:
         logo?.trim() ||
-        "/placeholder.png",
+        "/placeholder.jpg",
 
       image:
         image?.trim() || "",
@@ -208,7 +208,7 @@ exports.updateDeveloper = async (req, res) => {
 
           logo:
             logo?.trim() ||
-            "/placeholder.png",
+            "/placeholder.jpg",
 
           image:
             image?.trim() || "",
