@@ -15,6 +15,7 @@ const {
   checkPropertyDuplicates,
   publishDraft,
   getProperties,
+  getPropertySeoList,
   deleteProperty,
   restoreProperty,
   moveToTrash,
@@ -40,6 +41,15 @@ router.get(
   "/",
   optionalProtect,
   getProperties
+);
+
+
+// Lightweight SEO property list
+// Used by sitemap / LLM discovery.
+// Returns only published, active, non-deleted SEO fields.
+router.get(
+  "/seo-list",
+  getPropertySeoList
 );
 
 // Public property by slug

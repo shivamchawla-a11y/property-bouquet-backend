@@ -3465,3 +3465,73 @@ exports.aiCreateProperty = async (req, res) => {
     });
   }
 };
+
+exports.getPropertySeoList = async (
+  req,
+  res
+) => {
+  try {
+    const filter = {
+      status: "published",
+      isDeleted: {
+        $ne: true,
+      },
+      isActive: {
+        $ne: false,
+      },
+      deletedFromStatus: {
+        $nin: [
+          "trash",
+          "inactive",
+        ],
+      },
+      slug: {
+        $exists: true,
+        $ne: "",
+      },
+    };
+
+    const properties =
+      await Property.find(filter)
+        .select({
+          _id: 0,
+          slug: 1,
+          status: 1,
+          isDeleted: 1,
+          isActive: 1,
+          deletedFromStatus: 1,
+          updatedAt: 1,
+          createdAt: 1,
+          title: 1,
+          name: 1,
+          "coreDetails.title": 1,
+          "coreDetails.developerRef": 1,
+          "coreDetails.developerName": 1,
+          "locationData.locationName": 1,
+          "locationData.customLocation": 1,
+          locationName: 1,
+          developerName: 1,
+          "developer.name": 1,
+        })
+        .populate(
+          "coreDetails.developerRef",
+          "name -_id"
+        )
+        .lean();
+
+    return res.status(200).json({
+      success: true,
+      data: properties,
+    });
+  } catch (error) {
+    console.error(
+      "GET PROPERTY SEO LIST ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
