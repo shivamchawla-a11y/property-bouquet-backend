@@ -70,6 +70,161 @@ const connectivityItemSchema = new mongoose.Schema(
 );
 
 /* ============================================================
+   REAL ESTATE TYPE CARD
+============================================================ */
+
+const realEstateTypeCardSchema = new mongoose.Schema(
+  {
+    title: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    description: {
+      type: String,
+      default: "",
+    },
+  },
+  {
+    _id: false,
+  }
+);
+
+/* ============================================================
+   LIFESTYLE GROUP
+============================================================ */
+
+const lifestyleGroupSchema = new mongoose.Schema(
+  {
+    title: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    description: {
+      type: String,
+      default: "",
+    },
+
+    items: {
+      type: [String],
+      default: () => [],
+    },
+  },
+  {
+    _id: false,
+  }
+);
+
+/* ============================================================
+   WHY BUY REASON
+============================================================ */
+
+const whyBuyReasonSchema = new mongoose.Schema(
+  {
+    title: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    description: {
+      type: String,
+      default: "",
+    },
+  },
+  {
+    _id: false,
+  }
+);
+
+/* ============================================================
+   FAQ ITEM
+============================================================ */
+
+const faqItemSchema = new mongoose.Schema(
+  {
+    question: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    answer: {
+      type: String,
+      default: "",
+    },
+  },
+  {
+    _id: false,
+  }
+);
+
+/* ============================================================
+   CUSTOM LOCATION SECTION
+============================================================ */
+
+const customLocationSectionSchema =
+  new mongoose.Schema(
+    {
+      id: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+
+      type: {
+        type: String,
+        default: "richText",
+        trim: true,
+      },
+
+      enabled: {
+        type: Boolean,
+        default: true,
+      },
+
+      eyebrow: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+
+      title: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+
+      subtitle: {
+        type: String,
+        default: "",
+      },
+
+      content: {
+        type: String,
+        default: "",
+      },
+
+      image: {
+        type: String,
+        default: "",
+      },
+
+      imagePosition: {
+        type: String,
+        default: "right",
+        trim: true,
+      },
+    },
+    {
+      _id: false,
+    }
+  );
+
+/* ============================================================
    LOCATION SCHEMA
 ============================================================ */
 
@@ -105,19 +260,14 @@ const locationSchema = new mongoose.Schema(
     /* ========================================================
        PUBLIC LOCATION PAGE CONTENT
 
-       IMPORTANT:
-
        Every field inside pageContent is an OPTIONAL OVERRIDE.
 
        Empty strings mean:
 
        "Use the existing/default public page value."
 
-       The frontend is responsible for falling back to its
-       existing default whenever a custom value is empty.
-
-       This allows the admin to customize only the fields
-       they actually want to change.
+       The public components are responsible for fallback
+       behaviour when a custom value is empty.
     ======================================================== */
 
     pageContent: {
@@ -236,18 +386,10 @@ const locationSchema = new mongoose.Schema(
       ====================================================== */
 
       about: {
-        /* ------------------------------------------------------
-           ENABLE / DISABLE
-        ------------------------------------------------------ */
-
         enabled: {
           type: Boolean,
           default: true,
         },
-
-        /* ------------------------------------------------------
-           MAIN ABOUT CONTENT
-        ------------------------------------------------------ */
 
         eyebrow: {
           type: String,
@@ -271,18 +413,10 @@ const locationSchema = new mongoose.Schema(
           default: "",
         },
 
-        /* ------------------------------------------------------
-           LOCATION HIGHLIGHTS / SNAPSHOT
-        ------------------------------------------------------ */
-
         highlights: {
           type: [aboutHighlightSchema],
           default: () => [],
         },
-
-        /* ------------------------------------------------------
-           REAL ESTATE MARKET
-        ------------------------------------------------------ */
 
         marketEyebrow: {
           type: String,
@@ -305,10 +439,6 @@ const locationSchema = new mongoose.Schema(
           type: [aboutInsightSchema],
           default: () => [],
         },
-
-        /* ------------------------------------------------------
-           PERSPECTIVE / QUOTE
-        ------------------------------------------------------ */
 
         perspectiveEyebrow: {
           type: String,
@@ -349,18 +479,10 @@ const locationSchema = new mongoose.Schema(
           default: "",
         },
 
-        /* ------------------------------------------------------
-           CONNECTIVITY CARDS
-        ------------------------------------------------------ */
-
         items: {
           type: [connectivityItemSchema],
           default: () => [],
         },
-
-        /* ------------------------------------------------------
-           LOCATION ADVANTAGE
-        ------------------------------------------------------ */
 
         advantageEyebrow: {
           type: String,
@@ -376,12 +498,10 @@ const locationSchema = new mongoose.Schema(
 
       /* ======================================================
          NEARBY LOCATIONS
-         
-         IMPORTANT:
 
-         Nearby locations themselves remain dynamic.
+         The actual nearby locations remain dynamic.
 
-         These fields only control the section's text/copy.
+         These fields only control section copy.
       ====================================================== */
 
       nearby: {
@@ -401,6 +521,199 @@ const locationSchema = new mongoose.Schema(
           type: String,
           default: "",
         },
+      },
+
+      /* ======================================================
+         REAL ESTATE TYPES
+      ====================================================== */
+
+      realEstateTypes: {
+        eyebrow: {
+          type: String,
+          default: "",
+          trim: true,
+        },
+
+        title: {
+          type: String,
+          default: "",
+          trim: true,
+        },
+
+        description: {
+          type: String,
+          default: "",
+        },
+
+        cards: {
+          type: [realEstateTypeCardSchema],
+          default: () => [],
+        },
+      },
+
+      /* ======================================================
+         PROPERTY PRICES
+      ====================================================== */
+
+      propertyPrices: {
+        eyebrow: {
+          type: String,
+          default: "",
+          trim: true,
+        },
+
+        title: {
+          type: String,
+          default: "",
+          trim: true,
+        },
+
+        description: {
+          type: String,
+          default: "",
+        },
+
+        ctaText: {
+          type: String,
+          default: "",
+          trim: true,
+        },
+
+        ctaLink: {
+          type: String,
+          default: "",
+          trim: true,
+        },
+
+        factorsTitle: {
+          type: String,
+          default: "",
+          trim: true,
+        },
+
+        factors: {
+          type: [String],
+          default: () => [],
+        },
+
+        currentPricingTitle: {
+          type: String,
+          default: "",
+          trim: true,
+        },
+
+        currentPricingDescription: {
+          type: String,
+          default: "",
+        },
+      },
+
+      /* ======================================================
+         LIFESTYLE
+      ====================================================== */
+
+      lifestyle: {
+        eyebrow: {
+          type: String,
+          default: "",
+          trim: true,
+        },
+
+        title: {
+          type: String,
+          default: "",
+          trim: true,
+        },
+
+        description: {
+          type: String,
+          default: "",
+        },
+
+        groups: {
+          type: [lifestyleGroupSchema],
+          default: () => [],
+        },
+      },
+
+      /* ======================================================
+         WHY BUY
+      ====================================================== */
+
+      whyBuy: {
+        eyebrow: {
+          type: String,
+          default: "",
+          trim: true,
+        },
+
+        title: {
+          type: String,
+          default: "",
+          trim: true,
+        },
+
+        description: {
+          type: String,
+          default: "",
+        },
+
+        reasons: {
+          type: [whyBuyReasonSchema],
+          default: () => [],
+        },
+      },
+
+      /* ======================================================
+         FAQ
+      ====================================================== */
+
+      faq: {
+        eyebrow: {
+          type: String,
+          default: "",
+          trim: true,
+        },
+
+        title: {
+          type: String,
+          default: "",
+          trim: true,
+        },
+
+        description: {
+          type: String,
+          default: "",
+        },
+
+        items: {
+          type: [faqItemSchema],
+          default: () => [],
+        },
+      },
+
+      /* ======================================================
+         ADVISOR CTA
+
+         Stored as Mixed for now so existing/new CTA fields
+         are not stripped by Mongoose.
+
+         The exact editable fields can be made strict once
+         LocationAdvisorCTA.jsx is wired to pageContent.
+      ====================================================== */
+
+      advisorCta: {
+        type: mongoose.Schema.Types.Mixed,
+        default: () => ({}),
+      },
+
+      /* ======================================================
+         CUSTOM ADDITIONAL SECTIONS
+      ====================================================== */
+
+      sections: {
+        type: [customLocationSectionSchema],
+        default: () => [],
       },
     },
   },
@@ -434,4 +747,7 @@ locationSchema.index(
 
 module.exports =
   mongoose.models.Location ||
-  mongoose.model("Location", locationSchema);
+  mongoose.model(
+    "Location",
+    locationSchema
+  );
