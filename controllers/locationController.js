@@ -1050,6 +1050,44 @@ exports.getLocationById =
    without the previously saved structure being lost.
 ============================================================ */
 
+/* ============================================================
+   UPDATE LOCATION PAGE CONTENT
+
+   PATCH /api/locations/page-content/:id
+
+   IMPORTANT ARCHITECTURE:
+
+   pageContent is an OPTIONAL CUSTOM OVERRIDE layer.
+
+   The public location components provide their own static/default
+   content. pageContent only stores the values customized from
+   the admin editor.
+
+   Editable/customizable sections:
+
+   1. HERO
+   2. ABOUT
+   3. REAL ESTATE TYPES
+   4. PROPERTY PRICES
+   5. CONNECTIVITY
+   6. LIFESTYLE
+   7. WHY BUY
+   8. NEARBY
+   9. FAQ
+   10. CUSTOM SECTIONS
+
+   Advisor CTA is intentionally NOT included here because it is
+   static and is not part of the custom editable layer.
+
+   IMPORTANT:
+
+   We normalize the COMPLETE pageContent object instead of
+   replacing it with only a few sections.
+
+   This prevents one section being saved while another existing
+   custom section gets deleted.
+============================================================ */
+
 exports.updateLocationPageContent = async (req, res) => {
   try {
     /* ==========================================================
@@ -1097,15 +1135,7 @@ exports.updateLocationPageContent = async (req, res) => {
     }
 
     /* ==========================================================
-       HELPER — SAFE STRING
-
-       We intentionally preserve empty strings.
-
-       Example:
-
-       undefined → ""
-       null      → ""
-       "Gurgaon" → "Gurgaon"
+       HELPERS
     ========================================================== */
 
     const safeString = (value) => {
@@ -1119,6 +1149,29 @@ exports.updateLocationPageContent = async (req, res) => {
       return String(value);
     };
 
+    const safeBoolean = (
+      value,
+      defaultValue = true
+    ) => {
+      if (typeof value === "boolean") {
+        return value;
+      }
+
+      return defaultValue;
+    };
+
+    const cleanStringArray = (
+      value
+    ) => {
+      if (!Array.isArray(value)) {
+        return [];
+      }
+
+      return value.map(
+        (item) => safeString(item)
+      );
+    };
+
     /* ==========================================================
        HERO
     ========================================================== */
@@ -1130,44 +1183,22 @@ exports.updateLocationPageContent = async (req, res) => {
         ? pageContent.hero
         : {};
 
-    /* ----------------------------------------------------------
-       HERO BENEFITS
-       
-       Admin editor uses exactly 4 desktop benefits.
-    ---------------------------------------------------------- */
-
     const benefits = Array.isArray(
       hero.benefits
     )
-      ? hero.benefits
-          .slice(0, 4)
-          .map(safeString)
+      ? hero.benefits.map(
+          (item) => safeString(item)
+        )
       : [];
-
-    while (benefits.length < 4) {
-      benefits.push("");
-    }
-
-    /* ----------------------------------------------------------
-       HERO MOBILE BENEFITS
-       
-       Admin editor uses exactly 4 mobile benefits.
-    ---------------------------------------------------------- */
 
     const mobileBenefits =
       Array.isArray(
         hero.mobileBenefits
       )
-        ? hero.mobileBenefits
-            .slice(0, 4)
-            .map(safeString)
+        ? hero.mobileBenefits.map(
+            (item) => safeString(item)
+          )
         : [];
-
-    while (
-      mobileBenefits.length < 4
-    ) {
-      mobileBenefits.push("");
-    }
 
     /* ==========================================================
        ABOUT
@@ -1180,19 +1211,12 @@ exports.updateLocationPageContent = async (req, res) => {
         ? pageContent.about
         : {};
 
-    /* ----------------------------------------------------------
-       ABOUT HIGHLIGHTS
-       
-       Admin editor uses exactly 3 highlights.
-    ---------------------------------------------------------- */
-
     const highlights =
       Array.isArray(
         about.highlights
       )
-        ? about.highlights
-            .slice(0, 3)
-            .map((item) => ({
+        ? about.highlights.map(
+            (item) => ({
               title: safeString(
                 item?.title
               ),
@@ -1201,29 +1225,16 @@ exports.updateLocationPageContent = async (req, res) => {
                 safeString(
                   item?.description
                 ),
-            }))
+            })
+          )
         : [];
-
-    while (highlights.length < 3) {
-      highlights.push({
-        title: "",
-        description: "",
-      });
-    }
-
-    /* ----------------------------------------------------------
-       MARKET INSIGHTS
-       
-       Admin editor uses exactly 3 market insights.
-    ---------------------------------------------------------- */
 
     const marketInsights =
       Array.isArray(
         about.marketInsights
       )
-        ? about.marketInsights
-            .slice(0, 3)
-            .map((item) => ({
+        ? about.marketInsights.map(
+            (item) => ({
               title: safeString(
                 item?.title
               ),
@@ -1232,17 +1243,65 @@ exports.updateLocationPageContent = async (req, res) => {
                 safeString(
                   item?.description
                 ),
-            }))
+            })
+          )
         : [];
 
-    while (
-      marketInsights.length < 3
-    ) {
-      marketInsights.push({
-        title: "",
-        description: "",
-      });
-    }
+    /* ==========================================================
+       REAL ESTATE TYPES
+    ========================================================== */
+
+    const realEstateTypes =
+      pageContent.realEstateTypes &&
+      typeof pageContent.realEstateTypes ===
+        "object" &&
+      !Array.isArray(
+        pageContent.realEstateTypes
+      )
+        ? pageContent.realEstateTypes
+        : {};
+
+    const realEstateCards =
+      Array.isArray(
+        realEstateTypes.cards
+      )
+        ? realEstateTypes.cards.map(
+            (item) => ({
+              title: safeString(
+                item?.title
+              ),
+
+              description:
+                safeString(
+                  item?.description
+                ),
+            })
+          )
+        : [];
+
+    /* ==========================================================
+       PROPERTY PRICES
+    ========================================================== */
+
+    const propertyPrices =
+      pageContent.propertyPrices &&
+      typeof pageContent.propertyPrices ===
+        "object" &&
+      !Array.isArray(
+        pageContent.propertyPrices
+      )
+        ? pageContent.propertyPrices
+        : {};
+
+    const pricingFactors =
+      Array.isArray(
+        propertyPrices.factors
+      )
+        ? propertyPrices.factors.map(
+            (item) =>
+              safeString(item)
+          )
+        : [];
 
     /* ==========================================================
        CONNECTIVITY
@@ -1258,19 +1317,12 @@ exports.updateLocationPageContent = async (req, res) => {
         ? pageContent.connectivity
         : {};
 
-    /* ----------------------------------------------------------
-       CONNECTIVITY ITEMS
-       
-       Admin editor uses exactly 6 items.
-    ---------------------------------------------------------- */
-
     const connectivityItems =
       Array.isArray(
         connectivity.items
       )
-        ? connectivity.items
-            .slice(0, 6)
-            .map((item) => ({
+        ? connectivity.items.map(
+            (item) => ({
               title: safeString(
                 item?.title
               ),
@@ -1279,17 +1331,85 @@ exports.updateLocationPageContent = async (req, res) => {
                 safeString(
                   item?.subtitle
                 ),
-            }))
+            })
+          )
         : [];
 
-    while (
-      connectivityItems.length < 6
-    ) {
-      connectivityItems.push({
-        title: "",
-        subtitle: "",
-      });
-    }
+    /* ==========================================================
+       LIFESTYLE
+    ========================================================== */
+
+    const lifestyle =
+      pageContent.lifestyle &&
+      typeof pageContent.lifestyle ===
+        "object" &&
+      !Array.isArray(
+        pageContent.lifestyle
+      )
+        ? pageContent.lifestyle
+        : {};
+
+    const lifestyleGroups =
+      Array.isArray(
+        lifestyle.groups
+      )
+        ? lifestyle.groups.map(
+            (group) => ({
+              title: safeString(
+                group?.title
+              ),
+
+              description:
+                safeString(
+                  group?.description
+                ),
+
+              items:
+                Array.isArray(
+                  group?.items
+                )
+                  ? group.items.map(
+                      (item) =>
+                        safeString(
+                          item
+                        )
+                    )
+                  : [],
+            })
+          )
+        : [];
+
+    /* ==========================================================
+       WHY BUY
+    ========================================================== */
+
+    const whyBuy =
+      pageContent.whyBuy &&
+      typeof pageContent.whyBuy ===
+        "object" &&
+      !Array.isArray(
+        pageContent.whyBuy
+      )
+        ? pageContent.whyBuy
+        : {};
+
+    const whyBuyReasons =
+      Array.isArray(
+        whyBuy.reasons
+      )
+        ? whyBuy.reasons.map(
+            (item) => ({
+              title: safeString(
+                item?.title
+              ),
+
+              description:
+                safeString(
+                  item?.description
+                ),
+            })
+          )
+        : [];
 
     /* ==========================================================
        NEARBY
@@ -1298,12 +1418,113 @@ exports.updateLocationPageContent = async (req, res) => {
     const nearby =
       pageContent.nearby &&
       typeof pageContent.nearby === "object" &&
-      !Array.isArray(pageContent.nearby)
+      !Array.isArray(
+        pageContent.nearby
+      )
         ? pageContent.nearby
         : {};
 
     /* ==========================================================
-       COMPLETE CLEAN PAGE CONTENT
+       FAQ
+    ========================================================== */
+
+    const faq =
+      pageContent.faq &&
+      typeof pageContent.faq === "object" &&
+      !Array.isArray(
+        pageContent.faq
+      )
+        ? pageContent.faq
+        : {};
+
+    const faqItems =
+      Array.isArray(
+        faq.items
+      )
+        ? faq.items.map(
+            (item) => ({
+              question:
+                safeString(
+                  item?.question
+                ),
+
+              answer:
+                safeString(
+                  item?.answer
+                ),
+            })
+          )
+        : [];
+
+    /* ==========================================================
+       CUSTOM SECTIONS
+    ========================================================== */
+
+    const sections =
+      Array.isArray(
+        pageContent.sections
+      )
+        ? pageContent.sections
+            .map((section) => ({
+              id: safeString(
+                section?.id
+              ),
+
+              type:
+                safeString(
+                  section?.type
+                ) || "richText",
+
+              enabled:
+                safeBoolean(
+                  section?.enabled,
+                  true
+                ),
+
+              eyebrow:
+                safeString(
+                  section?.eyebrow
+                ),
+
+              title:
+                safeString(
+                  section?.title
+                ),
+
+              subtitle:
+                safeString(
+                  section?.subtitle
+                ),
+
+              content:
+                safeString(
+                  section?.content
+                ),
+
+              image:
+                safeString(
+                  section?.image
+                ),
+
+              imagePosition:
+                safeString(
+                  section?.imagePosition
+                ),
+            }))
+            .filter(
+              (section) =>
+                section.id
+            )
+        : [];
+
+    /* ==========================================================
+       COMPLETE CUSTOM PAGE CONTENT
+
+       IMPORTANT:
+
+       Advisor CTA is intentionally omitted because it is static.
+
+       All other editable/custom sections are included.
     ========================================================== */
 
     const cleanPageContent = {
@@ -1312,45 +1533,54 @@ exports.updateLocationPageContent = async (req, res) => {
       ======================================================== */
 
       hero: {
-        eyebrow: safeString(
-          hero.eyebrow
-        ),
+        eyebrow:
+          safeString(
+            hero.eyebrow
+          ),
 
-        title: safeString(
-          hero.title
-        ),
+        title:
+          safeString(
+            hero.title
+          ),
 
-        description: safeString(
-          hero.description
-        ),
+        description:
+          safeString(
+            hero.description
+          ),
 
-        image: safeString(
-          hero.image
-        ),
+        image:
+          safeString(
+            hero.image
+          ),
 
-        locationLabel: safeString(
-          hero.locationLabel
-        ),
+        locationLabel:
+          safeString(
+            hero.locationLabel
+          ),
 
-        whyTitle: safeString(
-          hero.whyTitle
-        ),
+        whyTitle:
+          safeString(
+            hero.whyTitle
+          ),
 
-        whyDescription: safeString(
-          hero.whyDescription
-        ),
+        whyDescription:
+          safeString(
+            hero.whyDescription
+          ),
 
         benefits,
 
         mobileBenefits,
 
-        primaryCtaText: safeString(
-          hero.primaryCtaText
-        ),
+        primaryCtaText:
+          safeString(
+            hero.primaryCtaText
+          ),
 
-        primaryCtaLink: safeString(
-          hero.primaryCtaLink
-        ),
+        primaryCtaLink:
+          safeString(
+            hero.primaryCtaLink
+          ),
 
         secondaryCtaText:
           safeString(
@@ -1367,9 +1597,10 @@ exports.updateLocationPageContent = async (req, res) => {
             hero.footerEyebrow
           ),
 
-        footerText: safeString(
-          hero.footerText
-        ),
+        footerText:
+          safeString(
+            hero.footerText
+          ),
       },
 
       /* ========================================================
@@ -1382,21 +1613,25 @@ exports.updateLocationPageContent = async (req, res) => {
             ? false
             : true,
 
-        eyebrow: safeString(
-          about.eyebrow
-        ),
+        eyebrow:
+          safeString(
+            about.eyebrow
+          ),
 
-        title: safeString(
-          about.title
-        ),
+        title:
+          safeString(
+            about.title
+          ),
 
-        content: safeString(
-          about.content
-        ),
+        content:
+          safeString(
+            about.content
+          ),
 
-        image: safeString(
-          about.image
-        ),
+        image:
+          safeString(
+            about.image
+          ),
 
         highlights,
 
@@ -1429,25 +1664,102 @@ exports.updateLocationPageContent = async (req, res) => {
       },
 
       /* ========================================================
+         REAL ESTATE TYPES
+      ======================================================== */
+
+      realEstateTypes: {
+        eyebrow:
+          safeString(
+            realEstateTypes.eyebrow
+          ),
+
+        title:
+          safeString(
+            realEstateTypes.title
+          ),
+
+        description:
+          safeString(
+            realEstateTypes.description
+          ),
+
+        cards:
+          realEstateCards,
+      },
+
+      /* ========================================================
+         PROPERTY PRICES
+      ======================================================== */
+
+      propertyPrices: {
+        eyebrow:
+          safeString(
+            propertyPrices.eyebrow
+          ),
+
+        title:
+          safeString(
+            propertyPrices.title
+          ),
+
+        description:
+          safeString(
+            propertyPrices.description
+          ),
+
+        ctaText:
+          safeString(
+            propertyPrices.ctaText
+          ),
+
+        ctaLink:
+          safeString(
+            propertyPrices.ctaLink
+          ),
+
+        factorsTitle:
+          safeString(
+            propertyPrices.factorsTitle
+          ),
+
+        factors:
+          pricingFactors,
+
+        currentPricingTitle:
+          safeString(
+            propertyPrices.currentPricingTitle
+          ),
+
+        currentPricingDescription:
+          safeString(
+            propertyPrices.currentPricingDescription
+          ),
+      },
+
+      /* ========================================================
          CONNECTIVITY
       ======================================================== */
 
       connectivity: {
-        eyebrow: safeString(
-          connectivity.eyebrow
-        ),
+        eyebrow:
+          safeString(
+            connectivity.eyebrow
+          ),
 
-        title: safeString(
-          connectivity.title
-        ),
+        title:
+          safeString(
+            connectivity.title
+          ),
 
-        description: safeString(
-          connectivity.description
-        ),
+        description:
+          safeString(
+            connectivity.description
+          ),
 
-        image: safeString(
-          connectivity.image
-        ),
+        image:
+          safeString(
+            connectivity.image
+          ),
 
         items:
           connectivityItems,
@@ -1464,32 +1776,111 @@ exports.updateLocationPageContent = async (req, res) => {
       },
 
       /* ========================================================
+         LIFESTYLE
+      ======================================================== */
+
+      lifestyle: {
+        eyebrow:
+          safeString(
+            lifestyle.eyebrow
+          ),
+
+        title:
+          safeString(
+            lifestyle.title
+          ),
+
+        description:
+          safeString(
+            lifestyle.description
+          ),
+
+        groups:
+          lifestyleGroups,
+      },
+
+      /* ========================================================
+         WHY BUY
+      ======================================================== */
+
+      whyBuy: {
+        eyebrow:
+          safeString(
+            whyBuy.eyebrow
+          ),
+
+        title:
+          safeString(
+            whyBuy.title
+          ),
+
+        description:
+          safeString(
+            whyBuy.description
+          ),
+
+        reasons:
+          whyBuyReasons,
+      },
+
+      /* ========================================================
          NEARBY
       ======================================================== */
 
       nearby: {
-        eyebrow: safeString(
-          nearby.eyebrow
-        ),
+        eyebrow:
+          safeString(
+            nearby.eyebrow
+          ),
 
-        title: safeString(
-          nearby.title
-        ),
+        title:
+          safeString(
+            nearby.title
+          ),
 
-        description: safeString(
-          nearby.description
-        ),
+        description:
+          safeString(
+            nearby.description
+          ),
       },
+
+      /* ========================================================
+         FAQ
+      ======================================================== */
+
+      faq: {
+        eyebrow:
+          safeString(
+            faq.eyebrow
+          ),
+
+        title:
+          safeString(
+            faq.title
+          ),
+
+        description:
+          safeString(
+            faq.description
+          ),
+
+        items:
+          faqItems,
+      },
+
+      /* ========================================================
+         CUSTOM SECTIONS
+      ======================================================== */
+
+      sections,
     };
 
     /* ==========================================================
        SAVE
 
-       We replace pageContent with the complete normalized
-       structure.
+       pageContent is the complete custom override layer.
 
-       This prevents old/partial data from causing inconsistent
-       editing behavior.
+       Static/default content remains inside the public components.
     ========================================================== */
 
     location.pageContent =
@@ -1500,10 +1891,7 @@ exports.updateLocationPageContent = async (req, res) => {
     /* ==========================================================
        FETCH FRESH DOCUMENT
 
-       Do not return the old in-memory object.
-
-       We fetch the document again so the admin editor receives
-       exactly what MongoDB has stored.
+       Return exactly what MongoDB has persisted.
     ========================================================== */
 
     const savedLocation =
