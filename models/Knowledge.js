@@ -71,6 +71,7 @@ const knowledgeSchema = new mongoose.Schema(
         "Market Education",
         "NRI Guide",
         "Tips & Tricks",
+        "Project's Review",
         "General",
       ],
 
