@@ -2537,9 +2537,9 @@ exports.aiCreateProperty = async (req, res) => {
   try {
     const aiData = req.body?.aiData;
 
-    // --------------------------------------------------------
+    // ============================================================
     // BASIC VALIDATION
-    // --------------------------------------------------------
+    // ============================================================
 
     if (!aiData || typeof aiData !== "object") {
       return res.status(400).json({
@@ -2555,9 +2555,43 @@ exports.aiCreateProperty = async (req, res) => {
       });
     }
 
-    // --------------------------------------------------------
-    // EXTRACT AI VALUES
-    // --------------------------------------------------------
+    // ============================================================
+    // SAFE HELPERS
+    // ============================================================
+
+    const cleanString = (value) => {
+      if (value === null || value === undefined) return "";
+      return String(value).trim();
+    };
+
+    const nullableString = (value) => {
+      const valueClean = cleanString(value);
+      return valueClean || "";
+    };
+
+    const safeNumber = (value) => {
+      if (typeof value === "number" && Number.isFinite(value)) {
+        return value;
+      }
+
+      return null;
+    };
+
+    const safeBoolean = (value) => value === true;
+
+    const safeArray = (value) => {
+      return Array.isArray(value) ? value : [];
+    };
+
+    const safeObject = (value) => {
+      return value && typeof value === "object" && !Array.isArray(value)
+        ? value
+        : {};
+    };
+
+    // ============================================================
+    // EXTRACT BASIC AI VALUES
+    // ============================================================
 
     const {
       title,
@@ -2584,14 +2618,26 @@ exports.aiCreateProperty = async (req, res) => {
       amenities,
       landmarks,
       overviewDescription,
-      seoKeywords,
+      featureBar,
+      overviewContent,
+      configurationContent,
+      locationContent,
+      locationBottomStrip,
+      masterPlanContent,
+      floorPlans,
+      seoContent,
+      faqSectionContent,
+      faqs,
+      ctaContent,
     } = aiData;
 
-    // --------------------------------------------------------
+    // ============================================================
     // TITLE
-    // --------------------------------------------------------
+    // ============================================================
 
-    if (!title || !String(title).trim()) {
+    const cleanTitle = cleanString(title);
+
+    if (!cleanTitle) {
       return res.status(400).json({
         success: false,
         message:
@@ -2599,12 +2645,9 @@ exports.aiCreateProperty = async (req, res) => {
       });
     }
 
-    // --------------------------------------------------------
+    // ============================================================
     // MARKET TYPE
-    // --------------------------------------------------------
-    // NEVER GUESS.
-    // Admin can select Primary / Resale during review.
-    // --------------------------------------------------------
+    // ============================================================
 
     let normalizedMarketType = null;
 
@@ -2612,14 +2655,14 @@ exports.aiCreateProperty = async (req, res) => {
       normalizedMarketType = marketType;
     }
 
-    // --------------------------------------------------------
+    // ============================================================
     // DEVELOPER LOOKUP
-    // --------------------------------------------------------
+    // ============================================================
 
     let developer = null;
 
-    if (developerName && String(developerName).trim()) {
-      const cleanDeveloperName = String(developerName).trim();
+    if (developerName && cleanString(developerName)) {
+      const cleanDeveloperName = cleanString(developerName);
 
       const escapedDeveloperName = cleanDeveloperName.replace(
         /[.*+?^${}()|[\]\\]/g,
@@ -2634,14 +2677,14 @@ exports.aiCreateProperty = async (req, res) => {
       }).lean();
     }
 
-    // --------------------------------------------------------
+    // ============================================================
     // CATEGORY LOOKUP
-    // --------------------------------------------------------
+    // ============================================================
 
     let category = null;
 
-    if (categoryName && String(categoryName).trim()) {
-      const cleanCategoryName = String(categoryName).trim();
+    if (categoryName && cleanString(categoryName)) {
+      const cleanCategoryName = cleanString(categoryName);
 
       const escapedCategoryName = cleanCategoryName.replace(
         /[.*+?^${}()|[\]\\]/g,
@@ -2655,7 +2698,6 @@ exports.aiCreateProperty = async (req, res) => {
         },
       }).lean();
 
-      // Try fullPath if exact category name wasn't found.
       if (!category) {
         category = await Category.findOne({
           fullPath: {
@@ -2666,18 +2708,14 @@ exports.aiCreateProperty = async (req, res) => {
       }
     }
 
-    // --------------------------------------------------------
+    // ============================================================
     // LOCATION LOOKUP
-    // --------------------------------------------------------
-    //
-    // Exact match only.
-    // If duplicate names exist, never guess.
-    // --------------------------------------------------------
+    // ============================================================
 
     let location = null;
 
-    if (locationName && String(locationName).trim()) {
-      const cleanLocationName = String(locationName).trim();
+    if (locationName && cleanString(locationName)) {
+      const cleanLocationName = cleanString(locationName);
 
       const escapedLocationName = cleanLocationName.replace(
         /[.*+?^${}()|[\]\\]/g,
@@ -2708,19 +2746,11 @@ exports.aiCreateProperty = async (req, res) => {
       }
     }
 
-    // --------------------------------------------------------
+    // ============================================================
     // SLUG GENERATION
-    // --------------------------------------------------------
-    //
-    // AI never controls the slug.
-    //
-    // IMPORTANT:
-    // Only PUBLISHED active properties should block a slug.
-    // Drafts should not force unnecessary -2, -3, etc.
-    // --------------------------------------------------------
+    // ============================================================
 
-    const slugBase = String(title)
-      .trim()
+    const slugBase = cleanTitle
       .toLowerCase()
       .replace(/&/g, " and ")
       .replace(/[^a-z0-9]+/g, "-")
@@ -2748,194 +2778,553 @@ exports.aiCreateProperty = async (req, res) => {
       slugCounter++;
     }
 
-    // --------------------------------------------------------
+    // ============================================================
     // CLEAN UNIT CONFIGURATIONS
-    // --------------------------------------------------------
+    // ============================================================
 
-    const safeUnitConfigurations = Array.isArray(unitConfigurations)
-      ? unitConfigurations
-          .filter(
-            (item) =>
-              item &&
-              typeof item === "object" &&
-              item.unitType
+    const safeUnitConfigurations = safeArray(unitConfigurations)
+      .filter(
+        (item) =>
+          item &&
+          typeof item === "object" &&
+          cleanString(item.unitType)
+      )
+      .map((item) => ({
+        unitType: nullableString(item.unitType),
+        area: nullableString(item.area),
+        price: nullableString(item.price),
+        paymentPlan: nullableString(item.paymentPlan),
+        bedrooms: nullableString(item.bedrooms),
+        bathrooms: nullableString(item.bathrooms),
+        balconies: nullableString(item.balconies),
+      }));
+
+    // ============================================================
+    // CLEAN FLOOR PLANS
+    // ============================================================
+
+    const safeFloorPlans = safeArray(floorPlans)
+      .filter(
+        (item) =>
+          item &&
+          typeof item === "object" &&
+          (
+            cleanString(item.unitType) ||
+            cleanString(item.area) ||
+            cleanString(item.price)
           )
-          .map((item) => ({
-            unitType: item.unitType ?? null,
-            area: item.area ?? null,
-            price: item.price ?? null,
-            paymentPlan: item.paymentPlan ?? null,
-            bedrooms: item.bedrooms ?? null,
-            bathrooms: item.bathrooms ?? null,
-            balconies: item.balconies ?? null,
-          }))
-      : [];
+      )
+      .map((item) => ({
+        unitType: nullableString(item.unitType),
+        area: nullableString(item.area),
+        price: nullableString(item.price),
+        paymentPlan: nullableString(item.paymentPlan),
+        bedrooms: nullableString(item.bedrooms),
+        bathrooms: nullableString(item.bathrooms),
+        balconies: nullableString(item.balconies),
+        image: "",
+      }));
 
-    // --------------------------------------------------------
+    // ============================================================
     // CLEAN PLOT CONFIGURATIONS
-    // --------------------------------------------------------
+    // ============================================================
 
-    const safePlotConfigurations = Array.isArray(plotConfigurations)
-      ? plotConfigurations
-          .filter(
-            (item) =>
-              item &&
-              typeof item === "object" &&
-              (
-                item.plotType ||
-                item.plotArea ||
-                item.price ||
-                item.paymentPlan
-              )
+    const safePlotConfigurations = safeArray(plotConfigurations)
+      .filter(
+        (item) =>
+          item &&
+          typeof item === "object" &&
+          (
+            cleanString(item.plotType) ||
+            cleanString(item.plotArea) ||
+            cleanString(item.price) ||
+            cleanString(item.paymentPlan)
           )
-          .map((item) => ({
-            plotType: item.plotType ?? null,
-            plotArea: item.plotArea ?? null,
-            price: item.price ?? null,
-            paymentPlan: item.paymentPlan ?? null,
-          }))
-      : [];
+      )
+      .map((item) => ({
+        plotType: nullableString(item.plotType),
+        plotArea: nullableString(item.plotArea),
+        price: nullableString(item.price),
+        paymentPlan: nullableString(item.paymentPlan),
+        image: "",
+      }));
 
-    // --------------------------------------------------------
+    // ============================================================
     // CLEAN HIGHLIGHTS
-    // --------------------------------------------------------
+    // ============================================================
 
-    const safeHighlights = Array.isArray(highlights)
-      ? highlights
-          .filter(
-            (item) =>
-              item &&
-              typeof item === "object" &&
-              item.heading
-          )
-          .map((item) => ({
-            heading: String(item.heading).trim(),
-            subheading: item.subheading
-              ? String(item.subheading).trim()
-              : "",
-          }))
-      : [];
+    const safeHighlights = safeArray(highlights)
+      .filter(
+        (item) =>
+          item &&
+          typeof item === "object" &&
+          cleanString(item.heading)
+      )
+      .map((item) => ({
+        heading: cleanString(item.heading),
+        subheading: cleanString(item.subheading),
+        icon: "",
+      }));
 
-    // --------------------------------------------------------
+    // ============================================================
     // CLEAN AMENITIES
-    // --------------------------------------------------------
+    // ============================================================
 
-    const safeAmenities = Array.isArray(amenities)
-      ? amenities
-          .filter(
-            (item) =>
-              item &&
-              typeof item === "object" &&
-              item.heading
-          )
-          .map((item) => ({
-            heading: String(item.heading).trim(),
-            subheading: item.subheading
-              ? String(item.subheading).trim()
-              : "",
-          }))
-      : [];
+    const safeAmenities = safeArray(amenities)
+      .filter(
+        (item) =>
+          item &&
+          typeof item === "object" &&
+          cleanString(item.heading)
+      )
+      .map((item) => ({
+        heading: cleanString(item.heading),
+        subheading: cleanString(item.subheading),
+        icon: "",
+      }));
 
-    // --------------------------------------------------------
+    // ============================================================
     // CLEAN LANDMARKS
-    // --------------------------------------------------------
+    // ============================================================
 
-    const safeLandmarks = Array.isArray(landmarks)
-      ? landmarks
-          .filter(
-            (item) =>
-              item &&
-              typeof item === "object" &&
-              item.name
-          )
-          .map((item) => ({
-            name: String(item.name).trim(),
-            distance: item.distance
-              ? String(item.distance).trim()
-              : "",
-          }))
-      : [];
+    const safeLandmarks = safeArray(landmarks)
+      .filter(
+        (item) =>
+          item &&
+          typeof item === "object" &&
+          cleanString(item.name)
+      )
+      .map((item) => ({
+        name: cleanString(item.name),
+        distance: cleanString(item.distance),
+        subtitle: "",
+        icon: "",
+      }));
 
-    // --------------------------------------------------------
-    // CLEAN SEO KEYWORDS
-    // --------------------------------------------------------
+    // ============================================================
+    // CLEAN FEATURE BAR
+    // ============================================================
 
-    const safeSeoKeywords = Array.isArray(seoKeywords)
-      ? seoKeywords
-          .filter(
-            (keyword) =>
-              typeof keyword === "string" &&
-              keyword.trim()
-          )
-          .map((keyword) => keyword.trim())
-      : [];
+    const safeFeatureBar = safeArray(featureBar)
+      .filter(
+        (item) =>
+          item &&
+          typeof item === "object" &&
+          cleanString(item.title)
+      )
+      .map((item) => ({
+        title: cleanString(item.title),
+        desc: cleanString(item.desc),
+        icon: "",
+      }));
 
-    // --------------------------------------------------------
-    // DEVELOPER DATA
-    // --------------------------------------------------------
+    // ============================================================
+    // OVERVIEW CONTENT
+    // ============================================================
 
-    const developerData = {
-      developerRef: developer?._id || null,
+    const safeOverviewContent = safeObject(overviewContent);
 
-      developerName:
-        developer?.name ||
-        (developerName
-          ? String(developerName).trim()
-          : ""),
+    const overviewData = {
+      aboutSectionNumber: "",
+      aboutLabel: nullableString(
+        safeOverviewContent.aboutLabel
+      ),
+      aboutTitleLine1: nullableString(
+        safeOverviewContent.aboutTitleLine1
+      ),
+      aboutTitleLine2: nullableString(
+        safeOverviewContent.aboutTitleLine2
+      ),
+      description: nullableString(overviewDescription),
+      aboutParagraph2: nullableString(
+        safeOverviewContent.aboutParagraph2
+      ),
+      aboutImageUrl: "",
 
-      developerLogo:
-        developer?.logo || "",
+      featureBar: safeFeatureBar,
 
-      developerImage:
-        developer?.image || "",
+      highlightsHeading: nullableString(
+        safeOverviewContent.highlightsHeading
+      ),
+      highlightsSubheading: nullableString(
+        safeOverviewContent.highlightsSubheading
+      ),
+      highlightQuote: nullableString(
+        safeOverviewContent.highlightQuote
+      ),
+
+      amenitiesSectionNumber: "",
+      amenitiesSectionLabel: nullableString(
+        safeOverviewContent.amenitiesSectionLabel
+      ),
+      amenitiesHeadingLine1: nullableString(
+        safeOverviewContent.amenitiesHeadingLine1
+      ),
+      amenitiesHeadingLine2: nullableString(
+        safeOverviewContent.amenitiesHeadingLine2
+      ),
+      amenitiesHeadingLine3: nullableString(
+        safeOverviewContent.amenitiesHeadingLine3
+      ),
+      amenitiesSubheading: nullableString(
+        safeOverviewContent.amenitiesSubheading
+      ),
+
+      highlights: safeHighlights,
+      amenities: safeAmenities,
+
+      bottomStripTitle1: "",
+      bottomStripTitle2: "",
+      bottomStripFeature1: "",
+      bottomStripFeature2: "",
+      bottomStripFeature3: "",
     };
 
-    // --------------------------------------------------------
-    // CATEGORY DATA
-    // --------------------------------------------------------
+    // ============================================================
+    // CONFIGURATION CONTENT
+    // ============================================================
 
-    const categoryData = {
-      categoryRef: category?._id || null,
+    const safeConfigurationContent =
+      safeObject(configurationContent);
 
-      categoryName:
-        category?.name ||
-        (categoryName
-          ? String(categoryName).trim()
-          : ""),
+    const safeConfigurationFeatures = safeArray(
+      safeConfigurationContent.features
+    )
+      .filter(
+        (item) =>
+          item &&
+          typeof item === "object" &&
+          cleanString(item.title)
+      )
+      .map((item) => ({
+        title: cleanString(item.title),
+        description: cleanString(item.description),
+      }));
+
+    const configurationSection = {
+      sectionNumber: "",
+      sectionLabel: nullableString(
+        safeConfigurationContent.sectionLabel
+      ),
+      titleLine1: nullableString(
+        safeConfigurationContent.titleLine1
+      ),
+      titleLine2: nullableString(
+        safeConfigurationContent.titleLine2
+      ),
+      subheading: nullableString(
+        safeConfigurationContent.subheading
+      ),
+      features: safeConfigurationFeatures,
+      buttonText: "",
     };
 
-    // --------------------------------------------------------
-    // LOCATION DATA
-    // --------------------------------------------------------
+    // ============================================================
+    // LOCATION CONTENT
+    // ============================================================
+
+    const safeLocationContent =
+      safeObject(locationContent);
+
+    const safeLocationBottomStrip = safeArray(
+      locationBottomStrip
+    )
+      .filter(
+        (item) =>
+          item &&
+          typeof item === "object" &&
+          cleanString(item.title)
+      )
+      .map((item) => ({
+        title: cleanString(item.title),
+        desc: cleanString(item.desc),
+        icon: "",
+      }));
 
     const locationData = {
       locationRef: location?._id || null,
 
       locationName:
         location?.name ||
-        (locationName
-          ? String(locationName).trim()
-          : ""),
+        cleanString(locationName),
 
       customLocation: "",
 
-      address:
-        address
-          ? String(address).trim()
-          : "",
+      address: nullableString(address),
 
       mapEmbedUrl: "",
 
-      presentation: {},
+      sectionNumber: "",
+
+      topLabel: nullableString(
+        safeLocationContent.topLabel
+      ),
+
+      headingLine1: nullableString(
+        safeLocationContent.headingLine1
+      ),
+
+      headingHighlight: nullableString(
+        safeLocationContent.headingHighlight
+      ),
+
+      description: nullableString(
+        safeLocationContent.description
+      ),
+
+      leftCardTag: nullableString(
+        safeLocationContent.leftCardTag
+      ),
+
+      leftCardTitleLine1: nullableString(
+        safeLocationContent.leftCardTitleLine1
+      ),
+
+      leftCardTitleLine2: nullableString(
+        safeLocationContent.leftCardTitleLine2
+      ),
+
+      leftCardDescription: nullableString(
+        safeLocationContent.leftCardDescription
+      ),
+
+      mapSectionTag: nullableString(
+        safeLocationContent.mapSectionTag
+      ),
+
+      mapSectionTitle: nullableString(
+        safeLocationContent.mapSectionTitle
+      ),
+
+      badgeTitle: nullableString(
+        safeLocationContent.badgeTitle
+      ),
+
+      badgeSubtitle: nullableString(
+        safeLocationContent.badgeSubtitle
+      ),
+
+      floatingCardTag: nullableString(
+        safeLocationContent.floatingCardTag
+      ),
+
+      floatingCardTitle: nullableString(
+        safeLocationContent.floatingCardTitle
+      ),
+
+      floatingCardDescription: nullableString(
+        safeLocationContent.floatingCardDescription
+      ),
 
       landmarks: safeLandmarks,
 
-      bottomStrip: {},
+      bottomStrip: safeLocationBottomStrip,
     };
 
-    // --------------------------------------------------------
+    // ============================================================
+    // MASTER PLAN
+    // ============================================================
+
+    const safeMasterPlanContent =
+      safeObject(masterPlanContent);
+
+    const safeMasterPlanBottomStrip = safeArray(
+      safeMasterPlanContent.bottomStrip
+    )
+      .filter(
+        (item) =>
+          item &&
+          typeof item === "object" &&
+          cleanString(item.title)
+      )
+      .map((item) => ({
+        title: cleanString(item.title),
+        desc: cleanString(item.desc),
+        icon: "",
+      }));
+
+    const masterPlanSection = {
+      sectionNumber: "",
+
+      topLabel: nullableString(
+        safeMasterPlanContent.topLabel
+      ),
+
+      headingLine1: nullableString(
+        safeMasterPlanContent.headingLine1
+      ),
+
+      headingHighlight: nullableString(
+        safeMasterPlanContent.headingHighlight
+      ),
+
+      description: nullableString(
+        safeMasterPlanContent.description
+      ),
+
+      enableSideStrips: false,
+
+      topFloatingLabel: nullableString(
+        safeMasterPlanContent.topFloatingLabel
+      ),
+
+      centerTitle: nullableString(
+        safeMasterPlanContent.centerTitle
+      ),
+
+      centerDescription: nullableString(
+        safeMasterPlanContent.centerDescription
+      ),
+
+      buttonText: nullableString(
+        safeMasterPlanContent.buttonText
+      ),
+
+      masterPlanImage: "",
+
+      bottomStrip: safeMasterPlanBottomStrip,
+    };
+
+    // ============================================================
+    // SEO
+    // ============================================================
+
+    const safeSeoContent =
+      safeObject(seoContent);
+
+    const safeSeoKeywords = safeArray(
+      safeSeoContent.keywords
+    )
+      .filter(
+        (keyword) =>
+          typeof keyword === "string" &&
+          keyword.trim()
+      )
+      .map((keyword) => keyword.trim());
+
+    const seoEngine = {
+      hasCustomSEO:
+        !!cleanString(safeSeoContent.metaTitle) ||
+        !!cleanString(safeSeoContent.metaDescription) ||
+        safeSeoKeywords.length > 0,
+
+      metaTitle: nullableString(
+        safeSeoContent.metaTitle
+      ),
+
+      metaDescription: nullableString(
+        safeSeoContent.metaDescription
+      ),
+
+      keywords: safeSeoKeywords,
+    };
+
+    // ============================================================
+    // FAQ SECTION
+    // ============================================================
+
+    const safeFaqSectionContent =
+      safeObject(faqSectionContent);
+
+    const faqSection = {
+      sectionNumber: "",
+
+      topLabel: nullableString(
+        safeFaqSectionContent.topLabel
+      ),
+
+      headingLine1: nullableString(
+        safeFaqSectionContent.headingLine1
+      ),
+
+      headingHighlight: nullableString(
+        safeFaqSectionContent.headingHighlight
+      ),
+
+      description: nullableString(
+        safeFaqSectionContent.description
+      ),
+
+      developerLabel: nullableString(
+        safeFaqSectionContent.developerLabel
+      ),
+
+      contactTitle: nullableString(
+        safeFaqSectionContent.contactTitle
+      ),
+
+      contactDescription: nullableString(
+        safeFaqSectionContent.contactDescription
+      ),
+
+      phone: nullableString(
+        safeFaqSectionContent.phone
+      ),
+
+      timing: nullableString(
+        safeFaqSectionContent.timing
+      ),
+
+      ctaTitle: nullableString(
+        safeFaqSectionContent.ctaTitle
+      ),
+
+      ctaDescription: nullableString(
+        safeFaqSectionContent.ctaDescription
+      ),
+
+      ctaButtonText: nullableString(
+        safeFaqSectionContent.ctaButtonText
+      ),
+
+      callLabel: nullableString(
+        safeFaqSectionContent.callLabel
+      ),
+
+      whatsappLabel: nullableString(
+        safeFaqSectionContent.whatsappLabel
+      ),
+    };
+
+    // ============================================================
+    // FAQS
+    // ============================================================
+
+    const safeFaqs = safeArray(faqs)
+      .filter(
+        (item) =>
+          item &&
+          typeof item === "object" &&
+          cleanString(item.question) &&
+          cleanString(item.answer)
+      )
+      .map((item) => ({
+        question: cleanString(item.question),
+        answer: cleanString(item.answer),
+      }));
+
+    // ============================================================
+    // CTA
+    // ============================================================
+
+    const safeCtaContent =
+      safeObject(ctaContent);
+
+    const cta = {
+      title: nullableString(
+        safeCtaContent.title
+      ),
+      subtitle: nullableString(
+        safeCtaContent.subtitle
+      ),
+      buttonText: nullableString(
+        safeCtaContent.buttonText
+      ),
+    };
+
+    // ============================================================
     // CONFIGURATION TYPE
-    // --------------------------------------------------------
+    // ============================================================
 
     let safeConfigurationType = null;
 
@@ -2946,15 +3335,39 @@ exports.aiCreateProperty = async (req, res) => {
       safeConfigurationType = configurationType;
     }
 
-    // --------------------------------------------------------
+    // ============================================================
+    // DEVELOPER DATA
+    // ============================================================
+
+    const developerData = {
+      developerRef: developer?._id || null,
+
+      developerName:
+        developer?.name ||
+        cleanString(developerName),
+
+      developerLogo:
+        developer?.logo || "",
+
+      developerImage:
+        developer?.image || "",
+    };
+
+    // ============================================================
+    // CATEGORY DATA
+    // ============================================================
+
+    const categoryData = {
+      categoryRef: category?._id || null,
+
+      categoryName:
+        category?.name ||
+        cleanString(categoryName),
+    };
+
+    // ============================================================
     // PROPERTY PAYLOAD
-    // --------------------------------------------------------
-    //
-    // IMPORTANT:
-    // We intentionally provide explicit empty values for
-    // presentation sections so AI drafts do not inherit
-    // unrelated luxury-template content.
-    // --------------------------------------------------------
+    // ============================================================
 
     const propertyPayload = {
       slug,
@@ -2966,14 +3379,15 @@ exports.aiCreateProperty = async (req, res) => {
       status: "draft",
       isDeleted: false,
       deletedFromStatus: null,
+
       propertyTag: ["Normal"],
 
-      // ======================================================
+      // ========================================================
       // CORE DETAILS
-      // ======================================================
+      // ========================================================
 
       coreDetails: {
-        title: String(title).trim(),
+        title: cleanTitle,
 
         developerRef:
           developerData.developerRef,
@@ -2988,160 +3402,102 @@ exports.aiCreateProperty = async (req, res) => {
           developerData.developerLogo,
 
         startingPrice:
-          typeof startingPrice === "number"
-            ? startingPrice
-            : null,
+          safeNumber(startingPrice),
 
         maxPrice:
-          typeof maxPrice === "number"
-            ? maxPrice
-            : null,
+          safeNumber(maxPrice),
 
         priceOnRequest:
-          priceOnRequest === true,
+          safeBoolean(priceOnRequest),
       },
 
-      // ======================================================
+      // ========================================================
       // CATEGORY
-      // ======================================================
+      // ========================================================
 
       categoryData,
 
-      // ======================================================
+      // ========================================================
       // HERO
-      // ======================================================
+      // ========================================================
 
       heroSection: {
         propertyStatus:
-          propertyStatus
-            ? String(propertyStatus).trim()
-            : "",
+          nullableString(propertyStatus),
 
         heroDescription:
-          heroDescription
-            ? String(heroDescription).trim()
-            : "",
+          nullableString(heroDescription),
 
         brochureButtonText: "",
+
         videoButtonText: "",
+
         taglineItems: [],
       },
 
-      // ======================================================
+      // ========================================================
       // KEY METRICS
-      // ======================================================
+      // ========================================================
 
       keyMetrics: {
         landArea:
-          landArea
-            ? String(landArea).trim()
-            : "",
+          nullableString(landArea),
 
         possession:
-          possession
-            ? String(possession).trim()
-            : "",
+          nullableString(possession),
 
         status:
-          propertyStatus
-            ? String(propertyStatus).trim()
-            : "",
+          nullableString(propertyStatus),
 
         totalUnits:
-          typeof totalUnits === "number"
-            ? totalUnits
-            : null,
+          safeNumber(totalUnits),
 
         totalTowers:
-          typeof totalTowers === "number"
-            ? totalTowers
-            : null,
+          safeNumber(totalTowers),
 
         floors:
-          floors
-            ? String(floors).trim()
-            : "",
+          nullableString(floors),
 
         reraNumber:
-          reraNumber
-            ? String(reraNumber).trim()
-            : "",
+          nullableString(reraNumber),
 
         customMetrics: [],
       },
 
-      // ======================================================
+      // ========================================================
       // OVERVIEW
-      // ======================================================
-      //
-      // Factual AI content only.
-      // Template presentation copy is cleared AFTER creation.
-      // ======================================================
+      // ========================================================
 
-      overview: {
-        description:
-          overviewDescription
-            ? String(overviewDescription).trim()
-            : "",
+      overview: overviewData,
 
-        featureBar: [],
-
-        highlights: safeHighlights,
-
-        amenities: safeAmenities,
-
-        // Explicitly blank presentation content.
-        aboutSectionNumber: "",
-        aboutLabel: "",
-        aboutTitleLine1: "",
-        aboutTitleLine2: "",
-        aboutParagraph2: "",
-        aboutImageUrl: "",
-
-        highlightsHeading: "",
-        highlightsSubheading: "",
-        highlightQuote: "",
-
-        amenitiesSectionNumber: "",
-        amenitiesSectionLabel: "",
-        amenitiesHeadingLine1: "",
-        amenitiesHeadingLine2: "",
-        amenitiesHeadingLine3: "",
-        amenitiesSubheading: "",
-
-        bottomStripTitle1: "",
-        bottomStripTitle2: "",
-        bottomStripFeature1: "",
-        bottomStripFeature2: "",
-        bottomStripFeature3: "",
-      },
-
-      // ======================================================
+      // ========================================================
       // CONFIGURATION SECTION
-      // ======================================================
+      // ========================================================
 
-      configurationSection: {
-        sectionNumber: "",
-        sectionLabel: "",
-        titleLine1: "",
-        titleLine2: "",
-        subheading: "",
-        features: [],
-        buttonText: "",
-      },
+      configurationSection,
+
+      // ========================================================
+      // UNIT CONFIGURATIONS
+      // ========================================================
 
       unitConfigurations:
         safeUnitConfigurations,
 
-      // ======================================================
+      // ========================================================
       // LOCATION
-      // ======================================================
+      // ========================================================
 
       locationData,
 
-      // ======================================================
+      // ========================================================
+      // MASTER PLAN
+      // ========================================================
+
+      masterPlanSection,
+
+      // ========================================================
       // GATED CONTENT
-      // ======================================================
+      // ========================================================
 
       gatedContent: {
         brochurePdfUrl: "",
@@ -3149,7 +3505,8 @@ exports.aiCreateProperty = async (req, res) => {
         configurationType:
           safeConfigurationType,
 
-        floorPlans: [],
+        floorPlans:
+          safeFloorPlans,
 
         plotConfigurations:
           safePlotConfigurations,
@@ -3157,9 +3514,9 @@ exports.aiCreateProperty = async (req, res) => {
         requireLogin: false,
       },
 
-      // ======================================================
+      // ========================================================
       // MEDIA
-      // ======================================================
+      // ========================================================
 
       media: {
         heroImageUrl: "",
@@ -3167,173 +3524,43 @@ exports.aiCreateProperty = async (req, res) => {
         walkthroughUrl: "",
       },
 
-      // ======================================================
+      // ========================================================
       // SEO
-      // ======================================================
+      // ========================================================
 
-      seoEngine: {
-        hasCustomSEO: false,
-        metaTitle: "",
-        metaDescription: "",
-        keywords: safeSeoKeywords,
-      },
+      seoEngine,
 
-      // ======================================================
+      // ========================================================
       // FAQ
-      // ======================================================
+      // ========================================================
 
-      faqSection: {
-        sectionNumber: "",
-        topLabel: "",
-        headingLine1: "",
-        headingHighlight: "",
-        description: "",
-        developerLabel: "",
-        contactTitle: "",
-        contactDescription: "",
-        phone: "",
-        timing: "",
-        ctaTitle: "",
-        ctaDescription: "",
-        ctaButtonText: "",
-        callLabel: "",
-      },
+      faqSection,
 
-      faqs: [],
+      faqs: safeFaqs,
 
-      // ======================================================
+      // ========================================================
       // CTA
-      // ======================================================
+      // ========================================================
 
-      cta: {},
+      cta,
 
-      // ======================================================
+      // ========================================================
       // AUTHENTICATED CREATOR
-      // ======================================================
+      // ========================================================
 
       createdBy: req.user.id,
     };
 
-    // ========================================================
+    // ============================================================
     // CREATE DRAFT
-    // ========================================================
+    // ============================================================
 
-    const property = await Property.create(propertyPayload);
+    const property =
+      await Property.create(propertyPayload);
 
-    // ========================================================
-    // IMPORTANT POST-CREATE CLEANUP
-    // ========================================================
-    //
-    // Mongoose can apply schema defaults to nested fields that
-    // were not explicitly represented by the schema.
-    //
-    // Clear known template/default presentation fields again
-    // before saving, guaranteeing that old property marketing
-    // copy cannot remain in an AI-created draft.
-    // ========================================================
-
-    const clearTemplateFields = {
-      // ---------------- OVERVIEW ----------------
-
-      "overview.aboutSectionNumber": "",
-      "overview.aboutLabel": "",
-      "overview.aboutTitleLine1": "",
-      "overview.aboutTitleLine2": "",
-      "overview.aboutParagraph2": "",
-      "overview.aboutImageUrl": "",
-
-      "overview.highlightsHeading": "",
-      "overview.highlightsSubheading": "",
-      "overview.highlightQuote": "",
-
-      "overview.amenitiesSectionNumber": "",
-      "overview.amenitiesSectionLabel": "",
-      "overview.amenitiesHeadingLine1": "",
-      "overview.amenitiesHeadingLine2": "",
-      "overview.amenitiesHeadingLine3": "",
-      "overview.amenitiesSubheading": "",
-
-      "overview.bottomStripTitle1": "",
-      "overview.bottomStripTitle2": "",
-      "overview.bottomStripFeature1": "",
-      "overview.bottomStripFeature2": "",
-      "overview.bottomStripFeature3": "",
-
-      // ---------------- CONFIGURATION ----------------
-
-      "configurationSection.sectionNumber": "",
-      "configurationSection.sectionLabel": "",
-      "configurationSection.titleLine1": "",
-      "configurationSection.titleLine2": "",
-      "configurationSection.subheading": "",
-      "configurationSection.buttonText": "",
-
-      // ---------------- LOCATION ----------------
-
-      "locationData.sectionNumber": "",
-      "locationData.topLabel": "",
-      "locationData.headingLine1": "",
-      "locationData.headingHighlight": "",
-      "locationData.description": "",
-
-      "locationData.leftCardTag": "",
-      "locationData.leftCardTitleLine1": "",
-      "locationData.leftCardTitleLine2": "",
-      "locationData.leftCardDescription": "",
-
-      "locationData.mapSectionTag": "",
-      "locationData.mapSectionTitle": "",
-
-      "locationData.badgeTitle": "",
-      "locationData.badgeSubtitle": "",
-
-      "locationData.floatingCardTag": "",
-      "locationData.floatingCardTitle": "",
-      "locationData.floatingCardDescription": "",
-
-      // ---------------- MASTER PLAN ----------------
-
-      "masterPlanSection.sectionNumber": "",
-      "masterPlanSection.topLabel": "",
-      "masterPlanSection.headingLine1": "",
-      "masterPlanSection.headingHighlight": "",
-      "masterPlanSection.description": "",
-      "masterPlanSection.enableSideStrips": false,
-      "masterPlanSection.topFloatingLabel": "",
-      "masterPlanSection.centerTitle": "",
-      "masterPlanSection.centerDescription": "",
-      "masterPlanSection.buttonText": "",
-      "masterPlanSection.masterPlanImage": "",
-
-      // ---------------- FAQ ----------------
-
-      "faqSection.sectionNumber": "",
-      "faqSection.topLabel": "",
-      "faqSection.headingLine1": "",
-      "faqSection.headingHighlight": "",
-      "faqSection.description": "",
-      "faqSection.developerLabel": "",
-      "faqSection.contactTitle": "",
-      "faqSection.contactDescription": "",
-      "faqSection.phone": "",
-      "faqSection.timing": "",
-      "faqSection.ctaTitle": "",
-      "faqSection.ctaDescription": "",
-      "faqSection.ctaButtonText": "",
-      "faqSection.callLabel": "",
-    };
-
-    Object.entries(clearTemplateFields).forEach(
-      ([path, value]) => {
-        property.set(path, value);
-      }
-    );
-
-    await property.save();
-
-    // ========================================================
+    // ============================================================
     // RESPONSE
-    // ========================================================
+    // ============================================================
 
     return res.status(201).json({
       success: true,
@@ -3409,9 +3636,9 @@ exports.aiCreateProperty = async (req, res) => {
       error
     );
 
-    // ========================================================
+    // ==========================================================
     // MONGOOSE VALIDATION ERROR
-    // ========================================================
+    // ==========================================================
 
     if (error.name === "ValidationError") {
       return res.status(400).json({
@@ -3432,9 +3659,9 @@ exports.aiCreateProperty = async (req, res) => {
       });
     }
 
-    // ========================================================
+    // ==========================================================
     // DUPLICATE KEY ERROR
-    // ========================================================
+    // ==========================================================
 
     if (error.code === 11000) {
       return res.status(409).json({
@@ -3448,9 +3675,9 @@ exports.aiCreateProperty = async (req, res) => {
       });
     }
 
-    // ========================================================
+    // ==========================================================
     // GENERAL ERROR
-    // ========================================================
+    // ==========================================================
 
     return res.status(500).json({
       success: false,
