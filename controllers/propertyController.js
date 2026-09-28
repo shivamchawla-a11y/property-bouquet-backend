@@ -3693,7 +3693,6 @@ exports.aiCreateProperty = async (req, res) => {
   }
 };
 
-
 exports.getPropertySeoList = async (
   req,
   res
