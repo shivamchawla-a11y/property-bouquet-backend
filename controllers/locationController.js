@@ -14,7 +14,10 @@ const slugify = require("../utils/slugify");
    Gurgaon
 
    Result:
-   Sector 56 -> parent Golf Course Road -> parent Gurgaon
+
+   Sector 56
+     -> parent Golf Course Road
+          -> parent Gurgaon
 ============================================================ */
 
 const buildParentChain = async (location) => {
@@ -76,7 +79,7 @@ const buildParentChain = async (location) => {
    │   └── Sector 55
    └── MG Road
 
-   Requesting Gurgaon will return Gurgaon + all descendants.
+   Requesting Gurgaon returns Gurgaon + all descendants.
 ============================================================ */
 
 const getAllChildIds = async (parentId) => {
@@ -203,7 +206,7 @@ const buildLocationPublicSlug = (location) => {
 };
 
 /* ============================================================
-   CREATE
+   CREATE LOCATION
 ============================================================ */
 
 exports.createLocation = async (req, res) => {
@@ -341,7 +344,6 @@ exports.getLocationBySlug = async (
         "locationData.locationRef": {
           $in: locationIds,
         },
-
         isActive: true,
       })
         .populate(
@@ -383,7 +385,7 @@ exports.getLocationBySlug = async (
 };
 
 /* ============================================================
-   GET ALL
+   GET ALL LOCATIONS
 ============================================================ */
 
 exports.getLocations = async (
@@ -414,7 +416,7 @@ exports.getLocations = async (
 };
 
 /* ============================================================
-   GET TREE
+   GET LOCATION TREE
 ============================================================ */
 
 exports.getLocationsTree = async (
@@ -473,7 +475,7 @@ exports.getLocationsTree = async (
 };
 
 /* ============================================================
-   DELETE
+   DELETE LOCATION
 ============================================================ */
 
 exports.deleteLocation = async (
@@ -535,7 +537,7 @@ exports.deleteLocation = async (
 };
 
 /* ============================================================
-   UPDATE
+   UPDATE LOCATION
 ============================================================ */
 
 exports.updateLocation = async (
@@ -578,10 +580,8 @@ exports.updateLocation = async (
     const existing =
       await Location.findOne({
         name: trimmedName,
-
         parent:
           location.parent || null,
-
         _id: {
           $ne: locationId,
         },
@@ -659,6 +659,10 @@ exports.getLocationByPublicSlug =
         });
       }
 
+      /*
+       * IMPORTANT:
+       * Remove leading/trailing slashes only.
+       */
       const cleanPublicSlug =
         String(publicSlug)
           .trim()
@@ -864,11 +868,10 @@ exports.getLocationByPublicSlug =
               break;
             }
 
-            const parentResult =
-              {
-                ...parent,
-                parent: null,
-              };
+            const parentResult = {
+              ...parent,
+              parent: null,
+            };
 
             currentResult.parent =
               parentResult;
@@ -932,7 +935,6 @@ exports.getLocationByPublicSlug =
           "locationData.locationRef": {
             $in: locationIds,
           },
-
           isActive: true,
         })
           .populate(
@@ -947,15 +949,11 @@ exports.getLocationByPublicSlug =
 
       return res.json({
         success: true,
-
         location:
           locationWithParents,
-
         properties,
-
         backendSlug:
           matchedLocation.slug,
-
         publicSlug:
           buildPublicSlug(
             matchedLocation
@@ -1022,84 +1020,47 @@ exports.getLocationById =
 
    PATCH /api/locations/page-content/:id
 
-   IMPORTANT:
-
-   This saves the complete optional override layer for:
-
-   1. HERO
-   2. ABOUT
-   3. CONNECTIVITY
-   4. NEARBY
-
-   Empty strings are intentionally saved as empty strings.
-
-   The public location page should treat empty custom values as:
-
-   "Use the existing/default public-page value."
-
-   This means the admin can:
-
-   - Save for the first time
-   - Open the editor again
-   - Edit another field
-   - Clear a field
-   - Save again
-   - Re-open the editor
-   - Continue editing
-
-   without the previously saved structure being lost.
-============================================================ */
-
-/* ============================================================
-   UPDATE LOCATION PAGE CONTENT
-
-   PATCH /api/locations/page-content/:id
-
    IMPORTANT ARCHITECTURE:
 
    pageContent is an OPTIONAL CUSTOM OVERRIDE layer.
 
-   The public location components provide their own static/default
-   content. pageContent only stores the values customized from
+   The public location components provide their own
+   static/default content.
+
+   pageContent only stores values customized from
    the admin editor.
 
-   Editable/customizable sections:
-
-   1. HERO
-   2. ABOUT
-   3. REAL ESTATE TYPES
-   4. PROPERTY PRICES
-   5. CONNECTIVITY
-   6. LIFESTYLE
-   7. WHY BUY
-   8. NEARBY
-   9. FAQ
-   10. CUSTOM SECTIONS
-
-   Advisor CTA is intentionally NOT included here because it is
-   static and is not part of the custom editable layer.
+   Rich-text fields are stored as normal strings.
 
    IMPORTANT:
+   We do NOT strip HTML from rich-text fields.
 
-   We normalize the COMPLETE pageContent object instead of
-   replacing it with only a few sections.
+   Therefore both of these work:
 
-   This prevents one section being saved while another existing
-   custom section gets deleted.
+   Plain text:
+   "This is a location description."
+
+   Rich text:
+   "<p>This is <strong>a location description</strong>.</p>"
 ============================================================ */
 
-exports.updateLocationPageContent = async (req, res) => {
+exports.updateLocationPageContent = async (
+  req,
+  res
+) => {
   try {
     /* ==========================================================
        LOCATION ID
     ========================================================== */
 
-    const locationId = req.params.id;
+    const locationId =
+      req.params.id;
 
     if (!locationId) {
       return res.status(400).json({
         success: false,
-        message: "Location ID is required ❌",
+        message:
+          "Location ID is required ❌",
       });
     }
 
@@ -1107,7 +1068,8 @@ exports.updateLocationPageContent = async (req, res) => {
        REQUEST BODY
     ========================================================== */
 
-    const { pageContent } = req.body;
+    const { pageContent } =
+      req.body;
 
     if (
       !pageContent ||
@@ -1116,7 +1078,8 @@ exports.updateLocationPageContent = async (req, res) => {
     ) {
       return res.status(400).json({
         success: false,
-        message: "Valid pageContent is required ❌",
+        message:
+          "Valid pageContent is required ❌",
       });
     }
 
@@ -1125,12 +1088,15 @@ exports.updateLocationPageContent = async (req, res) => {
     ========================================================== */
 
     const location =
-      await Location.findById(locationId);
+      await Location.findById(
+        locationId
+      );
 
     if (!location) {
       return res.status(404).json({
         success: false,
-        message: "Location not found ❌",
+        message:
+          "Location not found ❌",
       });
     }
 
@@ -1138,6 +1104,19 @@ exports.updateLocationPageContent = async (req, res) => {
        HELPERS
     ========================================================== */
 
+    /*
+     * IMPORTANT:
+     *
+     * safeString intentionally does NOT:
+     *
+     * - strip HTML
+     * - sanitize HTML
+     * - decode HTML
+     * - trim HTML
+     *
+     * This means RichTextEditor HTML is preserved exactly
+     * as received.
+     */
     const safeString = (value) => {
       if (
         value === null ||
@@ -1168,7 +1147,8 @@ exports.updateLocationPageContent = async (req, res) => {
       }
 
       return value.map(
-        (item) => safeString(item)
+        (item) =>
+          safeString(item)
       );
     };
 
@@ -1179,7 +1159,9 @@ exports.updateLocationPageContent = async (req, res) => {
     const hero =
       pageContent.hero &&
       typeof pageContent.hero === "object" &&
-      !Array.isArray(pageContent.hero)
+      !Array.isArray(
+        pageContent.hero
+      )
         ? pageContent.hero
         : {};
 
@@ -1187,7 +1169,8 @@ exports.updateLocationPageContent = async (req, res) => {
       hero.benefits
     )
       ? hero.benefits.map(
-          (item) => safeString(item)
+          (item) =>
+            safeString(item)
         )
       : [];
 
@@ -1196,7 +1179,8 @@ exports.updateLocationPageContent = async (req, res) => {
         hero.mobileBenefits
       )
         ? hero.mobileBenefits.map(
-            (item) => safeString(item)
+            (item) =>
+              safeString(item)
           )
         : [];
 
@@ -1207,7 +1191,9 @@ exports.updateLocationPageContent = async (req, res) => {
     const about =
       pageContent.about &&
       typeof pageContent.about === "object" &&
-      !Array.isArray(pageContent.about)
+      !Array.isArray(
+        pageContent.about
+      )
         ? pageContent.about
         : {};
 
@@ -1217,9 +1203,10 @@ exports.updateLocationPageContent = async (req, res) => {
       )
         ? about.highlights.map(
             (item) => ({
-              title: safeString(
-                item?.title
-              ),
+              title:
+                safeString(
+                  item?.title
+                ),
 
               description:
                 safeString(
@@ -1235,9 +1222,10 @@ exports.updateLocationPageContent = async (req, res) => {
       )
         ? about.marketInsights.map(
             (item) => ({
-              title: safeString(
-                item?.title
-              ),
+              title:
+                safeString(
+                  item?.title
+                ),
 
               description:
                 safeString(
@@ -1261,15 +1249,23 @@ exports.updateLocationPageContent = async (req, res) => {
         ? pageContent.realEstateTypes
         : {};
 
+    /*
+     * IMPORTANT:
+     *
+     * cards[].description is rich-text compatible.
+     *
+     * We use safeString only, so HTML is preserved.
+     */
     const realEstateCards =
       Array.isArray(
         realEstateTypes.cards
       )
         ? realEstateTypes.cards.map(
             (item) => ({
-              title: safeString(
-                item?.title
-              ),
+              title:
+                safeString(
+                  item?.title
+                ),
 
               description:
                 safeString(
@@ -1323,9 +1319,10 @@ exports.updateLocationPageContent = async (req, res) => {
       )
         ? connectivity.items.map(
             (item) => ({
-              title: safeString(
-                item?.title
-              ),
+              title:
+                safeString(
+                  item?.title
+                ),
 
               subtitle:
                 safeString(
@@ -1349,15 +1346,21 @@ exports.updateLocationPageContent = async (req, res) => {
         ? pageContent.lifestyle
         : {};
 
+    /*
+     * lifestyle.description is rich-text compatible.
+     *
+     * groups[].description remains plain text.
+     */
     const lifestyleGroups =
       Array.isArray(
         lifestyle.groups
       )
         ? lifestyle.groups.map(
             (group) => ({
-              title: safeString(
-                group?.title
-              ),
+              title:
+                safeString(
+                  group?.title
+                ),
 
               description:
                 safeString(
@@ -1393,15 +1396,21 @@ exports.updateLocationPageContent = async (req, res) => {
         ? pageContent.whyBuy
         : {};
 
+    /*
+     * whyBuy.description is rich-text compatible.
+     *
+     * reasons[].description remains plain text.
+     */
     const whyBuyReasons =
       Array.isArray(
         whyBuy.reasons
       )
         ? whyBuy.reasons.map(
             (item) => ({
-              title: safeString(
-                item?.title
-              ),
+              title:
+                safeString(
+                  item?.title
+                ),
 
               description:
                 safeString(
@@ -1417,7 +1426,8 @@ exports.updateLocationPageContent = async (req, res) => {
 
     const nearby =
       pageContent.nearby &&
-      typeof pageContent.nearby === "object" &&
+      typeof pageContent.nearby ===
+        "object" &&
       !Array.isArray(
         pageContent.nearby
       )
@@ -1430,13 +1440,19 @@ exports.updateLocationPageContent = async (req, res) => {
 
     const faq =
       pageContent.faq &&
-      typeof pageContent.faq === "object" &&
+      typeof pageContent.faq ===
+        "object" &&
       !Array.isArray(
         pageContent.faq
       )
         ? pageContent.faq
         : {};
 
+    /*
+     * faq.items[].answer is rich-text compatible.
+     *
+     * HTML is intentionally preserved.
+     */
     const faqItems =
       Array.isArray(
         faq.items
@@ -1465,52 +1481,56 @@ exports.updateLocationPageContent = async (req, res) => {
         pageContent.sections
       )
         ? pageContent.sections
-            .map((section) => ({
-              id: safeString(
-                section?.id
-              ),
+            .map(
+              (section) => ({
+                id:
+                  safeString(
+                    section?.id
+                  ),
 
-              type:
-                safeString(
-                  section?.type
-                ) || "richText",
+                type:
+                  safeString(
+                    section?.type
+                  ) ||
+                  "richText",
 
-              enabled:
-                safeBoolean(
-                  section?.enabled,
-                  true
-                ),
+                enabled:
+                  safeBoolean(
+                    section?.enabled,
+                    true
+                  ),
 
-              eyebrow:
-                safeString(
-                  section?.eyebrow
-                ),
+                eyebrow:
+                  safeString(
+                    section?.eyebrow
+                  ),
 
-              title:
-                safeString(
-                  section?.title
-                ),
+                title:
+                  safeString(
+                    section?.title
+                  ),
 
-              subtitle:
-                safeString(
-                  section?.subtitle
-                ),
+                subtitle:
+                  safeString(
+                    section?.subtitle
+                  ),
 
-              content:
-                safeString(
-                  section?.content
-                ),
+                content:
+                  safeString(
+                    section?.content
+                  ),
 
-              image:
-                safeString(
-                  section?.image
-                ),
+                image:
+                  safeString(
+                    section?.image
+                  ),
 
-              imagePosition:
-                safeString(
-                  section?.imagePosition
-                ),
-            }))
+                imagePosition:
+                  safeString(
+                    section?.imagePosition
+                  ),
+              })
+            )
             .filter(
               (section) =>
                 section.id
@@ -1525,6 +1545,9 @@ exports.updateLocationPageContent = async (req, res) => {
        Advisor CTA is intentionally omitted because it is static.
 
        All other editable/custom sections are included.
+
+       Rich-text HTML is preserved because every rich-text
+       field is passed through safeString() only.
     ========================================================== */
 
     const cleanPageContent = {
@@ -1623,6 +1646,9 @@ exports.updateLocationPageContent = async (req, res) => {
             about.title
           ),
 
+        /*
+         * RICH TEXT COMPATIBLE
+         */
         content:
           safeString(
             about.content
@@ -1645,6 +1671,9 @@ exports.updateLocationPageContent = async (req, res) => {
             about.marketTitle
           ),
 
+        /*
+         * RICH TEXT COMPATIBLE
+         */
         marketDescription:
           safeString(
             about.marketDescription
@@ -1678,11 +1707,18 @@ exports.updateLocationPageContent = async (req, res) => {
             realEstateTypes.title
           ),
 
+        /*
+         * RICH TEXT COMPATIBLE
+         */
         description:
           safeString(
             realEstateTypes.description
           ),
 
+        /*
+         * cards[].description is also
+         * RICH TEXT COMPATIBLE.
+         */
         cards:
           realEstateCards,
       },
@@ -1702,6 +1738,9 @@ exports.updateLocationPageContent = async (req, res) => {
             propertyPrices.title
           ),
 
+        /*
+         * RICH TEXT COMPATIBLE
+         */
         description:
           safeString(
             propertyPrices.description
@@ -1751,6 +1790,9 @@ exports.updateLocationPageContent = async (req, res) => {
             connectivity.title
           ),
 
+        /*
+         * RICH TEXT COMPATIBLE
+         */
         description:
           safeString(
             connectivity.description
@@ -1790,11 +1832,17 @@ exports.updateLocationPageContent = async (req, res) => {
             lifestyle.title
           ),
 
+        /*
+         * RICH TEXT COMPATIBLE
+         */
         description:
           safeString(
             lifestyle.description
           ),
 
+        /*
+         * groups[].description remains plain text.
+         */
         groups:
           lifestyleGroups,
       },
@@ -1814,11 +1862,17 @@ exports.updateLocationPageContent = async (req, res) => {
             whyBuy.title
           ),
 
+        /*
+         * RICH TEXT COMPATIBLE
+         */
         description:
           safeString(
             whyBuy.description
           ),
 
+        /*
+         * reasons[].description remains plain text.
+         */
         reasons:
           whyBuyReasons,
       },
@@ -1838,6 +1892,9 @@ exports.updateLocationPageContent = async (req, res) => {
             nearby.title
           ),
 
+        /*
+         * RICH TEXT COMPATIBLE
+         */
         description:
           safeString(
             nearby.description
@@ -1864,6 +1921,9 @@ exports.updateLocationPageContent = async (req, res) => {
             faq.description
           ),
 
+        /*
+         * faq.items[].answer is RICH TEXT COMPATIBLE.
+         */
         items:
           faqItems,
       },
@@ -1880,7 +1940,7 @@ exports.updateLocationPageContent = async (req, res) => {
 
        pageContent is the complete custom override layer.
 
-       Static/default content remains inside the public components.
+       Static/default content remains inside public components.
     ========================================================== */
 
     location.pageContent =
@@ -1913,10 +1973,8 @@ exports.updateLocationPageContent = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-
       message:
         "Location page content saved successfully ✅",
-
       location:
         savedLocation,
     });
@@ -1936,10 +1994,8 @@ exports.updateLocationPageContent = async (req, res) => {
     ) {
       return res.status(400).json({
         success: false,
-
         message:
           "Location page content validation failed ❌",
-
         error:
           err.message,
       });
@@ -1955,7 +2011,6 @@ exports.updateLocationPageContent = async (req, res) => {
     ) {
       return res.status(400).json({
         success: false,
-
         message:
           "Invalid location ID ❌",
       });
@@ -1967,7 +2022,6 @@ exports.updateLocationPageContent = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-
       message:
         err.message ||
         "Unable to save location page content ❌",
