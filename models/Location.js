@@ -71,6 +71,10 @@ const connectivityItemSchema = new mongoose.Schema(
 
 /* ============================================================
    REAL ESTATE TYPE CARD
+
+   description supports both:
+   - normal plain text
+   - HTML/rich text from RichTextEditor
 ============================================================ */
 
 const realEstateTypeCardSchema = new mongoose.Schema(
@@ -93,6 +97,13 @@ const realEstateTypeCardSchema = new mongoose.Schema(
 
 /* ============================================================
    LIFESTYLE GROUP
+
+   NOTE:
+   groups[].description remains plain text.
+
+   Only:
+   pageContent.lifestyle.description
+   is intended to support rich text.
 ============================================================ */
 
 const lifestyleGroupSchema = new mongoose.Schema(
@@ -120,6 +131,13 @@ const lifestyleGroupSchema = new mongoose.Schema(
 
 /* ============================================================
    WHY BUY REASON
+
+   NOTE:
+   reasons[].description remains plain text.
+
+   Only:
+   pageContent.whyBuy.description
+   is intended to support rich text.
 ============================================================ */
 
 const whyBuyReasonSchema = new mongoose.Schema(
@@ -142,6 +160,10 @@ const whyBuyReasonSchema = new mongoose.Schema(
 
 /* ============================================================
    FAQ ITEM
+
+   answer supports both:
+   - normal plain text
+   - HTML/rich text from RichTextEditor
 ============================================================ */
 
 const faqItemSchema = new mongoose.Schema(
@@ -166,63 +188,62 @@ const faqItemSchema = new mongoose.Schema(
    CUSTOM LOCATION SECTION
 ============================================================ */
 
-const customLocationSectionSchema =
-  new mongoose.Schema(
-    {
-      id: {
-        type: String,
-        default: "",
-        trim: true,
-      },
-
-      type: {
-        type: String,
-        default: "richText",
-        trim: true,
-      },
-
-      enabled: {
-        type: Boolean,
-        default: true,
-      },
-
-      eyebrow: {
-        type: String,
-        default: "",
-        trim: true,
-      },
-
-      title: {
-        type: String,
-        default: "",
-        trim: true,
-      },
-
-      subtitle: {
-        type: String,
-        default: "",
-      },
-
-      content: {
-        type: String,
-        default: "",
-      },
-
-      image: {
-        type: String,
-        default: "",
-      },
-
-      imagePosition: {
-        type: String,
-        default: "right",
-        trim: true,
-      },
+const customLocationSectionSchema = new mongoose.Schema(
+  {
+    id: {
+      type: String,
+      default: "",
+      trim: true,
     },
-    {
-      _id: false,
-    }
-  );
+
+    type: {
+      type: String,
+      default: "richText",
+      trim: true,
+    },
+
+    enabled: {
+      type: Boolean,
+      default: true,
+    },
+
+    eyebrow: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    title: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    subtitle: {
+      type: String,
+      default: "",
+    },
+
+    content: {
+      type: String,
+      default: "",
+    },
+
+    image: {
+      type: String,
+      default: "",
+    },
+
+    imagePosition: {
+      type: String,
+      default: "right",
+      trim: true,
+    },
+  },
+  {
+    _id: false,
+  }
+);
 
 /* ============================================================
    LOCATION SCHEMA
@@ -383,6 +404,14 @@ const locationSchema = new mongoose.Schema(
 
       /* ======================================================
          ABOUT LOCATION
+
+         Rich-text fields:
+         - content
+         - marketDescription
+
+         Plain-text fields:
+         - highlights[].description
+         - marketInsights[].description
       ====================================================== */
 
       about: {
@@ -454,6 +483,12 @@ const locationSchema = new mongoose.Schema(
 
       /* ======================================================
          CONNECTIVITY
+
+         Rich-text field:
+         - description
+
+         Plain-text:
+         - items[].subtitle
       ====================================================== */
 
       connectivity: {
@@ -499,9 +534,10 @@ const locationSchema = new mongoose.Schema(
       /* ======================================================
          NEARBY LOCATIONS
 
-         The actual nearby locations remain dynamic.
+         Rich-text field:
+         - description
 
-         These fields only control section copy.
+         Actual nearby locations remain dynamic.
       ====================================================== */
 
       nearby: {
@@ -525,6 +561,10 @@ const locationSchema = new mongoose.Schema(
 
       /* ======================================================
          REAL ESTATE TYPES
+
+         Rich-text fields:
+         - description
+         - cards[].description
       ====================================================== */
 
       realEstateTypes: {
@@ -553,6 +593,12 @@ const locationSchema = new mongoose.Schema(
 
       /* ======================================================
          PROPERTY PRICES
+
+         Rich-text field:
+         - description
+
+         Plain-text:
+         - currentPricingDescription
       ====================================================== */
 
       propertyPrices: {
@@ -610,6 +656,13 @@ const locationSchema = new mongoose.Schema(
 
       /* ======================================================
          LIFESTYLE
+
+         Rich-text field:
+         - description
+
+         Plain-text:
+         - groups[].description
+         - groups[].items
       ====================================================== */
 
       lifestyle: {
@@ -638,6 +691,12 @@ const locationSchema = new mongoose.Schema(
 
       /* ======================================================
          WHY BUY
+
+         Rich-text field:
+         - description
+
+         Plain-text:
+         - reasons[].description
       ====================================================== */
 
       whyBuy: {
@@ -666,6 +725,9 @@ const locationSchema = new mongoose.Schema(
 
       /* ======================================================
          FAQ
+
+         Rich-text field:
+         - items[].answer
       ====================================================== */
 
       faq: {
@@ -697,9 +759,6 @@ const locationSchema = new mongoose.Schema(
 
          Stored as Mixed for now so existing/new CTA fields
          are not stripped by Mongoose.
-
-         The exact editable fields can be made strict once
-         LocationAdvisorCTA.jsx is wired to pageContent.
       ====================================================== */
 
       advisorCta: {
