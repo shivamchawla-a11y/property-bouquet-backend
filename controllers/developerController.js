@@ -64,6 +64,32 @@ function buildDeveloperPublicSlug(slug) {
   return `${cleanSlug}-developer-projects`;
 }
 
+
+// ============================================================
+// HELPER — CLEAN PAGE CONTENT
+// ============================================================
+//
+// The dedicated editor sends pageContent as an object.
+//
+// We intentionally do NOT sanitize/strip HTML here because
+// RichTextEditor content needs to remain intact.
+//
+// Existing basic developer updates may not send pageContent at
+// all, so this helper simply detects whether it was supplied.
+//
+// ============================================================
+
+function hasPageContent(body) {
+  return (
+    body &&
+    Object.prototype.hasOwnProperty.call(
+      body,
+      "pageContent"
+    )
+  );
+}
+
+
 // ============================================================
 // CREATE
 // ============================================================
@@ -75,6 +101,7 @@ exports.createDeveloper = async (req, res) => {
       logo,
       image,
       description,
+      pageContent,
     } = req.body;
 
     if (!name?.trim()) {
@@ -102,7 +129,7 @@ exports.createDeveloper = async (req, res) => {
       });
     }
 
-    const developer = await Developer.create({
+    const developerData = {
       name: trimmedName,
 
       // KEEP DATABASE SLUG AS NORMAL BACKEND SLUG
@@ -112,15 +139,41 @@ exports.createDeveloper = async (req, res) => {
       }),
 
       logo:
-        logo?.trim() ||
-        "/placeholder.jpg",
+        typeof logo === "string" && logo.trim()
+          ? logo.trim()
+          : "/placeholder.jpg",
 
       image:
-        image?.trim() || "",
+        typeof image === "string"
+          ? image.trim()
+          : "",
 
       description:
-        description?.trim() || "",
-    });
+        typeof description === "string"
+          ? description.trim()
+          : "",
+    };
+
+    // ========================================================
+    // NEW — OPTIONAL PAGE CONTENT
+    // ========================================================
+    //
+    // Existing create requests don't need to send this.
+    // If the dedicated CMS sends it, preserve it.
+    //
+    // ========================================================
+
+    if (hasPageContent(req.body)) {
+      developerData.pageContent =
+        pageContent && typeof pageContent === "object"
+          ? pageContent
+          : {};
+    }
+
+    const developer =
+      await Developer.create(
+        developerData
+      );
 
     // ========================================================
     // ADD PUBLIC SEO SLUG TO RESPONSE
@@ -128,12 +181,14 @@ exports.createDeveloper = async (req, res) => {
 
     const developerResponse = {
       ...developer.toObject(),
-      publicSlug: buildDeveloperPublicSlug(
-        developer.slug
-      ),
+
+      publicSlug:
+        buildDeveloperPublicSlug(
+          developer.slug
+        ),
     };
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       data: developerResponse,
     });
@@ -143,12 +198,13 @@ exports.createDeveloper = async (req, res) => {
       err
     );
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Server error ❌",
     });
   }
 };
+
 
 // ============================================================
 // UPDATE
@@ -163,6 +219,7 @@ exports.updateDeveloper = async (req, res) => {
       logo,
       image,
       description,
+      pageContent,
     } = req.body;
 
     if (!name?.trim()) {
@@ -194,30 +251,64 @@ exports.updateDeveloper = async (req, res) => {
       });
     }
 
+    // ========================================================
+    // BUILD UPDATE DATA
+    // ========================================================
+    //
+    // IMPORTANT:
+    //
+    // pageContent is ONLY changed when the request actually
+    // contains pageContent.
+    //
+    // This protects the existing /admin/developers quick-edit
+    // form from accidentally wiping CMS content.
+    //
+    // ========================================================
+
+    const updateData = {
+      name: trimmedName,
+
+      // KEEP DATABASE SLUG AS NORMAL BACKEND SLUG
+      slug: slugify(trimmedName, {
+        lower: true,
+        strict: true,
+      }),
+
+      logo:
+        typeof logo === "string" && logo.trim()
+          ? logo.trim()
+          : "/placeholder.jpg",
+
+      image:
+        typeof image === "string"
+          ? image.trim()
+          : "",
+
+      description:
+        typeof description === "string"
+          ? description.trim()
+          : "",
+    };
+
+    // ========================================================
+    // NEW — UPDATE PAGE CONTENT ONLY WHEN SUPPLIED
+    // ========================================================
+
+    if (hasPageContent(req.body)) {
+      updateData.pageContent =
+        pageContent &&
+        typeof pageContent === "object"
+          ? pageContent
+          : {};
+    }
+
     const updatedDeveloper =
       await Developer.findByIdAndUpdate(
         id,
-        {
-          name: trimmedName,
-
-          // KEEP DATABASE SLUG AS NORMAL BACKEND SLUG
-          slug: slugify(trimmedName, {
-            lower: true,
-            strict: true,
-          }),
-
-          logo:
-            logo?.trim() ||
-            "/placeholder.jpg",
-
-          image:
-            image?.trim() || "",
-
-          description:
-            description?.trim() || "",
-        },
+        updateData,
         {
           new: true,
+          runValidators: true,
         }
       );
 
@@ -234,16 +325,19 @@ exports.updateDeveloper = async (req, res) => {
 
     const developerResponse = {
       ...updatedDeveloper.toObject(),
+
       publicSlug:
         buildDeveloperPublicSlug(
           updatedDeveloper.slug
         ),
     };
 
-    res.json({
+    return res.json({
       success: true,
+
       message:
         "Developer updated successfully ✅",
+
       data: developerResponse,
     });
   } catch (err) {
@@ -252,12 +346,13 @@ exports.updateDeveloper = async (req, res) => {
       err
     );
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Server error ❌",
     });
   }
 };
+
 
 // ============================================================
 // GET BY BACKEND SLUG
@@ -266,7 +361,23 @@ exports.updateDeveloper = async (req, res) => {
 // Example:
 // /api/developers/m3m
 //
-// This remains available for the old/backend slug.
+// This remains available for the backend slug.
+//
+// ============================================================
+
+// ============================================================
+// GET DEVELOPER BY BACKEND SLUG OR ID
+// ============================================================
+//
+// Supports:
+//
+// /api/developers/m3m
+//
+// AND
+//
+// /api/developers/68xxxxxxxxxxxxxxxxxxxxxxxx
+//
+// The ID support is used by the dedicated admin editor.
 //
 // ============================================================
 
@@ -275,10 +386,39 @@ exports.getDeveloperBySlug =
     try {
       const { slug } = req.params;
 
-      const developer =
-        await Developer.findOne({
-          slug,
+      if (!slug) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Developer identifier is required ❌",
         });
+      }
+
+      let developer = null;
+
+      // ========================================================
+      // IF PARAMETER LOOKS LIKE A MONGODB OBJECT ID
+      // ========================================================
+
+      if (
+        /^[0-9a-fA-F]{24}$/.test(
+          String(slug)
+        )
+      ) {
+        developer =
+          await Developer.findById(slug);
+      }
+
+      // ========================================================
+      // OTHERWISE USE NORMAL BACKEND SLUG
+      // ========================================================
+
+      if (!developer) {
+        developer =
+          await Developer.findOne({
+            slug,
+          });
+      }
 
       if (!developer) {
         return res.status(404).json({
@@ -288,6 +428,10 @@ exports.getDeveloperBySlug =
         });
       }
 
+      // ========================================================
+      // GET ACTIVE PROPERTIES
+      // ========================================================
+
       const properties =
         await Property.find({
           "coreDetails.developerRef":
@@ -295,6 +439,10 @@ exports.getDeveloperBySlug =
 
           isActive: true,
         });
+
+      // ========================================================
+      // LOGGING
+      // ========================================================
 
       console.log(
         "Developer:",
@@ -307,20 +455,13 @@ exports.getDeveloperBySlug =
         properties.length
       );
 
-      console.log(
-        properties.map((p) => ({
-          title:
-            p.coreDetails?.title,
-          slug: p.slug,
-        }))
-      );
-
       // ========================================================
       // ADD PUBLIC SEO SLUG
       // ========================================================
 
       const developerResponse = {
         ...developer.toObject(),
+
         publicSlug:
           buildDeveloperPublicSlug(
             developer.slug
@@ -337,7 +478,7 @@ exports.getDeveloperBySlug =
       });
     } catch (err) {
       console.error(
-        "GET DEV BY SLUG ERROR:",
+        "GET DEV BY SLUG/ID ERROR:",
         err
       );
 
@@ -348,6 +489,7 @@ exports.getDeveloperBySlug =
       });
     }
   };
+
 
 // ============================================================
 // GET BY PUBLIC SEO SLUG
@@ -394,7 +536,8 @@ exports.getDeveloperByPublicSlug =
       // GET ALL DEVELOPERS
       //
       // We calculate publicSlug from the existing backend slug.
-      // No database migration is required.
+      // No database migration required.
+      //
       // ========================================================
 
       const developers =
@@ -435,6 +578,10 @@ exports.getDeveloperByPublicSlug =
 
       // ========================================================
       // RETURN PUBLIC DEVELOPER DATA
+      //
+      // pageContent is automatically included because the
+      // Developer document contains it.
+      //
       // ========================================================
 
       const developerResponse = {
@@ -474,14 +621,16 @@ exports.getDeveloperByPublicSlug =
     }
   };
 
+
 // ============================================================
 // GET ALL
 // ============================================================
 //
-// Every developer now receives:
+// Every developer receives:
 //
 // slug
 // publicSlug
+// pageContent
 //
 // ============================================================
 
@@ -507,7 +656,7 @@ exports.getDevelopers = async (
           ),
       }));
 
-    res.json({
+    return res.json({
       success: true,
 
       data:
@@ -519,12 +668,13 @@ exports.getDevelopers = async (
       err
     );
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Server error ❌",
     });
   }
 };
+
 
 // ============================================================
 // DELETE
@@ -537,7 +687,7 @@ exports.deleteDeveloper =
         req.params.id
       );
 
-      res.json({
+      return res.json({
         success: true,
         message:
           "Deleted successfully ✅",
@@ -548,9 +698,22 @@ exports.deleteDeveloper =
         err
       );
 
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: "Server error ❌",
       });
     }
   };
+
+
+// ============================================================
+// EXPORT PUBLIC SLUG BUILDER
+// ============================================================
+//
+// Useful if another controller/route needs to generate the
+// same public developer URL.
+//
+// ============================================================
+
+exports.buildDeveloperPublicSlug =
+  buildDeveloperPublicSlug;
