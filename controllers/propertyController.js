@@ -2569,6 +2569,14 @@ exports.aiCreateProperty = async (req, res) => {
 
     const cleanString = (value) => {
       if (value === null || value === undefined) return "";
+
+      if (
+        typeof value === "object" ||
+        typeof value === "function"
+      ) {
+        return "";
+      }
+
       return String(value).trim();
     };
 
@@ -2579,6 +2587,15 @@ exports.aiCreateProperty = async (req, res) => {
         value === null ||
         value === undefined ||
         value === ""
+      ) {
+        return null;
+      }
+
+      // Do not convert formatted prices or area strings
+      // such as "₹1.5 Cr" or "1,250 sq. ft." into numbers.
+      if (
+        typeof value === "string" &&
+        !/^-?\d+(\.\d+)?$/.test(value.trim())
       ) {
         return null;
       }
@@ -2606,8 +2623,29 @@ exports.aiCreateProperty = async (req, res) => {
     const escapeRegex = (value) =>
       value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+    const cleanItems = (value, mapper, isValid) =>
+      safeArray(value)
+        .filter(
+          (item) =>
+            item &&
+            typeof item === "object" &&
+            !Array.isArray(item) &&
+            isValid(item)
+        )
+        .map(mapper);
+
+    const firstNonEmpty = (...values) => {
+      for (const value of values) {
+        const cleaned = cleanString(value);
+
+        if (cleaned) return cleaned;
+      }
+
+      return "";
+    };
+
     // ==========================================================
-    // EXTRACT BASIC AI VALUES
+    // EXTRACT AI VALUES
     // ==========================================================
 
     const {
@@ -2674,7 +2712,8 @@ exports.aiCreateProperty = async (req, res) => {
 
     // ==========================================================
     // DEVELOPER LOOKUP
-    // Optional. ID first, then unique exact name.
+    // Resolve by ID first, then by unique exact name.
+    // Never select an arbitrary duplicate.
     // ==========================================================
 
     let developer = null;
@@ -2706,12 +2745,9 @@ exports.aiCreateProperty = async (req, res) => {
       }
     }
 
-    // Ambiguous or missing developer: leave unresolved.
-    // Do not pick an arbitrary developer.
-
     // ==========================================================
     // CATEGORY LOOKUP
-    // Optional. ID first, then unique exact name/fullPath.
+    // Resolve by ID first, then by unique exact name/fullPath.
     // ==========================================================
 
     let category = null;
@@ -2748,12 +2784,10 @@ exports.aiCreateProperty = async (req, res) => {
       }
     }
 
-    // Ambiguous or missing category: leave unresolved.
-
     // ==========================================================
     // LOCATION LOOKUP
-    // Optional. ID first, then unique exact name.
-    // Ambiguous locations must never stop draft creation.
+    // Resolve by ID first, then by unique exact name.
+    // Ambiguous locations must not block draft creation.
     // ==========================================================
 
     let location = null;
@@ -2785,9 +2819,6 @@ exports.aiCreateProperty = async (req, res) => {
       }
     }
 
-    // Missing or ambiguous location is not an error.
-    // Do not preserve an unresolved name in locationData.
-
     // ==========================================================
     // SLUG GENERATION
     // ==========================================================
@@ -2817,16 +2848,9 @@ exports.aiCreateProperty = async (req, res) => {
     // CLEAN UNIT CONFIGURATIONS
     // ==========================================================
 
-    const safeUnitConfigurations = safeArray(
-      unitConfigurations
-    )
-      .filter(
-        (item) =>
-          item &&
-          typeof item === "object" &&
-          cleanString(item.unitType)
-      )
-      .map((item) => ({
+    const safeUnitConfigurations = cleanItems(
+      unitConfigurations,
+      (item) => ({
         unitType: nullableString(item.unitType),
         area: nullableString(item.area),
         price: nullableString(item.price),
@@ -2834,24 +2858,18 @@ exports.aiCreateProperty = async (req, res) => {
         bedrooms: nullableString(item.bedrooms),
         bathrooms: nullableString(item.bathrooms),
         balconies: nullableString(item.balconies),
-      }));
+      }),
+      (item) => Boolean(cleanString(item.unitType))
+    );
 
     // ==========================================================
     // CLEAN FLOOR PLANS
+    // Preserve the information but not unverified image URLs.
     // ==========================================================
 
-    const safeFloorPlans = safeArray(floorPlans)
-      .filter(
-        (item) =>
-          item &&
-          typeof item === "object" &&
-          (
-            cleanString(item.unitType) ||
-            cleanString(item.area) ||
-            cleanString(item.price)
-          )
-      )
-      .map((item) => ({
+    const safeFloorPlans = cleanItems(
+      floorPlans,
+      (item) => ({
         unitType: nullableString(item.unitType),
         area: nullableString(item.area),
         price: nullableString(item.price),
@@ -2860,102 +2878,116 @@ exports.aiCreateProperty = async (req, res) => {
         bathrooms: nullableString(item.bathrooms),
         balconies: nullableString(item.balconies),
         image: "",
-      }));
+      }),
+      (item) =>
+        Boolean(
+          cleanString(item.unitType) ||
+          cleanString(item.area) ||
+          cleanString(item.price)
+        )
+    );
 
     // ==========================================================
     // CLEAN PLOT CONFIGURATIONS
     // ==========================================================
 
-    const safePlotConfigurations = safeArray(
-      plotConfigurations
-    )
-      .filter(
-        (item) =>
-          item &&
-          typeof item === "object" &&
-          (
-            cleanString(item.plotType) ||
-            cleanString(item.plotArea) ||
-            cleanString(item.price) ||
-            cleanString(item.paymentPlan)
-          )
-      )
-      .map((item) => ({
+    const safePlotConfigurations = cleanItems(
+      plotConfigurations,
+      (item) => ({
         plotType: nullableString(item.plotType),
         plotArea: nullableString(item.plotArea),
         price: nullableString(item.price),
         paymentPlan: nullableString(item.paymentPlan),
         image: "",
-      }));
+      }),
+      (item) =>
+        Boolean(
+          cleanString(item.plotType) ||
+          cleanString(item.plotArea) ||
+          cleanString(item.price) ||
+          cleanString(item.paymentPlan)
+        )
+    );
+
+    // ==========================================================
+    // UNIT CONFIGURATION FALLBACK
+    //
+    // If the AI omitted unitConfigurations but supplied
+    // floorPlans, reuse their verified text fields.
+    // ==========================================================
+
+    const finalUnitConfigurations =
+      safeUnitConfigurations.length > 0
+        ? safeUnitConfigurations
+        : safeFloorPlans
+            .filter((item) => cleanString(item.unitType))
+            .map((item) => ({
+              unitType: item.unitType,
+              area: item.area,
+              price: item.price,
+              paymentPlan: item.paymentPlan,
+              bedrooms: item.bedrooms,
+              bathrooms: item.bathrooms,
+              balconies: item.balconies,
+            }));
 
     // ==========================================================
     // CLEAN HIGHLIGHTS
     // ==========================================================
 
-    const safeHighlights = safeArray(highlights)
-      .filter(
-        (item) =>
-          item &&
-          typeof item === "object" &&
-          cleanString(item.heading)
-      )
-      .map((item) => ({
+    const safeHighlights = cleanItems(
+      highlights,
+      (item) => ({
         heading: cleanString(item.heading),
         subheading: cleanString(item.subheading),
-        icon: "",
-      }));
+        icon: cleanString(item.icon),
+      }),
+      (item) => Boolean(cleanString(item.heading))
+    );
 
     // ==========================================================
     // CLEAN AMENITIES
+    // Keep only supplied amenities. Do not invent any here.
     // ==========================================================
 
-    const safeAmenities = safeArray(amenities)
-      .filter(
-        (item) =>
-          item &&
-          typeof item === "object" &&
-          cleanString(item.heading)
-      )
-      .map((item) => ({
+    const safeAmenities = cleanItems(
+      amenities,
+      (item) => ({
         heading: cleanString(item.heading),
         subheading: cleanString(item.subheading),
-        icon: "",
-      }));
+        icon: cleanString(item.icon),
+      }),
+      (item) => Boolean(cleanString(item.heading))
+    );
 
     // ==========================================================
     // CLEAN LANDMARKS
     // ==========================================================
 
-    const safeLandmarks = safeArray(landmarks)
-      .filter(
-        (item) =>
-          item &&
-          typeof item === "object" &&
-          cleanString(item.name)
-      )
-      .map((item) => ({
+    const safeLandmarks = cleanItems(
+      landmarks,
+      (item) => ({
         name: cleanString(item.name),
         distance: cleanString(item.distance),
-        subtitle: "",
-        icon: "",
-      }));
+        subtitle: cleanString(item.subtitle),
+        icon: cleanString(item.icon),
+      }),
+      (item) => Boolean(cleanString(item.name))
+    );
 
     // ==========================================================
     // CLEAN FEATURE BAR
     // ==========================================================
 
-    const safeFeatureBar = safeArray(featureBar)
-      .filter(
-        (item) =>
-          item &&
-          typeof item === "object" &&
-          cleanString(item.title)
-      )
-      .map((item) => ({
+    const safeFeatureBar = cleanItems(
+      featureBar,
+      (item) => ({
         title: cleanString(item.title),
         desc: cleanString(item.desc),
-        icon: "",
-      }));
+        icon: cleanString(item.icon),
+      }),
+      (item) => Boolean(cleanString(item.title))
+    );
 
     // ==========================================================
     // OVERVIEW CONTENT
@@ -2963,21 +2995,46 @@ exports.aiCreateProperty = async (req, res) => {
 
     const safeOverviewContent = safeObject(overviewContent);
 
+    const safeOverviewDescription = firstNonEmpty(
+      overviewDescription,
+      safeOverviewContent.description
+    );
+
+    const safeOverviewBottomStrip = cleanItems(
+      safeOverviewContent.bottomStrip,
+      (item) => ({
+        title: cleanString(item.title),
+        desc: cleanString(item.desc),
+        icon: cleanString(item.icon),
+      }),
+      (item) => Boolean(cleanString(item.title))
+    );
+
     const overviewData = {
-      aboutSectionNumber: "",
+      aboutSectionNumber: nullableString(
+        safeOverviewContent.aboutSectionNumber
+      ),
+
       aboutLabel: nullableString(
         safeOverviewContent.aboutLabel
       ),
+
       aboutTitleLine1: nullableString(
         safeOverviewContent.aboutTitleLine1
       ),
+
       aboutTitleLine2: nullableString(
         safeOverviewContent.aboutTitleLine2
       ),
-      description: nullableString(overviewDescription),
+
+      description: nullableString(
+        safeOverviewDescription
+      ),
+
       aboutParagraph2: nullableString(
         safeOverviewContent.aboutParagraph2
       ),
+
       aboutImageUrl: "",
 
       featureBar: safeFeatureBar,
@@ -2985,38 +3042,63 @@ exports.aiCreateProperty = async (req, res) => {
       highlightsHeading: nullableString(
         safeOverviewContent.highlightsHeading
       ),
+
       highlightsSubheading: nullableString(
         safeOverviewContent.highlightsSubheading
       ),
+
       highlightQuote: nullableString(
         safeOverviewContent.highlightQuote
       ),
 
-      amenitiesSectionNumber: "",
+      amenitiesSectionNumber: nullableString(
+        safeOverviewContent.amenitiesSectionNumber
+      ),
+
       amenitiesSectionLabel: nullableString(
         safeOverviewContent.amenitiesSectionLabel
       ),
+
       amenitiesHeadingLine1: nullableString(
         safeOverviewContent.amenitiesHeadingLine1
       ),
+
       amenitiesHeadingLine2: nullableString(
         safeOverviewContent.amenitiesHeadingLine2
       ),
+
       amenitiesHeadingLine3: nullableString(
         safeOverviewContent.amenitiesHeadingLine3
       ),
+
       amenitiesSubheading: nullableString(
         safeOverviewContent.amenitiesSubheading
       ),
 
       highlights: safeHighlights,
+
       amenities: safeAmenities,
 
-      bottomStripTitle1: "",
-      bottomStripTitle2: "",
-      bottomStripFeature1: "",
-      bottomStripFeature2: "",
-      bottomStripFeature3: "",
+      bottomStripTitle1: nullableString(
+        safeOverviewContent.bottomStripTitle1
+      ),
+
+      bottomStripTitle2: nullableString(
+        safeOverviewContent.bottomStripTitle2
+      ),
+
+      bottomStripFeature1: nullableString(
+        safeOverviewContent.bottomStripFeature1
+      ),
+
+      bottomStripFeature2: nullableString(
+        safeOverviewContent.bottomStripFeature2
+      ),
+
+      bottomStripFeature3: nullableString(
+        safeOverviewContent.bottomStripFeature3
+      ),
+
     };
 
     // ==========================================================
@@ -3027,36 +3109,57 @@ exports.aiCreateProperty = async (req, res) => {
       configurationContent
     );
 
-    const safeConfigurationFeatures = safeArray(
-      safeConfigurationContent.features
-    )
-      .filter(
-        (item) =>
-          item &&
-          typeof item === "object" &&
-          cleanString(item.title)
-      )
-      .map((item) => ({
-        title: cleanString(item.title),
-        description: cleanString(item.description),
-      }));
+const safeConfigurationFeatures = safeArray(
+  safeConfigurationContent.features
+)
+  .map((item) => {
+    // The current schema expects strings, not objects.
+    if (typeof item === "string") {
+      return item.trim();
+    }
+
+    if (item && typeof item === "object") {
+      const title = cleanString(item.title);
+      const description = cleanString(item.description);
+
+      if (title && description) {
+        return `${title}: ${description}`;
+      }
+
+      return title || description;
+    }
+
+    return "";
+  })
+  .filter(Boolean);
+
 
     const configurationSection = {
-      sectionNumber: "",
+      sectionNumber: nullableString(
+        safeConfigurationContent.sectionNumber
+      ),
+
       sectionLabel: nullableString(
         safeConfigurationContent.sectionLabel
       ),
+
       titleLine1: nullableString(
         safeConfigurationContent.titleLine1
       ),
+
       titleLine2: nullableString(
         safeConfigurationContent.titleLine2
       ),
+
       subheading: nullableString(
         safeConfigurationContent.subheading
       ),
+
       features: safeConfigurationFeatures,
-      buttonText: "",
+
+      buttonText: nullableString(
+        safeConfigurationContent.buttonText
+      ),
     };
 
     // ==========================================================
@@ -3065,36 +3168,39 @@ exports.aiCreateProperty = async (req, res) => {
 
     const safeLocationContent = safeObject(locationContent);
 
-    const safeLocationBottomStrip = safeArray(
-      locationBottomStrip
-    )
-      .filter(
-        (item) =>
-          item &&
-          typeof item === "object" &&
-          cleanString(item.title)
-      )
-      .map((item) => ({
+    const safeLocationBottomStrip = cleanItems(
+      locationBottomStrip,
+      (item) => ({
         title: cleanString(item.title),
         desc: cleanString(item.desc),
-        icon: "",
-      }));
+        icon: cleanString(item.icon),
+      }),
+      (item) => Boolean(cleanString(item.title))
+    );
 
     const locationData = {
       locationRef: location?._id || null,
 
-      // Empty unless a unique location was resolved.
+      // Never store an unresolved location name as a resolved
+      // database location.
       locationName: location
-        ? location.name || location.locationName || ""
+        ? firstNonEmpty(
+            location.name,
+            location.locationName
+          )
         : "",
 
       customLocation: "",
 
       address: nullableString(address),
 
+      // Never accept a raw iframe or unverified map embed URL
+      // from generated AI content.
       mapEmbedUrl: "",
 
-      sectionNumber: "",
+      sectionNumber: nullableString(
+        safeLocationContent.sectionNumber
+      ),
 
       topLabel: nullableString(
         safeLocationContent.topLabel
@@ -3169,23 +3275,20 @@ exports.aiCreateProperty = async (req, res) => {
       masterPlanContent
     );
 
-    const safeMasterPlanBottomStrip = safeArray(
-      safeMasterPlanContent.bottomStrip
-    )
-      .filter(
-        (item) =>
-          item &&
-          typeof item === "object" &&
-          cleanString(item.title)
-      )
-      .map((item) => ({
+    const safeMasterPlanBottomStrip = cleanItems(
+      safeMasterPlanContent.bottomStrip,
+      (item) => ({
         title: cleanString(item.title),
         desc: cleanString(item.desc),
-        icon: "",
-      }));
+        icon: cleanString(item.icon),
+      }),
+      (item) => Boolean(cleanString(item.title))
+    );
 
     const masterPlanSection = {
-      sectionNumber: "",
+      sectionNumber: nullableString(
+        safeMasterPlanContent.sectionNumber
+      ),
 
       topLabel: nullableString(
         safeMasterPlanContent.topLabel
@@ -3203,7 +3306,8 @@ exports.aiCreateProperty = async (req, res) => {
         safeMasterPlanContent.description
       ),
 
-      enableSideStrips: false,
+      enableSideStrips:
+        safeMasterPlanContent.enableSideStrips === true,
 
       topFloatingLabel: nullableString(
         safeMasterPlanContent.topFloatingLabel
@@ -3221,6 +3325,8 @@ exports.aiCreateProperty = async (req, res) => {
         safeMasterPlanContent.buttonText
       ),
 
+      // Keep this empty until a verified image URL is supplied
+      // by a trusted media/upload workflow.
       masterPlanImage: "",
 
       bottomStrip: safeMasterPlanBottomStrip,
@@ -3232,20 +3338,24 @@ exports.aiCreateProperty = async (req, res) => {
 
     const safeSeoContent = safeObject(seoContent);
 
-    const safeSeoKeywords = safeArray(
-      safeSeoContent.keywords
-    )
-      .filter(
-        (keyword) =>
-          typeof keyword === "string" &&
-          keyword.trim()
-      )
-      .map((keyword) => keyword.trim());
+    const safeSeoKeywords = [
+      ...new Set(
+        safeArray(safeSeoContent.keywords)
+          .filter(
+            (keyword) =>
+              typeof keyword === "string" &&
+              keyword.trim()
+          )
+          .map((keyword) => keyword.trim())
+      ),
+    ];
 
     const seoEngine = {
       hasCustomSEO:
-        !!cleanString(safeSeoContent.metaTitle) ||
-        !!cleanString(safeSeoContent.metaDescription) ||
+        Boolean(cleanString(safeSeoContent.metaTitle)) ||
+        Boolean(
+          cleanString(safeSeoContent.metaDescription)
+        ) ||
         safeSeoKeywords.length > 0,
 
       metaTitle: nullableString(
@@ -3260,7 +3370,7 @@ exports.aiCreateProperty = async (req, res) => {
     };
 
     // ==========================================================
-    // FAQ SECTION
+    // FAQ SECTION CONTENT
     // ==========================================================
 
     const safeFaqSectionContent = safeObject(
@@ -3268,7 +3378,9 @@ exports.aiCreateProperty = async (req, res) => {
     );
 
     const faqSection = {
-      sectionNumber: "",
+      sectionNumber: nullableString(
+        safeFaqSectionContent.sectionNumber
+      ),
 
       topLabel: nullableString(
         safeFaqSectionContent.topLabel
@@ -3331,18 +3443,18 @@ exports.aiCreateProperty = async (req, res) => {
     // FAQS
     // ==========================================================
 
-    const safeFaqs = safeArray(faqs)
-      .filter(
-        (item) =>
-          item &&
-          typeof item === "object" &&
-          cleanString(item.question) &&
-          cleanString(item.answer)
-      )
-      .map((item) => ({
+    const safeFaqs = cleanItems(
+      faqs,
+      (item) => ({
         question: cleanString(item.question),
         answer: cleanString(item.answer),
-      }));
+      }),
+      (item) =>
+        Boolean(
+          cleanString(item.question) &&
+          cleanString(item.answer)
+        )
+    );
 
     // ==========================================================
     // CTA
@@ -3362,11 +3474,24 @@ exports.aiCreateProperty = async (req, res) => {
     // CONFIGURATION TYPE
     // ==========================================================
 
-    const safeConfigurationType =
-      configurationType === "Apartments" ||
-      configurationType === "Plots"
-        ? configurationType
-        : null;
+    const requestedConfigurationType =
+      cleanString(configurationType);
+
+    let safeConfigurationType = null;
+
+    if (
+      requestedConfigurationType === "Apartments" ||
+      requestedConfigurationType === "Plots"
+    ) {
+      safeConfigurationType = requestedConfigurationType;
+    } else if (
+      safePlotConfigurations.length > 0 &&
+      finalUnitConfigurations.length === 0
+    ) {
+      safeConfigurationType = "Plots";
+    } else if (finalUnitConfigurations.length > 0) {
+      safeConfigurationType = "Apartments";
+    }
 
     // ==========================================================
     // DEVELOPER DATA
@@ -3376,15 +3501,24 @@ exports.aiCreateProperty = async (req, res) => {
       developerRef: developer?._id || null,
 
       developerName: developer
-        ? developer.name || developer.developerName || ""
+        ? firstNonEmpty(
+            developer.name,
+            developer.developerName
+          )
         : "",
 
       developerLogo: developer
-        ? developer.logo || developer.developerLogo || ""
+        ? firstNonEmpty(
+            developer.logo,
+            developer.developerLogo
+          )
         : "",
 
       developerImage: developer
-        ? developer.image || developer.developerImage || ""
+        ? firstNonEmpty(
+            developer.image,
+            developer.developerImage
+          )
         : "",
     };
 
@@ -3396,9 +3530,59 @@ exports.aiCreateProperty = async (req, res) => {
       categoryRef: category?._id || null,
 
       categoryName: category
-        ? category.name || category.categoryName || ""
+        ? firstNonEmpty(
+            category.name,
+            category.categoryName
+          )
         : "",
     };
+
+    // ==========================================================
+    // KEY METRICS / CUSTOM METRICS
+    // ==========================================================
+
+    const safeKeyMetrics = safeObject(aiData.keyMetrics);
+
+    const rawCustomMetrics =
+      aiData.customMetrics ??
+      safeKeyMetrics.customMetrics;
+
+const safeCustomMetrics = cleanItems(
+  rawCustomMetrics,
+  (item) => ({
+    label: firstNonEmpty(
+      item.label,
+      item.title,
+      item.name,
+      item.heading,
+      item.key
+    ),
+
+    value: firstNonEmpty(
+      item.value,
+      item.description,
+      item.text
+    ),
+
+    icon: firstNonEmpty(item.icon, "FaHome"),
+  }),
+  (item) =>
+    Boolean(
+      firstNonEmpty(
+        item.label,
+        item.title,
+        item.name,
+        item.heading,
+        item.key
+      ) &&
+      firstNonEmpty(
+        item.value,
+        item.description,
+        item.text
+      )
+    )
+);
+
 
     // ==========================================================
     // PROPERTY PAYLOAD
@@ -3418,6 +3602,8 @@ exports.aiCreateProperty = async (req, res) => {
 
       // CORE DETAILS
       coreDetails: {
+        // Keep the official project name here.
+        // Search-optimized text belongs in seoEngine.metaTitle.
         title: cleanTitle,
 
         developerRef: developerData.developerRef,
@@ -3437,21 +3623,53 @@ exports.aiCreateProperty = async (req, res) => {
       heroSection: {
         propertyStatus: nullableString(propertyStatus),
         heroDescription: nullableString(heroDescription),
-        brochureButtonText: "",
-        videoButtonText: "",
-        taglineItems: [],
+        brochureButtonText: nullableString(
+          safeObject(aiData.heroSection).brochureButtonText
+        ),
+        videoButtonText: nullableString(
+          safeObject(aiData.heroSection).videoButtonText
+        ),
+        taglineItems: safeArray(
+          safeObject(aiData.heroSection).taglineItems
+        )
+          .filter(
+            (item) =>
+              typeof item === "string" && item.trim()
+          )
+          .map((item) => item.trim()),
       },
 
       // KEY METRICS
       keyMetrics: {
-        landArea: nullableString(landArea),
-        possession: nullableString(possession),
-        status: nullableString(propertyStatus),
-        totalUnits: safeNumber(totalUnits),
-        totalTowers: safeNumber(totalTowers),
-        floors: nullableString(floors),
-        reraNumber: nullableString(reraNumber),
-        customMetrics: [],
+        landArea: nullableString(
+          landArea ?? safeKeyMetrics.landArea
+        ),
+
+        possession: nullableString(
+          possession ?? safeKeyMetrics.possession
+        ),
+
+        status: nullableString(
+          propertyStatus ?? safeKeyMetrics.status
+        ),
+
+        totalUnits: safeNumber(
+          totalUnits ?? safeKeyMetrics.totalUnits
+        ),
+
+        totalTowers: safeNumber(
+          totalTowers ?? safeKeyMetrics.totalTowers
+        ),
+
+        floors: nullableString(
+          floors ?? safeKeyMetrics.floors
+        ),
+
+        reraNumber: nullableString(
+          reraNumber ?? safeKeyMetrics.reraNumber
+        ),
+
+        customMetrics: safeCustomMetrics,
       },
 
       // OVERVIEW
@@ -3461,7 +3679,7 @@ exports.aiCreateProperty = async (req, res) => {
       configurationSection,
 
       // UNIT CONFIGURATIONS
-      unitConfigurations: safeUnitConfigurations,
+      unitConfigurations: finalUnitConfigurations,
 
       // LOCATION
       locationData,
@@ -3479,6 +3697,9 @@ exports.aiCreateProperty = async (req, res) => {
       },
 
       // MEDIA
+      // AI-provided arbitrary image URLs are deliberately not
+      // persisted here. A later trusted media workflow can map
+      // verified images into these fields.
       media: {
         heroImageUrl: "",
         gallery: [],
@@ -3537,7 +3758,12 @@ exports.aiCreateProperty = async (req, res) => {
           requested: cleanLocationName || null,
           resolved: Boolean(location),
           id: location?._id || null,
-          name: location?.name || null,
+          name: location
+            ? firstNonEmpty(
+                location.name,
+                location.locationName
+              ) || null
+            : null,
         },
       },
 
@@ -3546,6 +3772,17 @@ exports.aiCreateProperty = async (req, res) => {
         developer: !developer,
         category: !category,
         location: !location,
+      },
+
+      contentSummary: {
+        highlights: safeHighlights.length,
+        amenities: safeAmenities.length,
+        landmarks: safeLandmarks.length,
+        unitConfigurations: finalUnitConfigurations.length,
+        floorPlans: safeFloorPlans.length,
+        plotConfigurations: safePlotConfigurations.length,
+        customMetrics: safeCustomMetrics.length,
+        faqs: safeFaqs.length,
       },
     });
   } catch (error) {
