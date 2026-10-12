@@ -2523,25 +2523,33 @@ exports.getPropertyById = async (
 // ============================================================
 // Creates an AI-generated PROPERTY DRAFT only.
 //
-// IMPORTANT:
-// - AI does NOT create MongoDB ObjectIds.
-// - AI does NOT create the slug.
-// - AI does NOT decide marketType.
-// - AI does NOT control status/isDeleted/isActive/propertyTag.
-// - Backend resolves Developer / Category / Location references.
-// - Property is ALWAYS created as a draft.
-// - AI drafts must NOT inherit unrelated template copy.
+// RULES:
+// - AI does not create MongoDB ObjectIds.
+// - Backend generates the property slug.
+// - Backend controls status, isDeleted, isActive and propertyTag.
+// - Developer, category and location are optional.
+// - Reference lookup uses an ID when supplied, then a unique
+//   exact-name match.
+// - Ambiguous or missing references remain empty.
+// - Never select an arbitrary duplicate record.
+// - Never automatically create developer/category/location.
+// - Property is always created as a draft.
+// - AI drafts do not inherit unrelated template copy.
 // ============================================================
 
 exports.aiCreateProperty = async (req, res) => {
   try {
     const aiData = req.body?.aiData;
 
-    // ============================================================
+    // ==========================================================
     // BASIC VALIDATION
-    // ============================================================
+    // ==========================================================
 
-    if (!aiData || typeof aiData !== "object") {
+    if (
+      !aiData ||
+      typeof aiData !== "object" ||
+      Array.isArray(aiData)
+    ) {
       return res.status(400).json({
         success: false,
         message: "AI property data is required.",
@@ -2555,43 +2563,52 @@ exports.aiCreateProperty = async (req, res) => {
       });
     }
 
-    // ============================================================
+    // ==========================================================
     // SAFE HELPERS
-    // ============================================================
+    // ==========================================================
 
     const cleanString = (value) => {
       if (value === null || value === undefined) return "";
       return String(value).trim();
     };
 
-    const nullableString = (value) => {
-      const valueClean = cleanString(value);
-      return valueClean || "";
-    };
+    const nullableString = (value) => cleanString(value);
 
     const safeNumber = (value) => {
-      if (typeof value === "number" && Number.isFinite(value)) {
-        return value;
+      if (
+        value === null ||
+        value === undefined ||
+        value === ""
+      ) {
+        return null;
       }
 
-      return null;
+      const number = Number(value);
+
+      return Number.isFinite(number) ? number : null;
     };
 
     const safeBoolean = (value) => value === true;
 
-    const safeArray = (value) => {
-      return Array.isArray(value) ? value : [];
-    };
+    const safeArray = (value) =>
+      Array.isArray(value) ? value : [];
 
-    const safeObject = (value) => {
-      return value && typeof value === "object" && !Array.isArray(value)
+    const safeObject = (value) =>
+      value &&
+      typeof value === "object" &&
+      !Array.isArray(value)
         ? value
         : {};
-    };
 
-    // ============================================================
+    const isValidObjectId = (value) =>
+      /^[a-f\d]{24}$/i.test(cleanString(value));
+
+    const escapeRegex = (value) =>
+      value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    // ==========================================================
     // EXTRACT BASIC AI VALUES
-    // ============================================================
+    // ==========================================================
 
     const {
       title,
@@ -2631,9 +2648,9 @@ exports.aiCreateProperty = async (req, res) => {
       ctaContent,
     } = aiData;
 
-    // ============================================================
+    // ==========================================================
     // TITLE
-    // ============================================================
+    // ==========================================================
 
     const cleanTitle = cleanString(title);
 
@@ -2641,90 +2658,122 @@ exports.aiCreateProperty = async (req, res) => {
       return res.status(400).json({
         success: false,
         message:
-          "AI could not identify the property/project name. Please provide a clearer property name.",
+          "AI could not identify the property/project name. " +
+          "Please provide a clearer property name.",
       });
     }
 
-    // ============================================================
+    // ==========================================================
     // MARKET TYPE
-    // ============================================================
+    // ==========================================================
 
-    let normalizedMarketType = null;
+    const normalizedMarketType =
+      marketType === "Primary" || marketType === "Resale"
+        ? marketType
+        : null;
 
-    if (marketType === "Primary" || marketType === "Resale") {
-      normalizedMarketType = marketType;
-    }
-
-    // ============================================================
+    // ==========================================================
     // DEVELOPER LOOKUP
-    // ============================================================
+    // Optional. ID first, then unique exact name.
+    // ==========================================================
 
     let developer = null;
 
-    if (developerName && cleanString(developerName)) {
-      const cleanDeveloperName = cleanString(developerName);
+    const requestedDeveloperRef = cleanString(
+      aiData.developerRef
+    );
 
-      const escapedDeveloperName = cleanDeveloperName.replace(
-        /[.*+?^${}()|[\]\\]/g,
-        "\\$&"
-      );
+    const cleanDeveloperName = cleanString(developerName);
 
-      developer = await Developer.findOne({
-        name: {
-          $regex: `^${escapedDeveloperName}$`,
-          $options: "i",
-        },
-      }).lean();
+    if (isValidObjectId(requestedDeveloperRef)) {
+      developer = await Developer.findById(
+        requestedDeveloperRef
+      ).lean();
     }
 
-    // ============================================================
-    // CATEGORY LOOKUP
-    // ============================================================
-
-    let category = null;
-
-    if (categoryName && cleanString(categoryName)) {
-      const cleanCategoryName = cleanString(categoryName);
-
-      const escapedCategoryName = cleanCategoryName.replace(
-        /[.*+?^${}()|[\]\\]/g,
-        "\\$&"
-      );
-
-      category = await Category.findOne({
+    if (!developer && cleanDeveloperName) {
+      const developerMatches = await Developer.find({
         name: {
-          $regex: `^${escapedCategoryName}$`,
+          $regex: `^${escapeRegex(cleanDeveloperName)}$`,
           $options: "i",
         },
-      }).lean();
+      })
+        .limit(2)
+        .lean();
 
-      if (!category) {
-        category = await Category.findOne({
-          fullPath: {
-            $regex: `^${escapedCategoryName}$`,
-            $options: "i",
-          },
-        }).lean();
+      if (developerMatches.length === 1) {
+        developer = developerMatches[0];
       }
     }
 
-    // ============================================================
+    // Ambiguous or missing developer: leave unresolved.
+    // Do not pick an arbitrary developer.
+
+    // ==========================================================
+    // CATEGORY LOOKUP
+    // Optional. ID first, then unique exact name/fullPath.
+    // ==========================================================
+
+    let category = null;
+
+    const requestedCategoryRef = cleanString(
+      aiData.categoryRef
+    );
+
+    const cleanCategoryName = cleanString(categoryName);
+
+    if (isValidObjectId(requestedCategoryRef)) {
+      category = await Category.findById(
+        requestedCategoryRef
+      ).lean();
+    }
+
+    if (!category && cleanCategoryName) {
+      const categoryRegex = {
+        $regex: `^${escapeRegex(cleanCategoryName)}$`,
+        $options: "i",
+      };
+
+      const categoryMatches = await Category.find({
+        $or: [
+          { name: categoryRegex },
+          { fullPath: categoryRegex },
+        ],
+      })
+        .limit(2)
+        .lean();
+
+      if (categoryMatches.length === 1) {
+        category = categoryMatches[0];
+      }
+    }
+
+    // Ambiguous or missing category: leave unresolved.
+
+    // ==========================================================
     // LOCATION LOOKUP
-    // ============================================================
+    // Optional. ID first, then unique exact name.
+    // Ambiguous locations must never stop draft creation.
+    // ==========================================================
 
     let location = null;
 
-    if (locationName && cleanString(locationName)) {
-      const cleanLocationName = cleanString(locationName);
+    const requestedLocationRef = cleanString(
+      aiData.locationRef
+    );
 
-      const escapedLocationName = cleanLocationName.replace(
-        /[.*+?^${}()|[\]\\]/g,
-        "\\$&"
-      );
+    const cleanLocationName = cleanString(locationName);
 
+    if (isValidObjectId(requestedLocationRef)) {
+      location = await Location.findById(
+        requestedLocationRef
+      ).lean();
+    }
+
+    if (!location && cleanLocationName) {
       const locationMatches = await Location.find({
         name: {
-          $regex: `^${escapedLocationName}$`,
+          $regex: `^${escapeRegex(cleanLocationName)}$`,
           $options: "i",
         },
       })
@@ -2734,21 +2783,14 @@ exports.aiCreateProperty = async (req, res) => {
       if (locationMatches.length === 1) {
         location = locationMatches[0];
       }
-
-      if (locationMatches.length > 1) {
-        return res.status(400).json({
-          success: false,
-          message:
-            `Multiple locations named "${cleanLocationName}" were found. ` +
-            "Please select the correct location manually in the admin panel.",
-          code: "AMBIGUOUS_LOCATION",
-        });
-      }
     }
 
-    // ============================================================
+    // Missing or ambiguous location is not an error.
+    // Do not preserve an unresolved name in locationData.
+
+    // ==========================================================
     // SLUG GENERATION
-    // ============================================================
+    // ==========================================================
 
     const slugBase = cleanTitle
       .toLowerCase()
@@ -2766,23 +2808,18 @@ exports.aiCreateProperty = async (req, res) => {
     let slug = slugBase;
     let slugCounter = 2;
 
-    while (
-      await Property.exists({
-        slug,
-        isDeleted: false,
-        status: "published",
-        isActive: true,
-      })
-    ) {
+    while (await Property.exists({ slug })) {
       slug = `${slugBase}-${slugCounter}`;
       slugCounter++;
     }
 
-    // ============================================================
+    // ==========================================================
     // CLEAN UNIT CONFIGURATIONS
-    // ============================================================
+    // ==========================================================
 
-    const safeUnitConfigurations = safeArray(unitConfigurations)
+    const safeUnitConfigurations = safeArray(
+      unitConfigurations
+    )
       .filter(
         (item) =>
           item &&
@@ -2799,9 +2836,9 @@ exports.aiCreateProperty = async (req, res) => {
         balconies: nullableString(item.balconies),
       }));
 
-    // ============================================================
+    // ==========================================================
     // CLEAN FLOOR PLANS
-    // ============================================================
+    // ==========================================================
 
     const safeFloorPlans = safeArray(floorPlans)
       .filter(
@@ -2825,11 +2862,13 @@ exports.aiCreateProperty = async (req, res) => {
         image: "",
       }));
 
-    // ============================================================
+    // ==========================================================
     // CLEAN PLOT CONFIGURATIONS
-    // ============================================================
+    // ==========================================================
 
-    const safePlotConfigurations = safeArray(plotConfigurations)
+    const safePlotConfigurations = safeArray(
+      plotConfigurations
+    )
       .filter(
         (item) =>
           item &&
@@ -2849,9 +2888,9 @@ exports.aiCreateProperty = async (req, res) => {
         image: "",
       }));
 
-    // ============================================================
+    // ==========================================================
     // CLEAN HIGHLIGHTS
-    // ============================================================
+    // ==========================================================
 
     const safeHighlights = safeArray(highlights)
       .filter(
@@ -2866,9 +2905,9 @@ exports.aiCreateProperty = async (req, res) => {
         icon: "",
       }));
 
-    // ============================================================
+    // ==========================================================
     // CLEAN AMENITIES
-    // ============================================================
+    // ==========================================================
 
     const safeAmenities = safeArray(amenities)
       .filter(
@@ -2883,9 +2922,9 @@ exports.aiCreateProperty = async (req, res) => {
         icon: "",
       }));
 
-    // ============================================================
+    // ==========================================================
     // CLEAN LANDMARKS
-    // ============================================================
+    // ==========================================================
 
     const safeLandmarks = safeArray(landmarks)
       .filter(
@@ -2901,9 +2940,9 @@ exports.aiCreateProperty = async (req, res) => {
         icon: "",
       }));
 
-    // ============================================================
+    // ==========================================================
     // CLEAN FEATURE BAR
-    // ============================================================
+    // ==========================================================
 
     const safeFeatureBar = safeArray(featureBar)
       .filter(
@@ -2918,9 +2957,9 @@ exports.aiCreateProperty = async (req, res) => {
         icon: "",
       }));
 
-    // ============================================================
+    // ==========================================================
     // OVERVIEW CONTENT
-    // ============================================================
+    // ==========================================================
 
     const safeOverviewContent = safeObject(overviewContent);
 
@@ -2980,12 +3019,13 @@ exports.aiCreateProperty = async (req, res) => {
       bottomStripFeature3: "",
     };
 
-    // ============================================================
+    // ==========================================================
     // CONFIGURATION CONTENT
-    // ============================================================
+    // ==========================================================
 
-    const safeConfigurationContent =
-      safeObject(configurationContent);
+    const safeConfigurationContent = safeObject(
+      configurationContent
+    );
 
     const safeConfigurationFeatures = safeArray(
       safeConfigurationContent.features
@@ -3019,12 +3059,11 @@ exports.aiCreateProperty = async (req, res) => {
       buttonText: "",
     };
 
-    // ============================================================
+    // ==========================================================
     // LOCATION CONTENT
-    // ============================================================
+    // ==========================================================
 
-    const safeLocationContent =
-      safeObject(locationContent);
+    const safeLocationContent = safeObject(locationContent);
 
     const safeLocationBottomStrip = safeArray(
       locationBottomStrip
@@ -3044,9 +3083,10 @@ exports.aiCreateProperty = async (req, res) => {
     const locationData = {
       locationRef: location?._id || null,
 
-      locationName:
-        location?.name ||
-        cleanString(locationName),
+      // Empty unless a unique location was resolved.
+      locationName: location
+        ? location.name || location.locationName || ""
+        : "",
 
       customLocation: "",
 
@@ -3121,12 +3161,13 @@ exports.aiCreateProperty = async (req, res) => {
       bottomStrip: safeLocationBottomStrip,
     };
 
-    // ============================================================
+    // ==========================================================
     // MASTER PLAN
-    // ============================================================
+    // ==========================================================
 
-    const safeMasterPlanContent =
-      safeObject(masterPlanContent);
+    const safeMasterPlanContent = safeObject(
+      masterPlanContent
+    );
 
     const safeMasterPlanBottomStrip = safeArray(
       safeMasterPlanContent.bottomStrip
@@ -3185,12 +3226,11 @@ exports.aiCreateProperty = async (req, res) => {
       bottomStrip: safeMasterPlanBottomStrip,
     };
 
-    // ============================================================
+    // ==========================================================
     // SEO
-    // ============================================================
+    // ==========================================================
 
-    const safeSeoContent =
-      safeObject(seoContent);
+    const safeSeoContent = safeObject(seoContent);
 
     const safeSeoKeywords = safeArray(
       safeSeoContent.keywords
@@ -3219,12 +3259,13 @@ exports.aiCreateProperty = async (req, res) => {
       keywords: safeSeoKeywords,
     };
 
-    // ============================================================
+    // ==========================================================
     // FAQ SECTION
-    // ============================================================
+    // ==========================================================
 
-    const safeFaqSectionContent =
-      safeObject(faqSectionContent);
+    const safeFaqSectionContent = safeObject(
+      faqSectionContent
+    );
 
     const faqSection = {
       sectionNumber: "",
@@ -3286,9 +3327,9 @@ exports.aiCreateProperty = async (req, res) => {
       ),
     };
 
-    // ============================================================
+    // ==========================================================
     // FAQS
-    // ============================================================
+    // ==========================================================
 
     const safeFaqs = safeArray(faqs)
       .filter(
@@ -3303,270 +3344,175 @@ exports.aiCreateProperty = async (req, res) => {
         answer: cleanString(item.answer),
       }));
 
-    // ============================================================
+    // ==========================================================
     // CTA
-    // ============================================================
+    // ==========================================================
 
-    const safeCtaContent =
-      safeObject(ctaContent);
+    const safeCtaContent = safeObject(ctaContent);
 
     const cta = {
-      title: nullableString(
-        safeCtaContent.title
-      ),
-      subtitle: nullableString(
-        safeCtaContent.subtitle
-      ),
+      title: nullableString(safeCtaContent.title),
+      subtitle: nullableString(safeCtaContent.subtitle),
       buttonText: nullableString(
         safeCtaContent.buttonText
       ),
     };
 
-    // ============================================================
+    // ==========================================================
     // CONFIGURATION TYPE
-    // ============================================================
+    // ==========================================================
 
-    let safeConfigurationType = null;
-
-    if (
+    const safeConfigurationType =
       configurationType === "Apartments" ||
       configurationType === "Plots"
-    ) {
-      safeConfigurationType = configurationType;
-    }
+        ? configurationType
+        : null;
 
-    // ============================================================
+    // ==========================================================
     // DEVELOPER DATA
-    // ============================================================
+    // ==========================================================
 
     const developerData = {
       developerRef: developer?._id || null,
 
-      developerName:
-        developer?.name ||
-        cleanString(developerName),
+      developerName: developer
+        ? developer.name || developer.developerName || ""
+        : "",
 
-      developerLogo:
-        developer?.logo || "",
+      developerLogo: developer
+        ? developer.logo || developer.developerLogo || ""
+        : "",
 
-      developerImage:
-        developer?.image || "",
+      developerImage: developer
+        ? developer.image || developer.developerImage || ""
+        : "",
     };
 
-    // ============================================================
+    // ==========================================================
     // CATEGORY DATA
-    // ============================================================
+    // ==========================================================
 
     const categoryData = {
       categoryRef: category?._id || null,
 
-      categoryName:
-        category?.name ||
-        cleanString(categoryName),
+      categoryName: category
+        ? category.name || category.categoryName || ""
+        : "",
     };
 
-    // ============================================================
+    // ==========================================================
     // PROPERTY PAYLOAD
-    // ============================================================
+    // ==========================================================
 
     const propertyPayload = {
       slug,
 
       marketType: normalizedMarketType,
 
-      // Backend-controlled.
+      // Backend-controlled draft values.
       isActive: true,
       status: "draft",
       isDeleted: false,
       deletedFromStatus: null,
-
       propertyTag: ["Normal"],
 
-      // ========================================================
       // CORE DETAILS
-      // ========================================================
-
       coreDetails: {
         title: cleanTitle,
 
-        developerRef:
-          developerData.developerRef,
+        developerRef: developerData.developerRef,
+        developerName: developerData.developerName,
+        developerImage: developerData.developerImage,
+        developerLogo: developerData.developerLogo,
 
-        developerName:
-          developerData.developerName,
-
-        developerImage:
-          developerData.developerImage,
-
-        developerLogo:
-          developerData.developerLogo,
-
-        startingPrice:
-          safeNumber(startingPrice),
-
-        maxPrice:
-          safeNumber(maxPrice),
-
-        priceOnRequest:
-          safeBoolean(priceOnRequest),
+        startingPrice: safeNumber(startingPrice),
+        maxPrice: safeNumber(maxPrice),
+        priceOnRequest: safeBoolean(priceOnRequest),
       },
 
-      // ========================================================
       // CATEGORY
-      // ========================================================
-
       categoryData,
 
-      // ========================================================
       // HERO
-      // ========================================================
-
       heroSection: {
-        propertyStatus:
-          nullableString(propertyStatus),
-
-        heroDescription:
-          nullableString(heroDescription),
-
+        propertyStatus: nullableString(propertyStatus),
+        heroDescription: nullableString(heroDescription),
         brochureButtonText: "",
-
         videoButtonText: "",
-
         taglineItems: [],
       },
 
-      // ========================================================
       // KEY METRICS
-      // ========================================================
-
       keyMetrics: {
-        landArea:
-          nullableString(landArea),
-
-        possession:
-          nullableString(possession),
-
-        status:
-          nullableString(propertyStatus),
-
-        totalUnits:
-          safeNumber(totalUnits),
-
-        totalTowers:
-          safeNumber(totalTowers),
-
-        floors:
-          nullableString(floors),
-
-        reraNumber:
-          nullableString(reraNumber),
-
+        landArea: nullableString(landArea),
+        possession: nullableString(possession),
+        status: nullableString(propertyStatus),
+        totalUnits: safeNumber(totalUnits),
+        totalTowers: safeNumber(totalTowers),
+        floors: nullableString(floors),
+        reraNumber: nullableString(reraNumber),
         customMetrics: [],
       },
 
-      // ========================================================
       // OVERVIEW
-      // ========================================================
-
       overview: overviewData,
 
-      // ========================================================
       // CONFIGURATION SECTION
-      // ========================================================
-
       configurationSection,
 
-      // ========================================================
       // UNIT CONFIGURATIONS
-      // ========================================================
+      unitConfigurations: safeUnitConfigurations,
 
-      unitConfigurations:
-        safeUnitConfigurations,
-
-      // ========================================================
       // LOCATION
-      // ========================================================
-
       locationData,
 
-      // ========================================================
       // MASTER PLAN
-      // ========================================================
-
       masterPlanSection,
 
-      // ========================================================
       // GATED CONTENT
-      // ========================================================
-
       gatedContent: {
         brochurePdfUrl: "",
-
-        configurationType:
-          safeConfigurationType,
-
-        floorPlans:
-          safeFloorPlans,
-
-        plotConfigurations:
-          safePlotConfigurations,
-
+        configurationType: safeConfigurationType,
+        floorPlans: safeFloorPlans,
+        plotConfigurations: safePlotConfigurations,
         requireLogin: false,
       },
 
-      // ========================================================
       // MEDIA
-      // ========================================================
-
       media: {
         heroImageUrl: "",
         gallery: [],
         walkthroughUrl: "",
       },
 
-      // ========================================================
       // SEO
-      // ========================================================
-
       seoEngine,
 
-      // ========================================================
       // FAQ
-      // ========================================================
-
       faqSection,
-
       faqs: safeFaqs,
 
-      // ========================================================
       // CTA
-      // ========================================================
-
       cta,
 
-      // ========================================================
       // AUTHENTICATED CREATOR
-      // ========================================================
-
       createdBy: req.user.id,
     };
 
-    // ============================================================
+    // ==========================================================
     // CREATE DRAFT
-    // ============================================================
+    // ==========================================================
 
-    const property =
-      await Property.create(propertyPayload);
+    const property = await Property.create(propertyPayload);
 
-    // ============================================================
+    // ==========================================================
     // RESPONSE
-    // ============================================================
+    // ==========================================================
 
     return res.status(201).json({
       success: true,
 
-      message:
-        "AI property draft created successfully.",
+      message: "AI property draft created successfully.",
 
       draftId: property._id,
 
@@ -3574,67 +3520,36 @@ exports.aiCreateProperty = async (req, res) => {
 
       resolution: {
         developer: {
-          requested:
-            developerName || null,
-
-          resolved:
-            !!developer,
-
-          id:
-            developer?._id || null,
-
-          name:
-            developer?.name || null,
+          requested: cleanDeveloperName || null,
+          resolved: Boolean(developer),
+          id: developer?._id || null,
+          name: developer?.name || null,
         },
 
         category: {
-          requested:
-            categoryName || null,
-
-          resolved:
-            !!category,
-
-          id:
-            category?._id || null,
-
-          name:
-            category?.name || null,
+          requested: cleanCategoryName || null,
+          resolved: Boolean(category),
+          id: category?._id || null,
+          name: category?.name || null,
         },
 
         location: {
-          requested:
-            locationName || null,
-
-          resolved:
-            !!location,
-
-          id:
-            location?._id || null,
-
-          name:
-            location?.name || null,
+          requested: cleanLocationName || null,
+          resolved: Boolean(location),
+          id: location?._id || null,
+          name: location?.name || null,
         },
       },
 
       reviewRequired: {
-        marketType:
-          normalizedMarketType === null,
-
-        developer:
-          !developer,
-
-        category:
-          !category,
-
-        location:
-          !location,
+        marketType: normalizedMarketType === null,
+        developer: !developer,
+        category: !category,
+        location: !location,
       },
     });
   } catch (error) {
-    console.error(
-      "AI CREATE PROPERTY ERROR:",
-      error
-    );
+    console.error("AI CREATE PROPERTY ERROR:", error);
 
     // ==========================================================
     // MONGOOSE VALIDATION ERROR
@@ -3643,19 +3558,12 @@ exports.aiCreateProperty = async (req, res) => {
     if (error.name === "ValidationError") {
       return res.status(400).json({
         success: false,
-
-        message:
-          "Property validation failed.",
-
-        errors:
-          Object.fromEntries(
-            Object.entries(error.errors).map(
-              ([key, value]) => [
-                key,
-                value.message,
-              ]
-            )
-          ),
+        message: "Property validation failed.",
+        errors: Object.fromEntries(
+          Object.entries(error.errors).map(
+            ([key, value]) => [key, value.message]
+          )
+        ),
       });
     }
 
@@ -3666,12 +3574,9 @@ exports.aiCreateProperty = async (req, res) => {
     if (error.code === 11000) {
       return res.status(409).json({
         success: false,
-
         message:
           "A property with the same unique value already exists.",
-
-        duplicateFields:
-          error.keyValue || {},
+        duplicateFields: error.keyValue || {},
       });
     }
 
@@ -3681,10 +3586,7 @@ exports.aiCreateProperty = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-
-      message:
-        "Failed to create AI property draft.",
-
+      message: "Failed to create AI property draft.",
       error:
         process.env.NODE_ENV === "production"
           ? undefined
@@ -3692,6 +3594,7 @@ exports.aiCreateProperty = async (req, res) => {
     });
   }
 };
+
 
 exports.getPropertySeoList = async (
   req,
