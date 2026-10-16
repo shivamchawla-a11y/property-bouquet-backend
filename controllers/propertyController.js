@@ -2519,1319 +2519,967 @@ exports.getPropertyById = async (
 
 
 // ============================================================
-// AI CREATE PROPERTY
-// ============================================================
-// Creates an AI-generated PROPERTY DRAFT only.
-//
-// RULES:
-// - AI does not create MongoDB ObjectIds.
-// - Backend generates the property slug.
-// - Backend controls status, isDeleted, isActive and propertyTag.
-// - Developer, category and location are optional.
-// - Reference lookup uses an ID when supplied, then a unique
-//   exact-name match.
-// - Ambiguous or missing references remain empty.
-// - Never select an arbitrary duplicate record.
-// - Never automatically create developer/category/location.
-// - Property is always created as a draft.
-// - AI drafts do not inherit unrelated template copy.
+// AI CREATE PROPERTY — PROPERTY BOUQUET
+// Creates a reviewable draft from AI-generated property data.
+// NEVER publishes an AI-generated property automatically.
 // ============================================================
 
 exports.aiCreateProperty = async (req, res) => {
   try {
-    const aiData = req.body?.aiData;
+    const mongoose = require("mongoose");
 
-    // ==========================================================
-    // BASIC VALIDATION
-    // ==========================================================
+    // --------------------------------------------------------
+    // 1. AUTHENTICATION
+    // --------------------------------------------------------
 
-    if (
-      !aiData ||
-      typeof aiData !== "object" ||
-      Array.isArray(aiData)
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "AI property data is required.",
-      });
-    }
+    const userId = req.user?.id || req.user?._id;
 
-    if (!req.user?.id) {
+    if (!userId || !mongoose.Types.ObjectId.isValid(String(userId))) {
       return res.status(401).json({
         success: false,
-        message: "Authenticated user is required.",
+        message: "Authentication required to create an AI property draft.",
       });
     }
 
-    // ==========================================================
-    // SAFE HELPERS
-    // ==========================================================
+    // --------------------------------------------------------
+    // 2. INPUT VALIDATION
+    // --------------------------------------------------------
 
-    const cleanString = (value) => {
-      if (value === null || value === undefined) return "";
+    const input = req.body?.aiData;
 
-      if (
-        typeof value === "object" ||
-        typeof value === "function"
-      ) {
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      return res.status(400).json({
+        success: false,
+        message: "aiData must be a valid JSON object.",
+      });
+    }
+
+    const cleanString = (value, maxLength = 20000) => {
+      if (typeof value !== "string" && typeof value !== "number") {
         return "";
       }
 
-      return String(value).trim();
+      return String(value)
+        .replace(/\u0000/g, "")
+        .trim()
+        .slice(0, maxLength);
     };
-
-    const nullableString = (value) => cleanString(value);
-
-    const safeNumber = (value) => {
-      if (
-        value === null ||
-        value === undefined ||
-        value === ""
-      ) {
-        return null;
-      }
-
-      // Do not convert formatted prices or area strings
-      // such as "₹1.5 Cr" or "1,250 sq. ft." into numbers.
-      if (
-        typeof value === "string" &&
-        !/^-?\d+(\.\d+)?$/.test(value.trim())
-      ) {
-        return null;
-      }
-
-      const number = Number(value);
-
-      return Number.isFinite(number) ? number : null;
-    };
-
-    const safeBoolean = (value) => value === true;
-
-    const safeArray = (value) =>
-      Array.isArray(value) ? value : [];
 
     const safeObject = (value) =>
-      value &&
-      typeof value === "object" &&
-      !Array.isArray(value)
+      value && typeof value === "object" && !Array.isArray(value)
         ? value
         : {};
 
-    const isValidObjectId = (value) =>
-      /^[a-f\d]{24}$/i.test(cleanString(value));
+    const safeArray = (value) => (Array.isArray(value) ? value : []);
+
+    const safeBoolean = (value, fallback = false) =>
+      typeof value === "boolean" ? value : fallback;
+
+    const safeNumber = (value) => {
+      if (typeof value === "number") {
+        return Number.isFinite(value) && value >= 0 ? value : null;
+      }
+
+      if (typeof value !== "string") return null;
+
+      const normalized = value.trim();
+
+      // Accept plain numbers only.
+      // Do not guess what "₹1.95 Cr", "1,950 sq ft", etc. mean.
+      if (!/^\d+(?:\.\d+)?$/.test(normalized)) return null;
+
+      const number = Number(normalized);
+
+      return Number.isFinite(number) && number >= 0 ? number : null;
+    };
+
+    const safeId = (value) => {
+      const id = cleanString(value, 100);
+
+      return mongoose.Types.ObjectId.isValid(id) ? id : null;
+    };
+
+    const safeTextArray = (value, maxItems = 50, maxLength = 1000) =>
+      safeArray(value)
+        .slice(0, maxItems)
+        .map((item) => cleanString(item, maxLength))
+        .filter(Boolean);
 
     const escapeRegex = (value) =>
       value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-    const cleanItems = (value, mapper, isValid) =>
-      safeArray(value)
-        .filter(
-          (item) =>
-            item &&
-            typeof item === "object" &&
-            !Array.isArray(item) &&
-            isValid(item)
-        )
-        .map(mapper);
-
-    const firstNonEmpty = (...values) => {
+    const getFirstString = (...values) => {
       for (const value of values) {
-        const cleaned = cleanString(value);
-
-        if (cleaned) return cleaned;
+        const result = cleanString(value);
+        if (result) return result;
       }
 
       return "";
     };
 
-    // ==========================================================
-    // EXTRACT AI VALUES
-    // ==========================================================
+    // Do not accept an arbitrary object ID supplied by AI as proof
+    // that the corresponding developer/category/location is correct.
+    // Every reference must be verified against the database.
 
-    const {
-      title,
-      marketType,
-      developerName,
-      categoryName,
-      startingPrice,
-      maxPrice,
-      priceOnRequest,
-      locationName,
-      address,
-      heroDescription,
-      propertyStatus,
-      landArea,
-      possession,
-      totalUnits,
-      totalTowers,
-      floors,
-      reraNumber,
-      configurationType,
-      unitConfigurations,
-      plotConfigurations,
-      highlights,
-      amenities,
-      landmarks,
-      overviewDescription,
-      featureBar,
-      overviewContent,
-      configurationContent,
-      locationContent,
-      locationBottomStrip,
-      masterPlanContent,
-      floorPlans,
-      seoContent,
-      faqSectionContent,
-      faqs,
-      ctaContent,
-    } = aiData;
+    const resolveReference = async ({
+      Model,
+      suppliedId,
+      suppliedName,
+      nameFields = ["name"],
+    }) => {
+      const id = safeId(suppliedId);
+      const name = cleanString(suppliedName, 300);
 
-    // ==========================================================
-    // TITLE
-    // ==========================================================
+      if (id) {
+        const record = await Model.findById(id)
+          .select("_id name slug")
+          .lean();
 
-    const cleanTitle = cleanString(title);
+        if (record) {
+          return {
+            record,
+            resolved: true,
+            method: "id",
+            suppliedName: name,
+          };
+        }
+      }
+
+      if (name) {
+        for (const field of nameFields) {
+          // Only search explicitly allowed schema fields.
+          if (!["name", "slug", "fullPath"].includes(field)) continue;
+
+          const record = await Model.findOne({
+            [field]: {
+              $regex: `^${escapeRegex(name)}$`,
+              $options: "i",
+            },
+          })
+            .select("_id name slug")
+            .lean();
+
+          if (record) {
+            return {
+              record,
+              resolved: true,
+              method: `exact-${field}`,
+              suppliedName: name,
+            };
+          }
+        }
+      }
+
+      return {
+        record: null,
+        resolved: false,
+        method: null,
+        suppliedName: name,
+      };
+    };
+
+    // --------------------------------------------------------
+    // 3. READ INPUT SECTIONS
+    // --------------------------------------------------------
+
+    const core = safeObject(input.coreDetails);
+    const categoryInput = safeObject(input.categoryData);
+    const heroInput = safeObject(input.heroSection);
+    const metricsInput = safeObject(input.keyMetrics);
+    const overviewInput = safeObject(input.overview);
+    const configurationInput = safeObject(input.configurationSection);
+    const locationInput = safeObject(input.locationData);
+    const masterPlanInput = safeObject(input.masterPlanSection);
+    const gatedInput = safeObject(input.gatedContent);
+    const seoInput = safeObject(input.seoEngine);
+    const faqSectionInput = safeObject(input.faqSection);
+    const ctaInput = safeObject(input.cta);
+
+    const overviewContent = safeObject(input.overviewContent);
+    const configurationContent = safeObject(input.configurationContent);
+    const locationContent = safeObject(input.locationContent);
+    const masterPlanContent = safeObject(input.masterPlanContent);
+    const seoContent = safeObject(input.seoContent);
+    const faqSectionContent = safeObject(input.faqSectionContent);
+    const ctaContent = safeObject(input.ctaContent);
+
+    const cleanTitle = getFirstString(
+      core.title,
+      input.title,
+      input.projectName,
+      input.propertyName
+    );
 
     if (!cleanTitle) {
       return res.status(400).json({
         success: false,
-        message:
-          "AI could not identify the property/project name. " +
-          "Please provide a clearer property name.",
+        message: "A property title or project name is required.",
       });
     }
 
-    // ==========================================================
-    // MARKET TYPE
-    // ==========================================================
-
-    const normalizedMarketType =
-      marketType === "Primary" || marketType === "Resale"
-        ? marketType
-        : null;
-
-    // ==========================================================
-    // DEVELOPER LOOKUP
-    // Resolve by ID first, then by unique exact name.
-    // Never select an arbitrary duplicate.
-    // ==========================================================
-
-    let developer = null;
-
-    const requestedDeveloperRef = cleanString(
-      aiData.developerRef
+    const marketTypeInput = getFirstString(
+      input.marketType,
+      core.marketType
     );
 
-    const cleanDeveloperName = cleanString(developerName);
+    const marketType = ["Primary", "Resale"].includes(marketTypeInput)
+      ? marketTypeInput
+      : "Primary";
 
-    if (isValidObjectId(requestedDeveloperRef)) {
-      developer = await Developer.findById(
-        requestedDeveloperRef
-      ).lean();
-    }
-
-    if (!developer && cleanDeveloperName) {
-      const developerMatches = await Developer.find({
-        name: {
-          $regex: `^${escapeRegex(cleanDeveloperName)}$`,
-          $options: "i",
-        },
-      })
-        .limit(2)
-        .lean();
-
-      if (developerMatches.length === 1) {
-        developer = developerMatches[0];
-      }
-    }
-
-    // ==========================================================
-    // CATEGORY LOOKUP
-    // Resolve by ID first, then by unique exact name/fullPath.
-    // ==========================================================
-
-    let category = null;
-
-    const requestedCategoryRef = cleanString(
-      aiData.categoryRef
+    const developerName = getFirstString(
+      core.developerName,
+      input.developerName,
+      input.developer
     );
 
-    const cleanCategoryName = cleanString(categoryName);
-
-    if (isValidObjectId(requestedCategoryRef)) {
-      category = await Category.findById(
-        requestedCategoryRef
-      ).lean();
-    }
-
-    if (!category && cleanCategoryName) {
-      const categoryRegex = {
-        $regex: `^${escapeRegex(cleanCategoryName)}$`,
-        $options: "i",
-      };
-
-      const categoryMatches = await Category.find({
-        $or: [
-          { name: categoryRegex },
-          { fullPath: categoryRegex },
-        ],
-      })
-        .limit(2)
-        .lean();
-
-      if (categoryMatches.length === 1) {
-        category = categoryMatches[0];
-      }
-    }
-
-    // ==========================================================
-    // LOCATION LOOKUP
-    // Resolve by ID first, then by unique exact name.
-    // Ambiguous locations must not block draft creation.
-    // ==========================================================
-
-    let location = null;
-
-    const requestedLocationRef = cleanString(
-      aiData.locationRef
+    const categoryName = getFirstString(
+      categoryInput.categoryName,
+      input.categoryName,
+      input.propertyType
     );
 
-    const cleanLocationName = cleanString(locationName);
+    const locationName = getFirstString(
+      locationInput.locationName,
+      input.locationName,
+      input.location
+    );
 
-    if (isValidObjectId(requestedLocationRef)) {
-      location = await Location.findById(
-        requestedLocationRef
-      ).lean();
+    const locationAddress = getFirstString(
+      locationInput.address,
+      input.address
+    );
+
+    // --------------------------------------------------------
+    // 4. RESOLVE DATABASE REFERENCES
+    // --------------------------------------------------------
+
+    const [developerResolution, categoryResolution, locationResolution] =
+      await Promise.all([
+        resolveReference({
+          Model: Developer,
+          suppliedId: core.developerRef || input.developerRef,
+          suppliedName: developerName,
+          nameFields: ["name"],
+        }),
+
+        resolveReference({
+          Model: Category,
+          suppliedId:
+            categoryInput.categoryRef ||
+            input.categoryRef,
+          suppliedName: categoryName,
+          nameFields: ["name", "slug", "fullPath"],
+        }),
+
+        resolveReference({
+          Model: Location,
+          suppliedId:
+            locationInput.locationRef ||
+            input.locationRef,
+          suppliedName: locationName,
+          nameFields: ["name", "slug"],
+        }),
+      ]);
+
+    const developerRecord = developerResolution.record;
+    const categoryRecord = categoryResolution.record;
+    const locationRecord = locationResolution.record;
+
+    const resolution = {
+      developer: {
+        resolved: Boolean(developerRecord),
+        method: developerResolution.method,
+        suppliedName: developerName,
+        id: developerRecord?._id?.toString() || null,
+      },
+      category: {
+        resolved: Boolean(categoryRecord),
+        method: categoryResolution.method,
+        suppliedName: categoryName,
+        id: categoryRecord?._id?.toString() || null,
+      },
+      location: {
+        resolved: Boolean(locationRecord),
+        method: locationResolution.method,
+        suppliedName: locationName,
+        id: locationRecord?._id?.toString() || null,
+      },
+    };
+
+    // --------------------------------------------------------
+    // 5. SAFE SUBDOCUMENT MAPPERS
+    // --------------------------------------------------------
+
+    const mapTextItems = (
+      items,
+      {
+        titleKeys = ["title", "name", "heading"],
+        descriptionKeys = ["description", "desc", "subtitle"],
+        maxItems = 40,
+      } = {}
+    ) =>
+      safeArray(items)
+        .slice(0, maxItems)
+        .map((raw) => {
+          const item = safeObject(raw);
+
+          return {
+            title: getFirstString(
+              ...titleKeys.map((key) => item[key])
+            ),
+            description: getFirstString(
+              ...descriptionKeys.map((key) => item[key])
+            ),
+          };
+        })
+        .filter((item) => item.title || item.description);
+
+    const mapFeatureItems = (items, maxItems = 40) =>
+      safeArray(items)
+        .slice(0, maxItems)
+        .map((raw) => {
+          const item = safeObject(raw);
+
+          return {
+            heading: getFirstString(
+              item.heading,
+              item.title,
+              item.name
+            ),
+            subheading: getFirstString(
+              item.subheading,
+              item.description,
+              item.desc
+            ),
+          };
+        })
+        .filter((item) => item.heading || item.subheading);
+
+    const mapBottomStrip = (items, maxItems = 12) =>
+      safeArray(items)
+        .slice(0, maxItems)
+        .map((raw) => {
+          const item = safeObject(raw);
+
+          return {
+            title: getFirstString(item.title, item.heading, item.name),
+            desc: getFirstString(
+              item.desc,
+              item.description,
+              item.subheading
+            ),
+          };
+        })
+        .filter((item) => item.title || item.desc);
+
+    const mapConfigurations = (items, maxItems = 40) =>
+      safeArray(items)
+        .slice(0, maxItems)
+        .map((raw) => {
+          const item = safeObject(raw);
+
+          return {
+            unitType: getFirstString(
+              item.unitType,
+              item.configuration,
+              item.type,
+              item.name
+            ),
+            area: getFirstString(item.area, item.size, item.areaRange),
+            price: getFirstString(item.price, item.startingPrice),
+            paymentPlan: getFirstString(
+              item.paymentPlan,
+              item.paymentTerms
+            ),
+            bedrooms: getFirstString(item.bedrooms, item.bhk),
+            bathrooms: getFirstString(item.bathrooms),
+            balconies: getFirstString(item.balconies),
+          };
+        })
+        .filter(
+          (item) =>
+            item.unitType ||
+            item.area ||
+            item.price ||
+            item.bedrooms
+        );
+
+    const mapPlotConfigurations = (items, maxItems = 40) =>
+      safeArray(items)
+        .slice(0, maxItems)
+        .map((raw) => {
+          const item = safeObject(raw);
+
+          return {
+            plotType: getFirstString(
+              item.plotType,
+              item.unitType,
+              item.type,
+              item.name
+            ),
+            area: getFirstString(item.area, item.size, item.areaRange),
+            price: getFirstString(item.price, item.startingPrice),
+            paymentPlan: getFirstString(
+              item.paymentPlan,
+              item.paymentTerms
+            ),
+          };
+        })
+        .filter((item) => item.plotType || item.area || item.price);
+
+    const mapLandmarks = (items, maxItems = 40) =>
+      safeArray(items)
+        .slice(0, maxItems)
+        .map((raw) => {
+          const item = safeObject(raw);
+
+          return {
+            name: getFirstString(item.name, item.title),
+            distance: getFirstString(item.distance, item.distanceText),
+            subtitle: getFirstString(
+              item.subtitle,
+              item.description,
+              item.type
+            ),
+          };
+        })
+        .filter((item) => item.name);
+
+    const mapFaqs = (items, maxItems = 30) =>
+      safeArray(items)
+        .slice(0, maxItems)
+        .map((raw) => {
+          const item = safeObject(raw);
+
+          return {
+            question: getFirstString(item.question, item.title),
+            answer: getFirstString(item.answer, item.content),
+          };
+        })
+        .filter((item) => item.question && item.answer);
+
+    const mapCustomMetrics = (items, maxItems = 20) =>
+      safeArray(items)
+        .slice(0, maxItems)
+        .map((raw) => {
+          const item = safeObject(raw);
+
+          return {
+            label: getFirstString(item.label, item.title, item.name),
+            value: getFirstString(item.value, item.description),
+          };
+        })
+        .filter((item) => item.label && item.value);
+
+    const mapTaglineItems = (items) =>
+      safeTextArray(items, 12, 180);
+
+    // --------------------------------------------------------
+    // 6. CONFIGURATION TYPE
+    // Existing schema supports only Apartments and Plots.
+    // Do not pass an unsupported enum value into Mongoose.
+    // --------------------------------------------------------
+
+    const rawConfigurationType = getFirstString(
+      gatedInput.configurationType,
+      input.configurationType
+    );
+
+    const unitConfigurations = mapConfigurations(
+      input.unitConfigurations
+    );
+
+    const floorPlans = mapConfigurations(
+      gatedInput.floorPlans || input.floorPlans
+    );
+
+    const plotConfigurations = mapPlotConfigurations(
+      input.plotConfigurations || gatedInput.plotConfigurations
+    );
+
+    const allUnitConfigurations =
+      unitConfigurations.length > 0
+        ? unitConfigurations
+        : floorPlans;
+
+    let configurationType;
+
+    if (["Apartments", "Plots"].includes(rawConfigurationType)) {
+      configurationType = rawConfigurationType;
+    } else if (
+      /plot|land/i.test(categoryName) ||
+      plotConfigurations.length > 0
+    ) {
+      configurationType = "Plots";
+    } else {
+      // The existing schema does not support "Independent Floors".
+      // Map to Apartments for compatibility with the existing enum.
+      configurationType = "Apartments";
     }
 
-    if (!location && cleanLocationName) {
-      const locationMatches = await Location.find({
-        name: {
-          $regex: `^${escapeRegex(cleanLocationName)}$`,
-          $options: "i",
-        },
-      })
-        .limit(2)
-        .lean();
+    // --------------------------------------------------------
+    // 7. SLUG GENERATION
+    // Only published, non-deleted properties reserve a slug
+    // under the published partial unique index.
+    // --------------------------------------------------------
 
-      if (locationMatches.length === 1) {
-        location = locationMatches[0];
-      }
-    }
-
-    // ==========================================================
-    // SLUG GENERATION
-    // ==========================================================
-
-    const slugBase = cleanTitle
-      .toLowerCase()
-      .replace(/&/g, " and ")
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
-
-    if (!slugBase) {
-      return res.status(400).json({
-        success: false,
-        message: "Unable to generate a valid property slug.",
-      });
-    }
+    const slugBase =
+      cleanTitle
+        .toLowerCase()
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/&/g, " and ")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 170)
+        .replace(/-+$/g, "") || "property";
 
     let slug = slugBase;
     let slugCounter = 2;
 
-    while (await Property.exists({ slug })) {
+    while (
+      await Property.exists({
+        slug,
+        isDeleted: false,
+        status: "published",
+      })
+    ) {
       slug = `${slugBase}-${slugCounter}`;
-      slugCounter++;
+      slugCounter += 1;
     }
 
-    // ==========================================================
-    // CLEAN UNIT CONFIGURATIONS
-    // ==========================================================
+    // --------------------------------------------------------
+    // 8. BUILD PROPERTY PAYLOAD
+    // Explicitly create a draft. Never trust AI status fields.
+    // --------------------------------------------------------
 
-    const safeUnitConfigurations = cleanItems(
-      unitConfigurations,
-      (item) => ({
-        unitType: nullableString(item.unitType),
-        area: nullableString(item.area),
-        price: nullableString(item.price),
-        paymentPlan: nullableString(item.paymentPlan),
-        bedrooms: nullableString(item.bedrooms),
-        bathrooms: nullableString(item.bathrooms),
-        balconies: nullableString(item.balconies),
-      }),
-      (item) => Boolean(cleanString(item.unitType))
+    const priceOnRequest = safeBoolean(
+      core.priceOnRequest ?? input.priceOnRequest,
+      false
     );
 
-    // ==========================================================
-    // CLEAN FLOOR PLANS
-    // Preserve the information but not unverified image URLs.
-    // ==========================================================
-
-    const safeFloorPlans = cleanItems(
-      floorPlans,
-      (item) => ({
-        unitType: nullableString(item.unitType),
-        area: nullableString(item.area),
-        price: nullableString(item.price),
-        paymentPlan: nullableString(item.paymentPlan),
-        bedrooms: nullableString(item.bedrooms),
-        bathrooms: nullableString(item.bathrooms),
-        balconies: nullableString(item.balconies),
-        image: "",
-      }),
-      (item) =>
-        Boolean(
-          cleanString(item.unitType) ||
-          cleanString(item.area) ||
-          cleanString(item.price)
-        )
+    const startingPrice = safeNumber(
+      core.startingPrice ?? input.startingPrice
     );
 
-    // ==========================================================
-    // CLEAN PLOT CONFIGURATIONS
-    // ==========================================================
-
-    const safePlotConfigurations = cleanItems(
-      plotConfigurations,
-      (item) => ({
-        plotType: nullableString(item.plotType),
-        plotArea: nullableString(item.plotArea),
-        price: nullableString(item.price),
-        paymentPlan: nullableString(item.paymentPlan),
-        image: "",
-      }),
-      (item) =>
-        Boolean(
-          cleanString(item.plotType) ||
-          cleanString(item.plotArea) ||
-          cleanString(item.price) ||
-          cleanString(item.paymentPlan)
-        )
+    const maxPrice = safeNumber(
+      core.maxPrice ?? input.maxPrice
     );
 
-    // ==========================================================
-    // UNIT CONFIGURATION FALLBACK
-    //
-    // If the AI omitted unitConfigurations but supplied
-    // floorPlans, reuse their verified text fields.
-    // ==========================================================
-
-    const finalUnitConfigurations =
-      safeUnitConfigurations.length > 0
-        ? safeUnitConfigurations
-        : safeFloorPlans
-            .filter((item) => cleanString(item.unitType))
-            .map((item) => ({
-              unitType: item.unitType,
-              area: item.area,
-              price: item.price,
-              paymentPlan: item.paymentPlan,
-              bedrooms: item.bedrooms,
-              bathrooms: item.bathrooms,
-              balconies: item.balconies,
-            }));
-
-    // ==========================================================
-    // CLEAN HIGHLIGHTS
-    // ==========================================================
-
-    const safeHighlights = cleanItems(
-      highlights,
-      (item) => ({
-        heading: cleanString(item.heading),
-        subheading: cleanString(item.subheading),
-        icon: cleanString(item.icon),
-      }),
-      (item) => Boolean(cleanString(item.heading))
+    const heroDescription = getFirstString(
+      heroInput.heroDescription,
+      input.heroDescription,
+      overviewContent.heroDescription
     );
 
-    // ==========================================================
-    // CLEAN AMENITIES
-    // Keep only supplied amenities. Do not invent any here.
-    // ==========================================================
-
-    const safeAmenities = cleanItems(
-      amenities,
-      (item) => ({
-        heading: cleanString(item.heading),
-        subheading: cleanString(item.subheading),
-        icon: cleanString(item.icon),
-      }),
-      (item) => Boolean(cleanString(item.heading))
+    const overviewDescription = getFirstString(
+      overviewInput.description,
+      overviewContent.description,
+      input.overviewDescription,
+      input.description
     );
 
-    // ==========================================================
-    // CLEAN LANDMARKS
-    // ==========================================================
-
-    const safeLandmarks = cleanItems(
-      landmarks,
-      (item) => ({
-        name: cleanString(item.name),
-        distance: cleanString(item.distance),
-        subtitle: cleanString(item.subtitle),
-        icon: cleanString(item.icon),
-      }),
-      (item) => Boolean(cleanString(item.name))
-    );
-
-    // ==========================================================
-    // CLEAN FEATURE BAR
-    // ==========================================================
-
-    const safeFeatureBar = cleanItems(
-      featureBar,
-      (item) => ({
-        title: cleanString(item.title),
-        desc: cleanString(item.desc),
-        icon: cleanString(item.icon),
-      }),
-      (item) => Boolean(cleanString(item.title))
-    );
-
-    // ==========================================================
-    // OVERVIEW CONTENT
-    // ==========================================================
-
-    const safeOverviewContent = safeObject(overviewContent);
-
-    const safeOverviewDescription = firstNonEmpty(
-      overviewDescription,
-      safeOverviewContent.description
-    );
-
-    const safeOverviewBottomStrip = cleanItems(
-      safeOverviewContent.bottomStrip,
-      (item) => ({
-        title: cleanString(item.title),
-        desc: cleanString(item.desc),
-        icon: cleanString(item.icon),
-      }),
-      (item) => Boolean(cleanString(item.title))
-    );
-
-    const overviewData = {
-      aboutSectionNumber: nullableString(
-        safeOverviewContent.aboutSectionNumber
-      ),
-
-      aboutLabel: nullableString(
-        safeOverviewContent.aboutLabel
-      ),
-
-      aboutTitleLine1: nullableString(
-        safeOverviewContent.aboutTitleLine1
-      ),
-
-      aboutTitleLine2: nullableString(
-        safeOverviewContent.aboutTitleLine2
-      ),
-
-      description: nullableString(
-        safeOverviewDescription
-      ),
-
-      aboutParagraph2: nullableString(
-        safeOverviewContent.aboutParagraph2
-      ),
-
-      aboutImageUrl: "",
-
-      featureBar: safeFeatureBar,
-
-      highlightsHeading: nullableString(
-        safeOverviewContent.highlightsHeading
-      ),
-
-      highlightsSubheading: nullableString(
-        safeOverviewContent.highlightsSubheading
-      ),
-
-      highlightQuote: nullableString(
-        safeOverviewContent.highlightQuote
-      ),
-
-      amenitiesSectionNumber: nullableString(
-        safeOverviewContent.amenitiesSectionNumber
-      ),
-
-      amenitiesSectionLabel: nullableString(
-        safeOverviewContent.amenitiesSectionLabel
-      ),
-
-      amenitiesHeadingLine1: nullableString(
-        safeOverviewContent.amenitiesHeadingLine1
-      ),
-
-      amenitiesHeadingLine2: nullableString(
-        safeOverviewContent.amenitiesHeadingLine2
-      ),
-
-      amenitiesHeadingLine3: nullableString(
-        safeOverviewContent.amenitiesHeadingLine3
-      ),
-
-      amenitiesSubheading: nullableString(
-        safeOverviewContent.amenitiesSubheading
-      ),
-
-      highlights: safeHighlights,
-
-      amenities: safeAmenities,
-
-      bottomStripTitle1: nullableString(
-        safeOverviewContent.bottomStripTitle1
-      ),
-
-      bottomStripTitle2: nullableString(
-        safeOverviewContent.bottomStripTitle2
-      ),
-
-      bottomStripFeature1: nullableString(
-        safeOverviewContent.bottomStripFeature1
-      ),
-
-      bottomStripFeature2: nullableString(
-        safeOverviewContent.bottomStripFeature2
-      ),
-
-      bottomStripFeature3: nullableString(
-        safeOverviewContent.bottomStripFeature3
-      ),
-
-    };
-
-    // ==========================================================
-    // CONFIGURATION CONTENT
-    // ==========================================================
-
-    const safeConfigurationContent = safeObject(
-      configurationContent
-    );
-
-const safeConfigurationFeatures = safeArray(
-  safeConfigurationContent.features
-)
-  .map((item) => {
-    // The current schema expects strings, not objects.
-    if (typeof item === "string") {
-      return item.trim();
-    }
-
-    if (item && typeof item === "object") {
-      const title = cleanString(item.title);
-      const description = cleanString(item.description);
-
-      if (title && description) {
-        return `${title}: ${description}`;
-      }
-
-      return title || description;
-    }
-
-    return "";
-  })
-  .filter(Boolean);
-
-
-    const configurationSection = {
-      sectionNumber: nullableString(
-        safeConfigurationContent.sectionNumber
-      ),
-
-      sectionLabel: nullableString(
-        safeConfigurationContent.sectionLabel
-      ),
-
-      titleLine1: nullableString(
-        safeConfigurationContent.titleLine1
-      ),
-
-      titleLine2: nullableString(
-        safeConfigurationContent.titleLine2
-      ),
-
-      subheading: nullableString(
-        safeConfigurationContent.subheading
-      ),
-
-      features: safeConfigurationFeatures,
-
-      buttonText: nullableString(
-        safeConfigurationContent.buttonText
-      ),
-    };
-
-    // ==========================================================
-    // LOCATION CONTENT
-    // ==========================================================
-
-    const safeLocationContent = safeObject(locationContent);
-
-    const safeLocationBottomStrip = cleanItems(
-      locationBottomStrip,
-      (item) => ({
-        title: cleanString(item.title),
-        desc: cleanString(item.desc),
-        icon: cleanString(item.icon),
-      }),
-      (item) => Boolean(cleanString(item.title))
-    );
-
-    const locationData = {
-      locationRef: location?._id || null,
-
-      // Never store an unresolved location name as a resolved
-      // database location.
-      locationName: location
-        ? firstNonEmpty(
-            location.name,
-            location.locationName
-          )
-        : "",
-
-      customLocation: "",
-
-      address: nullableString(address),
-
-      // Never accept a raw iframe or unverified map embed URL
-      // from generated AI content.
-      mapEmbedUrl: "",
-
-      sectionNumber: nullableString(
-        safeLocationContent.sectionNumber
-      ),
-
-      topLabel: nullableString(
-        safeLocationContent.topLabel
-      ),
-
-      headingLine1: nullableString(
-        safeLocationContent.headingLine1
-      ),
-
-      headingHighlight: nullableString(
-        safeLocationContent.headingHighlight
-      ),
-
-      description: nullableString(
-        safeLocationContent.description
-      ),
-
-      leftCardTag: nullableString(
-        safeLocationContent.leftCardTag
-      ),
-
-      leftCardTitleLine1: nullableString(
-        safeLocationContent.leftCardTitleLine1
-      ),
-
-      leftCardTitleLine2: nullableString(
-        safeLocationContent.leftCardTitleLine2
-      ),
-
-      leftCardDescription: nullableString(
-        safeLocationContent.leftCardDescription
-      ),
-
-      mapSectionTag: nullableString(
-        safeLocationContent.mapSectionTag
-      ),
-
-      mapSectionTitle: nullableString(
-        safeLocationContent.mapSectionTitle
-      ),
-
-      badgeTitle: nullableString(
-        safeLocationContent.badgeTitle
-      ),
-
-      badgeSubtitle: nullableString(
-        safeLocationContent.badgeSubtitle
-      ),
-
-      floatingCardTag: nullableString(
-        safeLocationContent.floatingCardTag
-      ),
-
-      floatingCardTitle: nullableString(
-        safeLocationContent.floatingCardTitle
-      ),
-
-      floatingCardDescription: nullableString(
-        safeLocationContent.floatingCardDescription
-      ),
-
-      landmarks: safeLandmarks,
-
-      bottomStrip: safeLocationBottomStrip,
-    };
-
-    // ==========================================================
-    // MASTER PLAN
-    // ==========================================================
-
-    const safeMasterPlanContent = safeObject(
-      masterPlanContent
-    );
-
-    const safeMasterPlanBottomStrip = cleanItems(
-      safeMasterPlanContent.bottomStrip,
-      (item) => ({
-        title: cleanString(item.title),
-        desc: cleanString(item.desc),
-        icon: cleanString(item.icon),
-      }),
-      (item) => Boolean(cleanString(item.title))
-    );
-
-    const masterPlanSection = {
-      sectionNumber: nullableString(
-        safeMasterPlanContent.sectionNumber
-      ),
-
-      topLabel: nullableString(
-        safeMasterPlanContent.topLabel
-      ),
-
-      headingLine1: nullableString(
-        safeMasterPlanContent.headingLine1
-      ),
-
-      headingHighlight: nullableString(
-        safeMasterPlanContent.headingHighlight
-      ),
-
-      description: nullableString(
-        safeMasterPlanContent.description
-      ),
-
-      enableSideStrips:
-        safeMasterPlanContent.enableSideStrips === true,
-
-      topFloatingLabel: nullableString(
-        safeMasterPlanContent.topFloatingLabel
-      ),
-
-      centerTitle: nullableString(
-        safeMasterPlanContent.centerTitle
-      ),
-
-      centerDescription: nullableString(
-        safeMasterPlanContent.centerDescription
-      ),
-
-      buttonText: nullableString(
-        safeMasterPlanContent.buttonText
-      ),
-
-      // Keep this empty until a verified image URL is supplied
-      // by a trusted media/upload workflow.
-      masterPlanImage: "",
-
-      bottomStrip: safeMasterPlanBottomStrip,
-    };
-
-    // ==========================================================
-    // SEO
-    // ==========================================================
-
-    const safeSeoContent = safeObject(seoContent);
-
-    const safeSeoKeywords = [
-      ...new Set(
-        safeArray(safeSeoContent.keywords)
-          .filter(
-            (keyword) =>
-              typeof keyword === "string" &&
-              keyword.trim()
-          )
-          .map((keyword) => keyword.trim())
-      ),
-    ];
-
-    const seoEngine = {
-      hasCustomSEO:
-        Boolean(cleanString(safeSeoContent.metaTitle)) ||
-        Boolean(
-          cleanString(safeSeoContent.metaDescription)
-        ) ||
-        safeSeoKeywords.length > 0,
-
-      metaTitle: nullableString(
-        safeSeoContent.metaTitle
-      ),
-
-      metaDescription: nullableString(
-        safeSeoContent.metaDescription
-      ),
-
-      keywords: safeSeoKeywords,
-    };
-
-    // ==========================================================
-    // FAQ SECTION CONTENT
-    // ==========================================================
-
-    const safeFaqSectionContent = safeObject(
-      faqSectionContent
-    );
-
-    const faqSection = {
-      sectionNumber: nullableString(
-        safeFaqSectionContent.sectionNumber
-      ),
-
-      topLabel: nullableString(
-        safeFaqSectionContent.topLabel
-      ),
-
-      headingLine1: nullableString(
-        safeFaqSectionContent.headingLine1
-      ),
-
-      headingHighlight: nullableString(
-        safeFaqSectionContent.headingHighlight
-      ),
-
-      description: nullableString(
-        safeFaqSectionContent.description
-      ),
-
-      developerLabel: nullableString(
-        safeFaqSectionContent.developerLabel
-      ),
-
-      contactTitle: nullableString(
-        safeFaqSectionContent.contactTitle
-      ),
-
-      contactDescription: nullableString(
-        safeFaqSectionContent.contactDescription
-      ),
-
-      phone: nullableString(
-        safeFaqSectionContent.phone
-      ),
-
-      timing: nullableString(
-        safeFaqSectionContent.timing
-      ),
-
-      ctaTitle: nullableString(
-        safeFaqSectionContent.ctaTitle
-      ),
-
-      ctaDescription: nullableString(
-        safeFaqSectionContent.ctaDescription
-      ),
-
-      ctaButtonText: nullableString(
-        safeFaqSectionContent.ctaButtonText
-      ),
-
-      callLabel: nullableString(
-        safeFaqSectionContent.callLabel
-      ),
-
-      whatsappLabel: nullableString(
-        safeFaqSectionContent.whatsappLabel
-      ),
-    };
-
-    // ==========================================================
-    // FAQS
-    // ==========================================================
-
-    const safeFaqs = cleanItems(
-      faqs,
-      (item) => ({
-        question: cleanString(item.question),
-        answer: cleanString(item.answer),
-      }),
-      (item) =>
-        Boolean(
-          cleanString(item.question) &&
-          cleanString(item.answer)
-        )
-    );
-
-    // ==========================================================
-    // CTA
-    // ==========================================================
-
-    const safeCtaContent = safeObject(ctaContent);
-
-    const cta = {
-      title: nullableString(safeCtaContent.title),
-      subtitle: nullableString(safeCtaContent.subtitle),
-      buttonText: nullableString(
-        safeCtaContent.buttonText
-      ),
-    };
-
-    // ==========================================================
-    // CONFIGURATION TYPE
-    // ==========================================================
-
-    const requestedConfigurationType =
-      cleanString(configurationType);
-
-    let safeConfigurationType = null;
-
-    if (
-      requestedConfigurationType === "Apartments" ||
-      requestedConfigurationType === "Plots"
-    ) {
-      safeConfigurationType = requestedConfigurationType;
-    } else if (
-      safePlotConfigurations.length > 0 &&
-      finalUnitConfigurations.length === 0
-    ) {
-      safeConfigurationType = "Plots";
-    } else if (finalUnitConfigurations.length > 0) {
-      safeConfigurationType = "Apartments";
-    }
-
-    // ==========================================================
-    // DEVELOPER DATA
-    // ==========================================================
-
-    const developerData = {
-      developerRef: developer?._id || null,
-
-      developerName: developer
-        ? firstNonEmpty(
-            developer.name,
-            developer.developerName
-          )
-        : "",
-
-      developerLogo: developer
-        ? firstNonEmpty(
-            developer.logo,
-            developer.developerLogo
-          )
-        : "",
-
-      developerImage: developer
-        ? firstNonEmpty(
-            developer.image,
-            developer.developerImage
-          )
-        : "",
-    };
-
-    // ==========================================================
-    // CATEGORY DATA
-    // ==========================================================
-
-    const categoryData = {
-      categoryRef: category?._id || null,
-
-      categoryName: category
-        ? firstNonEmpty(
-            category.name,
-            category.categoryName
-          )
-        : "",
-    };
-
-    // ==========================================================
-    // KEY METRICS / CUSTOM METRICS
-    // ==========================================================
-
-    const safeKeyMetrics = safeObject(aiData.keyMetrics);
-
-    const rawCustomMetrics =
-      aiData.customMetrics ??
-      safeKeyMetrics.customMetrics;
-
-const safeCustomMetrics = cleanItems(
-  rawCustomMetrics,
-  (item) => ({
-    label: firstNonEmpty(
-      item.label,
-      item.title,
-      item.name,
-      item.heading,
-      item.key
-    ),
-
-    value: firstNonEmpty(
-      item.value,
-      item.description,
-      item.text
-    ),
-
-    icon: firstNonEmpty(item.icon, "FaHome"),
-  }),
-  (item) =>
-    Boolean(
-      firstNonEmpty(
-        item.label,
-        item.title,
-        item.name,
-        item.heading,
-        item.key
-      ) &&
-      firstNonEmpty(
-        item.value,
-        item.description,
-        item.text
-      )
+    const overviewFeatureBar = safeArray(
+      overviewInput.featureBar || input.featureBar
     )
-);
+      .slice(0, 12)
+      .map((raw) => {
+        const item = safeObject(raw);
 
+        return {
+          title: getFirstString(item.title, item.heading, item.name),
+          desc: getFirstString(
+            item.desc,
+            item.description,
+            item.subtitle
+          ),
+        };
+      })
+      .filter((item) => item.title || item.desc);
 
-    // ==========================================================
-    // PROPERTY PAYLOAD
-    // ==========================================================
+    const overviewHighlights = mapFeatureItems(
+      overviewInput.highlights || input.highlights
+    );
+
+    const overviewAmenities = mapFeatureItems(
+      overviewInput.amenities || input.amenities,
+      60
+    );
+
+    const customMetrics = mapCustomMetrics(
+      metricsInput.customMetrics || input.customMetrics
+    );
+
+    const locationLandmarks = mapLandmarks(
+      locationInput.landmarks || input.landmarks
+    );
+
+    const locationBottomStrip = mapBottomStrip(
+      locationInput.bottomStrip ||
+        input.locationBottomStrip ||
+        locationContent.bottomStrip
+    );
+
+    const masterPlanBottomStrip = mapBottomStrip(
+      masterPlanInput.bottomStrip ||
+        masterPlanContent.bottomStrip
+    );
+
+    const seoKeywords = safeTextArray(
+      seoInput.keywords ||
+        seoContent.keywords ||
+        input.seoKeywords,
+      40,
+      150
+    );
+
+    const faqItems = mapFaqs(input.faqs);
 
     const propertyPayload = {
       slug,
 
-      marketType: normalizedMarketType,
+      marketType,
 
-      // Backend-controlled draft values.
-      isActive: true,
+      // Always draft, irrespective of AI-provided status.
       status: "draft",
+      isActive: true,
       isDeleted: false,
       deletedFromStatus: null,
-      propertyTag: ["Normal"],
+      propertyTag: "Normal",
 
-      // CORE DETAILS
+      createdBy: userId,
+
       coreDetails: {
-        // Keep the official project name here.
-        // Search-optimized text belongs in seoEngine.metaTitle.
         title: cleanTitle,
 
-        developerRef: developerData.developerRef,
-        developerName: developerData.developerName,
-        developerImage: developerData.developerImage,
-        developerLogo: developerData.developerLogo,
+        developerRef: developerRecord?._id || null,
+        developerName: developerRecord
+          ? cleanString(developerRecord.name, 300)
+          : "",
 
-        startingPrice: safeNumber(startingPrice),
-        maxPrice: safeNumber(maxPrice),
-        priceOnRequest: safeBoolean(priceOnRequest),
+        developerImage: "",
+        developerLogo: "",
+
+        startingPrice: priceOnRequest ? null : startingPrice,
+        maxPrice: priceOnRequest ? null : maxPrice,
+        priceOnRequest,
       },
 
-      // CATEGORY
-      categoryData,
+      categoryData: {
+        categoryRef: categoryRecord?._id || null,
+        categoryName: categoryRecord
+          ? cleanString(categoryRecord.name, 300)
+          : "",
+      },
 
-      // HERO
       heroSection: {
-        propertyStatus: nullableString(propertyStatus),
-        heroDescription: nullableString(heroDescription),
-        brochureButtonText: nullableString(
-          safeObject(aiData.heroSection).brochureButtonText
+        propertyStatus: getFirstString(
+          heroInput.propertyStatus,
+          metricsInput.status
         ),
-        videoButtonText: nullableString(
-          safeObject(aiData.heroSection).videoButtonText
+
+        heroDescription,
+
+        brochureButtonText: getFirstString(
+          heroInput.brochureButtonText
         ),
-        taglineItems: safeArray(
-          safeObject(aiData.heroSection).taglineItems
-        )
-          .filter(
-            (item) =>
-              typeof item === "string" && item.trim()
-          )
-          .map((item) => item.trim()),
+
+        videoButtonText: getFirstString(
+          heroInput.videoButtonText
+        ),
+
+        taglineItems: mapTaglineItems(
+          heroInput.taglineItems || input.taglineItems
+        ),
       },
 
-      // KEY METRICS
       keyMetrics: {
-        landArea: nullableString(
-          landArea ?? safeKeyMetrics.landArea
-        ),
+        landArea: getFirstString(metricsInput.landArea),
+        possession: getFirstString(metricsInput.possession),
+        status: getFirstString(metricsInput.status),
 
-        possession: nullableString(
-          possession ?? safeKeyMetrics.possession
-        ),
+        totalUnits: safeNumber(metricsInput.totalUnits),
+        totalTowers: safeNumber(metricsInput.totalTowers),
 
-        status: nullableString(
-          propertyStatus ?? safeKeyMetrics.status
-        ),
+        floors: getFirstString(metricsInput.floors),
+        reraNumber: getFirstString(metricsInput.reraNumber),
 
-        totalUnits: safeNumber(
-          totalUnits ?? safeKeyMetrics.totalUnits
-        ),
-
-        totalTowers: safeNumber(
-          totalTowers ?? safeKeyMetrics.totalTowers
-        ),
-
-        floors: nullableString(
-          floors ?? safeKeyMetrics.floors
-        ),
-
-        reraNumber: nullableString(
-          reraNumber ?? safeKeyMetrics.reraNumber
-        ),
-
-        customMetrics: safeCustomMetrics,
+        customMetrics,
       },
 
-      // OVERVIEW
-      overview: overviewData,
+      overview: {
+        description: overviewDescription,
 
-      // CONFIGURATION SECTION
-      configurationSection,
+        aboutTitle: getFirstString(
+          overviewInput.aboutTitle,
+          overviewContent.aboutTitle
+        ),
 
-      // UNIT CONFIGURATIONS
-      unitConfigurations: finalUnitConfigurations,
+        aboutParagraph1: getFirstString(
+          overviewInput.aboutParagraph1,
+          overviewContent.aboutParagraph1
+        ),
 
-      // LOCATION
-      locationData,
+        aboutParagraph2: getFirstString(
+          overviewInput.aboutParagraph2,
+          overviewContent.aboutParagraph2
+        ),
 
-      // MASTER PLAN
-      masterPlanSection,
+        aboutImageUrl: "",
 
-      // GATED CONTENT
-      gatedContent: {
-        brochurePdfUrl: "",
-        configurationType: safeConfigurationType,
-        floorPlans: safeFloorPlans,
-        plotConfigurations: safePlotConfigurations,
-        requireLogin: false,
+        featureBar: overviewFeatureBar,
+        highlights: overviewHighlights,
+        amenities: overviewAmenities,
+
+        bottomStrip: mapBottomStrip(
+          overviewInput.bottomStrip ||
+            overviewContent.bottomStrip
+        ),
       },
 
-      // MEDIA
-      // AI-provided arbitrary image URLs are deliberately not
-      // persisted here. A later trusted media workflow can map
-      // verified images into these fields.
+      configurationSection: {
+        title: getFirstString(
+          configurationInput.title,
+          configurationContent.title
+        ),
+
+        description: getFirstString(
+          configurationInput.description,
+          configurationContent.description
+        ),
+
+        features: safeTextArray(
+          configurationInput.features ||
+            configurationContent.features,
+          40,
+          1000
+        ),
+      },
+
+      unitConfigurations: allUnitConfigurations,
+
       media: {
+        // AI-generated media URLs are not trusted automatically.
+        // Add reviewed assets through your admin/media workflow.
         heroImageUrl: "",
         gallery: [],
         walkthroughUrl: "",
       },
 
-      // SEO
-      seoEngine,
+      locationData: {
+        locationRef: locationRecord?._id || null,
 
-      // FAQ
-      faqSection,
-      faqs: safeFaqs,
+        locationName: locationRecord
+          ? cleanString(locationRecord.name, 300)
+          : "",
 
-      // CTA
-      cta,
+        customLocation: locationRecord
+          ? ""
+          : locationName,
 
-      // AUTHENTICATED CREATOR
-      createdBy: req.user.id,
+        address: locationAddress,
+
+        // Do not accept arbitrary AI iframe/HTML embeds.
+        mapEmbedUrl: "",
+
+        title: getFirstString(
+          locationInput.title,
+          locationContent.title
+        ),
+
+        description: getFirstString(
+          locationInput.description,
+          locationContent.description
+        ),
+
+        landmarks: locationLandmarks,
+        bottomStrip: locationBottomStrip,
+      },
+
+      masterPlanSection: {
+        title: getFirstString(
+          masterPlanInput.title,
+          masterPlanContent.title
+        ),
+
+        description: getFirstString(
+          masterPlanInput.description,
+          masterPlanContent.description
+        ),
+
+        masterPlanImage: "",
+
+        bottomStrip: masterPlanBottomStrip,
+      },
+
+      gatedContent: {
+        brochurePdfUrl: "",
+
+        configurationType,
+
+        floorPlans: floorPlans,
+
+        plotConfigurations,
+
+        requireLogin: safeBoolean(
+          gatedInput.requireLogin,
+          false
+        ),
+      },
+
+      seoEngine: {
+        hasCustomSEO: Boolean(
+          getFirstString(
+            seoInput.metaTitle,
+            seoContent.metaTitle
+          ) ||
+            getFirstString(
+              seoInput.metaDescription,
+              seoContent.metaDescription
+            )
+        ),
+
+        metaTitle: getFirstString(
+          seoInput.metaTitle,
+          seoContent.metaTitle
+        ),
+
+        metaDescription: getFirstString(
+          seoInput.metaDescription,
+          seoContent.metaDescription
+        ),
+
+        keywords: seoKeywords,
+      },
+
+      faqSection: {
+        title: getFirstString(
+          faqSectionInput.title,
+          faqSectionContent.title
+        ),
+
+        description: getFirstString(
+          faqSectionInput.description,
+          faqSectionContent.description
+        ),
+
+        phone: "",
+        timing: "",
+      },
+
+      faqs: faqItems,
+
+      cta: {
+        title: getFirstString(
+          ctaInput.title,
+          ctaContent.title
+        ),
+
+        description: getFirstString(
+          ctaInput.description,
+          ctaContent.description
+        ),
+
+        buttonText: getFirstString(
+          ctaInput.buttonText,
+          ctaContent.buttonText
+        ),
+      },
     };
 
-    // ==========================================================
-    // CREATE DRAFT
-    // ==========================================================
+    // --------------------------------------------------------
+    // 9. CREATE DRAFT
+    // --------------------------------------------------------
 
-    const property = await Property.create(propertyPayload);
+    const createdProperty = await Property.create(propertyPayload);
 
-    // ==========================================================
-    // RESPONSE
-    // ==========================================================
+    // --------------------------------------------------------
+    // 10. REVIEW FLAGS
+    // --------------------------------------------------------
+
+    const unresolvedReferences = [];
+
+    if (!developerRecord && developerName) {
+      unresolvedReferences.push("developer");
+    }
+
+    if (!categoryRecord && categoryName) {
+      unresolvedReferences.push("category");
+    }
+
+    if (!locationRecord && locationName) {
+      unresolvedReferences.push("location");
+    }
+
+    const reviewRequired =
+      unresolvedReferences.length > 0 ||
+      !overviewDescription ||
+      !heroDescription ||
+      !seoContent.metaTitle && !seoInput.metaTitle ||
+      !seoContent.metaDescription && !seoInput.metaDescription ||
+      faqItems.length === 0 ||
+      (marketType === "Primary" && !metricsInput.reraNumber);
+
+    const contentSummary = {
+      unitConfigurations: allUnitConfigurations.length,
+      floorPlans: floorPlans.length,
+      plotConfigurations: plotConfigurations.length,
+      highlights: overviewHighlights.length,
+      amenities: overviewAmenities.length,
+      landmarks: locationLandmarks.length,
+      faqs: faqItems.length,
+      customMetrics: customMetrics.length,
+      featureBar: overviewFeatureBar.length,
+      seoKeywords: seoKeywords.length,
+    };
 
     return res.status(201).json({
       success: true,
 
-      message: "AI property draft created successfully.",
+      message:
+        "AI property draft created successfully. Verify all facts and references before publishing.",
 
-      draftId: property._id,
+      draftId: createdProperty._id,
 
-      data: property,
+      data: createdProperty,
 
-      resolution: {
-        developer: {
-          requested: cleanDeveloperName || null,
-          resolved: Boolean(developer),
-          id: developer?._id || null,
-          name: developer?.name || null,
-        },
+      resolution,
 
-        category: {
-          requested: cleanCategoryName || null,
-          resolved: Boolean(category),
-          id: category?._id || null,
-          name: category?.name || null,
-        },
+      unresolvedReferences,
 
-        location: {
-          requested: cleanLocationName || null,
-          resolved: Boolean(location),
-          id: location?._id || null,
-          name: location
-            ? firstNonEmpty(
-                location.name,
-                location.locationName
-              ) || null
-            : null,
-        },
-      },
+      reviewRequired,
 
-      reviewRequired: {
-        marketType: normalizedMarketType === null,
-        developer: !developer,
-        category: !category,
-        location: !location,
-      },
-
-      contentSummary: {
-        highlights: safeHighlights.length,
-        amenities: safeAmenities.length,
-        landmarks: safeLandmarks.length,
-        unitConfigurations: finalUnitConfigurations.length,
-        floorPlans: safeFloorPlans.length,
-        plotConfigurations: safePlotConfigurations.length,
-        customMetrics: safeCustomMetrics.length,
-        faqs: safeFaqs.length,
-      },
+      contentSummary,
     });
   } catch (error) {
     console.error("AI CREATE PROPERTY ERROR:", error);
 
-    // ==========================================================
-    // MONGOOSE VALIDATION ERROR
-    // ==========================================================
-
-    if (error.name === "ValidationError") {
+    if (error?.name === "ValidationError") {
       return res.status(400).json({
         success: false,
-        message: "Property validation failed.",
-        errors: Object.fromEntries(
-          Object.entries(error.errors).map(
-            ([key, value]) => [key, value.message]
-          )
-        ),
+        message: "Property data failed schema validation.",
+        errors: Object.values(error.errors || {}).map((item) => ({
+          field: item.path,
+          message: item.message,
+        })),
       });
     }
 
-    // ==========================================================
-    // DUPLICATE KEY ERROR
-    // ==========================================================
-
-    if (error.code === 11000) {
+    if (error?.code === 11000) {
       return res.status(409).json({
         success: false,
         message:
-          "A property with the same unique value already exists.",
-        duplicateFields: error.keyValue || {},
+          "A property with a conflicting unique value already exists. Please retry after checking the existing record.",
+        fields: error.keyValue || {},
       });
     }
 
-    // ==========================================================
-    // GENERAL ERROR
-    // ==========================================================
-
     return res.status(500).json({
       success: false,
-      message: "Failed to create AI property draft.",
-      error:
-        process.env.NODE_ENV === "production"
-          ? undefined
-          : error.message,
+      message: "Failed to create the AI property draft.",
     });
   }
 };
-
 
 exports.getPropertySeoList = async (
   req,
