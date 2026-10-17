@@ -2528,43 +2528,33 @@ exports.aiCreateProperty = async (req, res) => {
   try {
     const mongoose = require("mongoose");
 
+    // --------------------------------------------------------
+    // 1. AUTHENTICATION
+    // --------------------------------------------------------
+
     const userId = req.user?.id || req.user?._id;
 
-    if (
-      !userId ||
-      !mongoose.Types.ObjectId.isValid(String(userId))
-    ) {
+    if (!userId || !mongoose.Types.ObjectId.isValid(String(userId))) {
       return res.status(401).json({
         success: false,
         message: "Authentication required to create an AI property draft.",
       });
     }
 
-    // =========================================================
+    // --------------------------------------------------------
     // 2. INPUT VALIDATION
-    // =========================================================
+    // --------------------------------------------------------
 
     const input = req.body?.aiData;
 
-    if (
-      !input ||
-      typeof input !== "object" ||
-      Array.isArray(input)
-    ) {
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
       return res.status(400).json({
         success: false,
         message: "aiData must be a valid JSON object.",
       });
     }
 
-    const obj = (value) =>
-      value && typeof value === "object" && !Array.isArray(value)
-        ? value
-        : {};
-
-    const arr = (value) => Array.isArray(value) ? value : [];
-
-    const str = (value, max = 20000) => {
+    const cleanString = (value, maxLength = 20000) => {
       if (typeof value !== "string" && typeof value !== "number") {
         return "";
       }
@@ -2572,171 +2562,76 @@ exports.aiCreateProperty = async (req, res) => {
       return String(value)
         .replace(/\u0000/g, "")
         .trim()
-        .slice(0, max);
+        .slice(0, maxLength);
     };
 
-    const first = (...values) => {
-      for (const value of values) {
-        const result = str(value);
-        if (result) return result;
-      }
-      return "";
-    };
+    const safeObject = (value) =>
+      value && typeof value === "object" && !Array.isArray(value)
+        ? value
+        : {};
 
-    const bool = (value, fallback = false) =>
+    const safeArray = (value) => (Array.isArray(value) ? value : []);
+
+    const safeBoolean = (value, fallback = false) =>
       typeof value === "boolean" ? value : fallback;
 
-    const num = (value) => {
+    const safeNumber = (value) => {
       if (typeof value === "number") {
         return Number.isFinite(value) && value >= 0 ? value : null;
       }
 
       if (typeof value !== "string") return null;
 
-      const valueString = value.trim();
+      const normalized = value.trim();
 
-      // Do not interpret ₹1.95 Cr, "1,950 sq ft", etc.
-      if (!/^\d+(?:\.\d+)?$/.test(valueString)) return null;
+      // Accept plain numbers only.
+      // Do not guess what "₹1.95 Cr", "1,950 sq ft", etc. mean.
+      if (!/^\d+(?:\.\d+)?$/.test(normalized)) return null;
 
-      const parsed = Number(valueString);
+      const number = Number(normalized);
 
-      return Number.isFinite(parsed) && parsed >= 0
-        ? parsed
-        : null;
+      return Number.isFinite(number) && number >= 0 ? number : null;
     };
 
-    const textArray = (value, maxItems = 40, maxLength = 1000) =>
-      arr(value)
+    const safeId = (value) => {
+      const id = cleanString(value, 100);
+
+      return mongoose.Types.ObjectId.isValid(id) ? id : null;
+    };
+
+    const safeTextArray = (value, maxItems = 50, maxLength = 1000) =>
+      safeArray(value)
         .slice(0, maxItems)
-        .map((item) => str(item, maxLength))
+        .map((item) => cleanString(item, maxLength))
         .filter(Boolean);
 
     const escapeRegex = (value) =>
       value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-    // =========================================================
-    // 3. READ THE ACTUAL INFORMATION EXTRACTOR SCHEMA
-    // =========================================================
+    const getFirstString = (...values) => {
+      for (const value of values) {
+        const result = cleanString(value);
+        if (result) return result;
+      }
 
-    const core = obj(input.coreDetails);
-    const categoryInput = obj(input.categoryData);
-    const hero = obj(input.heroSection);
-    const metrics = obj(input.keyMetrics);
-    const overview = obj(input.overview);
-    const configuration = obj(input.configurationSection);
-    const location = obj(input.locationData);
-    const masterPlan = obj(input.masterPlanSection);
-    const gated = obj(input.gatedContent);
-    const seo = obj(input.seoEngine);
-    const faqSection = obj(input.faqSection);
-    const cta = obj(input.cta);
+      return "";
+    };
 
-    const overviewContent = obj(input.overviewContent);
-    const configurationContent = obj(input.configurationContent);
-    const locationContent = obj(input.locationContent);
-    const masterPlanContent = obj(input.masterPlanContent);
-    const seoContent = obj(input.seoContent);
-    const faqContent = obj(input.faqSectionContent);
-    const ctaContent = obj(input.ctaContent);
-
-    const title = first(
-      core.title,
-      input.title,
-      input.projectName,
-      input.propertyName
-    );
-
-    if (!title) {
-      return res.status(400).json({
-        success: false,
-        message: "A property title or project name is required.",
-      });
-    }
-
-    const rawMarketType = first(input.marketType, core.marketType);
-
-    // Invalid or missing market type is not silently classified as Primary.
-    const marketType = ["Primary", "Resale"].includes(rawMarketType)
-      ? rawMarketType
-      : null;
-
-    const developerName = first(
-      core.developerName,
-      input.developerName,
-      input.developer
-    );
-
-    const categoryName = first(
-      categoryInput.categoryName,
-      input.categoryName,
-      input.propertyType
-    );
-
-    const locationName = first(
-      location.locationName,
-      input.locationName,
-      input.location
-    );
-
-    const address = first(location.address, input.address);
-
-    // =========================================================
-    // 4. DATABASE REFERENCE RESOLUTION
-    // =========================================================
+    // Do not accept an arbitrary object ID supplied by AI as proof
+    // that the corresponding developer/category/location is correct.
+    // Every reference must be verified against the database.
 
     const resolveReference = async ({
       Model,
       suppliedId,
       suppliedName,
-      allowedFields,
+      nameFields = ["name"],
     }) => {
-      const name = str(suppliedName, 300);
-      const id = str(suppliedId, 100);
+      const id = safeId(suppliedId);
+      const name = cleanString(suppliedName, 300);
 
-      // If both ID and name are supplied, require them to agree.
-      if (id && mongoose.Types.ObjectId.isValid(id)) {
-        const byId = await Model.findById(id)
-          .select("_id name slug")
-          .lean();
-
-        if (byId) {
-          if (
-            name &&
-            ![byId.name, byId.slug].some(
-              (candidate) =>
-                str(candidate).toLowerCase() === name.toLowerCase()
-            )
-          ) {
-            return {
-              record: null,
-              resolved: false,
-              method: "id-name-mismatch",
-            };
-          }
-
-          return {
-            record: byId,
-            resolved: true,
-            method: "id",
-          };
-        }
-      }
-
-      if (!name) {
-        return {
-          record: null,
-          resolved: false,
-          method: null,
-        };
-      }
-
-      for (const field of allowedFields) {
-        const record = await Model.findOne({
-          [field]: {
-            $regex: `^${escapeRegex(name)}$`,
-            $options: "i",
-          },
-        })
+      if (id) {
+        const record = await Model.findById(id)
           .select("_id name slug")
           .lean();
 
@@ -2744,8 +2639,34 @@ exports.aiCreateProperty = async (req, res) => {
           return {
             record,
             resolved: true,
-            method: `exact-${field}`,
+            method: "id",
+            suppliedName: name,
           };
+        }
+      }
+
+      if (name) {
+        for (const field of nameFields) {
+          // Only search explicitly allowed schema fields.
+          if (!["name", "slug", "fullPath"].includes(field)) continue;
+
+          const record = await Model.findOne({
+            [field]: {
+              $regex: `^${escapeRegex(name)}$`,
+              $options: "i",
+            },
+          })
+            .select("_id name slug")
+            .lean();
+
+          if (record) {
+            return {
+              record,
+              resolved: true,
+              method: `exact-${field}`,
+              suppliedName: name,
+            };
+          }
         }
       }
 
@@ -2753,8 +2674,84 @@ exports.aiCreateProperty = async (req, res) => {
         record: null,
         resolved: false,
         method: null,
+        suppliedName: name,
       };
     };
+
+    // --------------------------------------------------------
+    // 3. READ INPUT SECTIONS
+    // --------------------------------------------------------
+
+    const core = safeObject(input.coreDetails);
+    const categoryInput = safeObject(input.categoryData);
+    const heroInput = safeObject(input.heroSection);
+    const metricsInput = safeObject(input.keyMetrics);
+    const overviewInput = safeObject(input.overview);
+    const configurationInput = safeObject(input.configurationSection);
+    const locationInput = safeObject(input.locationData);
+    const masterPlanInput = safeObject(input.masterPlanSection);
+    const gatedInput = safeObject(input.gatedContent);
+    const seoInput = safeObject(input.seoEngine);
+    const faqSectionInput = safeObject(input.faqSection);
+    const ctaInput = safeObject(input.cta);
+
+    const overviewContent = safeObject(input.overviewContent);
+    const configurationContent = safeObject(input.configurationContent);
+    const locationContent = safeObject(input.locationContent);
+    const masterPlanContent = safeObject(input.masterPlanContent);
+    const seoContent = safeObject(input.seoContent);
+    const faqSectionContent = safeObject(input.faqSectionContent);
+    const ctaContent = safeObject(input.ctaContent);
+
+    const cleanTitle = getFirstString(
+      core.title,
+      input.title,
+      input.projectName,
+      input.propertyName
+    );
+
+    if (!cleanTitle) {
+      return res.status(400).json({
+        success: false,
+        message: "A property title or project name is required.",
+      });
+    }
+
+    const marketTypeInput = getFirstString(
+      input.marketType,
+      core.marketType
+    );
+
+    const marketType = ["Primary", "Resale"].includes(marketTypeInput)
+      ? marketTypeInput
+      : "Primary";
+
+    const developerName = getFirstString(
+      core.developerName,
+      input.developerName,
+      input.developer
+    );
+
+    const categoryName = getFirstString(
+      categoryInput.categoryName,
+      input.categoryName,
+      input.propertyType
+    );
+
+    const locationName = getFirstString(
+      locationInput.locationName,
+      input.locationName,
+      input.location
+    );
+
+    const locationAddress = getFirstString(
+      locationInput.address,
+      input.address
+    );
+
+    // --------------------------------------------------------
+    // 4. RESOLVE DATABASE REFERENCES
+    // --------------------------------------------------------
 
     const [developerResolution, categoryResolution, locationResolution] =
       await Promise.all([
@@ -2762,21 +2759,25 @@ exports.aiCreateProperty = async (req, res) => {
           Model: Developer,
           suppliedId: core.developerRef || input.developerRef,
           suppliedName: developerName,
-          allowedFields: ["name", "slug"],
+          nameFields: ["name"],
         }),
 
         resolveReference({
           Model: Category,
-          suppliedId: categoryInput.categoryRef || input.categoryRef,
+          suppliedId:
+            categoryInput.categoryRef ||
+            input.categoryRef,
           suppliedName: categoryName,
-          allowedFields: ["name", "slug"],
+          nameFields: ["name", "slug", "fullPath"],
         }),
 
         resolveReference({
           Model: Location,
-          suppliedId: location.locationRef || input.locationRef,
+          suppliedId:
+            locationInput.locationRef ||
+            input.locationRef,
           suppliedName: locationName,
-          allowedFields: ["name", "slug"],
+          nameFields: ["name", "slug"],
         }),
       ]);
 
@@ -2805,19 +2806,47 @@ exports.aiCreateProperty = async (req, res) => {
       },
     };
 
-    // =========================================================
-    // 5. SUBDOCUMENT MAPPERS
-    // =========================================================
+    // --------------------------------------------------------
+    // 5. SAFE SUBDOCUMENT MAPPERS
+    // --------------------------------------------------------
 
-    const mapFeatures = (items, limit = 40) =>
-      arr(items)
-        .slice(0, limit)
+    const mapTextItems = (
+      items,
+      {
+        titleKeys = ["title", "name", "heading"],
+        descriptionKeys = ["description", "desc", "subtitle"],
+        maxItems = 40,
+      } = {}
+    ) =>
+      safeArray(items)
+        .slice(0, maxItems)
         .map((raw) => {
-          const item = obj(raw);
+          const item = safeObject(raw);
 
           return {
-            heading: first(item.heading, item.title, item.name),
-            subheading: first(
+            title: getFirstString(
+              ...titleKeys.map((key) => item[key])
+            ),
+            description: getFirstString(
+              ...descriptionKeys.map((key) => item[key])
+            ),
+          };
+        })
+        .filter((item) => item.title || item.description);
+
+    const mapFeatureItems = (items, maxItems = 40) =>
+      safeArray(items)
+        .slice(0, maxItems)
+        .map((raw) => {
+          const item = safeObject(raw);
+
+          return {
+            heading: getFirstString(
+              item.heading,
+              item.title,
+              item.name
+            ),
+            subheading: getFirstString(
               item.subheading,
               item.description,
               item.desc
@@ -2826,51 +2855,45 @@ exports.aiCreateProperty = async (req, res) => {
         })
         .filter((item) => item.heading || item.subheading);
 
-    const mapFeatureBar = (items) =>
-      arr(items)
-        .slice(0, 12)
+    const mapBottomStrip = (items, maxItems = 12) =>
+      safeArray(items)
+        .slice(0, maxItems)
         .map((raw) => {
-          const item = obj(raw);
+          const item = safeObject(raw);
 
           return {
-            title: first(item.title, item.heading, item.name),
-            desc: first(item.desc, item.description, item.subtitle),
+            title: getFirstString(item.title, item.heading, item.name),
+            desc: getFirstString(
+              item.desc,
+              item.description,
+              item.subheading
+            ),
           };
         })
         .filter((item) => item.title || item.desc);
 
-    const mapStrip = (items, limit = 12) =>
-      arr(items)
-        .slice(0, limit)
+    const mapConfigurations = (items, maxItems = 40) =>
+      safeArray(items)
+        .slice(0, maxItems)
         .map((raw) => {
-          const item = obj(raw);
+          const item = safeObject(raw);
 
           return {
-            title: first(item.title, item.heading, item.name),
-            desc: first(item.desc, item.description, item.subheading),
-          };
-        })
-        .filter((item) => item.title || item.desc);
-
-    const mapConfigurations = (items, limit = 40) =>
-      arr(items)
-        .slice(0, limit)
-        .map((raw) => {
-          const item = obj(raw);
-
-          return {
-            unitType: first(
+            unitType: getFirstString(
               item.unitType,
               item.configuration,
               item.type,
               item.name
             ),
-            area: first(item.area, item.size, item.areaRange),
-            price: first(item.price, item.startingPrice),
-            paymentPlan: first(item.paymentPlan, item.paymentTerms),
-            bedrooms: first(item.bedrooms, item.bhk),
-            bathrooms: first(item.bathrooms),
-            balconies: first(item.balconies),
+            area: getFirstString(item.area, item.size, item.areaRange),
+            price: getFirstString(item.price, item.startingPrice),
+            paymentPlan: getFirstString(
+              item.paymentPlan,
+              item.paymentTerms
+            ),
+            bedrooms: getFirstString(item.bedrooms, item.bhk),
+            bathrooms: getFirstString(item.bathrooms),
+            balconies: getFirstString(item.balconies),
           };
         })
         .filter(
@@ -2881,45 +2904,39 @@ exports.aiCreateProperty = async (req, res) => {
             item.bedrooms
         );
 
-    const mapPlotConfigurations = (items, limit = 40) =>
-      arr(items)
-        .slice(0, limit)
+    const mapPlotConfigurations = (items, maxItems = 40) =>
+      safeArray(items)
+        .slice(0, maxItems)
         .map((raw) => {
-          const item = obj(raw);
+          const item = safeObject(raw);
 
           return {
-            plotType: first(
+            plotType: getFirstString(
               item.plotType,
               item.unitType,
               item.type,
               item.name
             ),
-            // IMPORTANT: Property.js uses plotArea, not area.
-            plotArea: first(
-              item.plotArea,
-              item.area,
-              item.size,
-              item.areaRange
+            area: getFirstString(item.area, item.size, item.areaRange),
+            price: getFirstString(item.price, item.startingPrice),
+            paymentPlan: getFirstString(
+              item.paymentPlan,
+              item.paymentTerms
             ),
-            price: first(item.price, item.startingPrice),
-            paymentPlan: first(item.paymentPlan, item.paymentTerms),
-            image: "",
           };
         })
-        .filter(
-          (item) => item.plotType || item.plotArea || item.price
-        );
+        .filter((item) => item.plotType || item.area || item.price);
 
-    const mapLandmarks = (items) =>
-      arr(items)
-        .slice(0, 40)
+    const mapLandmarks = (items, maxItems = 40) =>
+      safeArray(items)
+        .slice(0, maxItems)
         .map((raw) => {
-          const item = obj(raw);
+          const item = safeObject(raw);
 
           return {
-            name: first(item.name, item.title),
-            distance: first(item.distance, item.distanceText),
-            subtitle: first(
+            name: getFirstString(item.name, item.title),
+            distance: getFirstString(item.distance, item.distanceText),
+            subtitle: getFirstString(
               item.subtitle,
               item.description,
               item.type
@@ -2928,78 +2945,62 @@ exports.aiCreateProperty = async (req, res) => {
         })
         .filter((item) => item.name);
 
-    const mapFaqs = (items) =>
-      arr(items)
-        .slice(0, 30)
+    const mapFaqs = (items, maxItems = 30) =>
+      safeArray(items)
+        .slice(0, maxItems)
         .map((raw) => {
-          const item = obj(raw);
+          const item = safeObject(raw);
 
           return {
-            question: first(item.question, item.title),
-            answer: first(item.answer, item.content),
+            question: getFirstString(item.question, item.title),
+            answer: getFirstString(item.answer, item.content),
           };
         })
         .filter((item) => item.question && item.answer);
 
-    const mapCustomMetrics = (items) =>
-      arr(items)
-        .slice(0, 20)
+    const mapCustomMetrics = (items, maxItems = 20) =>
+      safeArray(items)
+        .slice(0, maxItems)
         .map((raw) => {
-          const item = obj(raw);
+          const item = safeObject(raw);
 
           return {
-            label: first(item.label, item.title, item.name),
-            value: first(item.value, item.description),
-            icon: "FaHome",
+            label: getFirstString(item.label, item.title, item.name),
+            value: getFirstString(item.value, item.description),
           };
         })
         .filter((item) => item.label && item.value);
 
-    // =========================================================
-    // 6. CONFIGURATION AND PRICING
-    // =========================================================
+    const mapTaglineItems = (items) =>
+      safeTextArray(items, 12, 180);
+
+    // --------------------------------------------------------
+    // 6. CONFIGURATION TYPE
+    // Existing schema supports only Apartments and Plots.
+    // Do not pass an unsupported enum value into Mongoose.
+    // --------------------------------------------------------
+
+    const rawConfigurationType = getFirstString(
+      gatedInput.configurationType,
+      input.configurationType
+    );
 
     const unitConfigurations = mapConfigurations(
       input.unitConfigurations
     );
 
     const floorPlans = mapConfigurations(
-      gated.floorPlans || input.floorPlans
-    ).map((item) => ({
-      ...item,
-      image: "",
-    }));
+      gatedInput.floorPlans || input.floorPlans
+    );
 
     const plotConfigurations = mapPlotConfigurations(
-      input.plotConfigurations || gated.plotConfigurations
+      input.plotConfigurations || gatedInput.plotConfigurations
     );
 
-    const allUnitConfigurations = unitConfigurations.length
-      ? unitConfigurations
-      : floorPlans.map(
-          ({
-            unitType,
-            area,
-            price,
-            paymentPlan,
-            bedrooms,
-            bathrooms,
-            balconies,
-          }) => ({
-            unitType,
-            area,
-            price,
-            paymentPlan,
-            bedrooms,
-            bathrooms,
-            balconies,
-          })
-        );
-
-    const rawConfigurationType = first(
-      gated.configurationType,
-      input.configurationType
-    );
+    const allUnitConfigurations =
+      unitConfigurations.length > 0
+        ? unitConfigurations
+        : floorPlans;
 
     let configurationType;
 
@@ -3007,30 +3008,23 @@ exports.aiCreateProperty = async (req, res) => {
       configurationType = rawConfigurationType;
     } else if (
       /plot|land/i.test(categoryName) ||
-      plotConfigurations.length
+      plotConfigurations.length > 0
     ) {
       configurationType = "Plots";
     } else {
+      // The existing schema does not support "Independent Floors".
+      // Map to Apartments for compatibility with the existing enum.
       configurationType = "Apartments";
     }
 
-    const priceOnRequest = bool(
-      core.priceOnRequest ?? input.priceOnRequest,
-      false
-    );
-
-    const startingPrice = num(
-      core.startingPrice ?? input.startingPrice
-    );
-
-    const maxPrice = num(core.maxPrice ?? input.maxPrice);
-
-    // =========================================================
-    // 7. SLUG
-    // =========================================================
+    // --------------------------------------------------------
+    // 7. SLUG GENERATION
+    // Only published, non-deleted properties reserve a slug
+    // under the published partial unique index.
+    // --------------------------------------------------------
 
     const slugBase =
-      title
+      cleanTitle
         .toLowerCase()
         .normalize("NFKD")
         .replace(/[\u0300-\u036f]/g, "")
@@ -3041,7 +3035,7 @@ exports.aiCreateProperty = async (req, res) => {
         .replace(/-+$/g, "") || "property";
 
     let slug = slugBase;
-    let counter = 2;
+    let slugCounter = 2;
 
     while (
       await Property.exists({
@@ -3050,102 +3044,121 @@ exports.aiCreateProperty = async (req, res) => {
         status: "published",
       })
     ) {
-      slug = `${slugBase}-${counter++}`;
+      slug = `${slugBase}-${slugCounter}`;
+      slugCounter += 1;
     }
 
-    // =========================================================
-    // 8. BUILD CONTENT FROM THE PROVIDED JSON SCHEMA
-    // =========================================================
+    // --------------------------------------------------------
+    // 8. BUILD PROPERTY PAYLOAD
+    // Explicitly create a draft. Never trust AI status fields.
+    // --------------------------------------------------------
 
-    const heroDescription = first(
-      hero.heroDescription,
-      input.heroDescription
+    const priceOnRequest = safeBoolean(
+      core.priceOnRequest ?? input.priceOnRequest,
+      false
     );
 
-    const overviewDescription = first(
-      overview.description,
+    const startingPrice = safeNumber(
+      core.startingPrice ?? input.startingPrice
+    );
+
+    const maxPrice = safeNumber(
+      core.maxPrice ?? input.maxPrice
+    );
+
+    const heroDescription = getFirstString(
+      heroInput.heroDescription,
+      input.heroDescription,
+      overviewContent.heroDescription
+    );
+
+    const overviewDescription = getFirstString(
+      overviewInput.description,
       overviewContent.description,
       input.overviewDescription,
       input.description
     );
 
-    const highlights = mapFeatures(
-      overview.highlights || input.highlights
+    const overviewFeatureBar = safeArray(
+      overviewInput.featureBar || input.featureBar
+    )
+      .slice(0, 12)
+      .map((raw) => {
+        const item = safeObject(raw);
+
+        return {
+          title: getFirstString(item.title, item.heading, item.name),
+          desc: getFirstString(
+            item.desc,
+            item.description,
+            item.subtitle
+          ),
+        };
+      })
+      .filter((item) => item.title || item.desc);
+
+    const overviewHighlights = mapFeatureItems(
+      overviewInput.highlights || input.highlights
     );
 
-    const amenities = mapFeatures(
-      overview.amenities || input.amenities,
+    const overviewAmenities = mapFeatureItems(
+      overviewInput.amenities || input.amenities,
       60
     );
 
-    const featureBar = mapFeatureBar(
-      overview.featureBar || input.featureBar
+    const customMetrics = mapCustomMetrics(
+      metricsInput.customMetrics || input.customMetrics
     );
 
-    const landmarks = mapLandmarks(
-      location.landmarks || input.landmarks
+    const locationLandmarks = mapLandmarks(
+      locationInput.landmarks || input.landmarks
     );
 
-    const locationBottomStrip = mapStrip(
-      location.bottomStrip ||
-        input.locationBottomStrip
+    const locationBottomStrip = mapBottomStrip(
+      locationInput.bottomStrip ||
+        input.locationBottomStrip ||
+        locationContent.bottomStrip
     );
 
-    const masterPlanBottomStrip = mapStrip(
-      masterPlan.bottomStrip ||
+    const masterPlanBottomStrip = mapBottomStrip(
+      masterPlanInput.bottomStrip ||
         masterPlanContent.bottomStrip
     );
 
-    const seoTitle = first(seo.metaTitle, seoContent.metaTitle);
-    const seoDescription = first(
-      seo.metaDescription,
-      seoContent.metaDescription
-    );
-
-    const seoKeywords = textArray(
-      seo.keywords || seoContent.keywords || input.seoKeywords,
+    const seoKeywords = safeTextArray(
+      seoInput.keywords ||
+        seoContent.keywords ||
+        input.seoKeywords,
       40,
       150
     );
 
-    const faqs = mapFaqs(input.faqs);
-
-    const totalUnits = num(metrics.totalUnits ?? input.totalUnits);
-    const totalTowers = num(metrics.totalTowers ?? input.totalTowers);
-
-    // =========================================================
-    // 9. PROPERTY PAYLOAD — MAPPED TO PROPERTY.JS
-    // =========================================================
+    const faqItems = mapFaqs(input.faqs);
 
     const propertyPayload = {
       slug,
 
       marketType,
 
-      // Never accept publication status from AI.
+      // Always draft, irrespective of AI-provided status.
       status: "draft",
       isActive: true,
       isDeleted: false,
       deletedFromStatus: null,
-      propertyTag: ["Normal"],
+      propertyTag: "Normal",
 
       createdBy: userId,
 
       coreDetails: {
-        title,
+        title: cleanTitle,
 
         developerRef: developerRecord?._id || null,
         developerName: developerRecord
-          ? str(developerRecord.name, 300)
-          : developerName,
-
-        developerImage: developerRecord
-          ? str(developerRecord.image, 2000)
+          ? cleanString(developerRecord.name, 300)
           : "",
 
-        developerLogo: developerRecord
-          ? str(developerRecord.logo, 2000)
-          : "",
+        developerImage: "",
+        developerLogo: "",
 
         startingPrice: priceOnRequest ? null : startingPrice,
         maxPrice: priceOnRequest ? null : maxPrice,
@@ -3155,201 +3168,99 @@ exports.aiCreateProperty = async (req, res) => {
       categoryData: {
         categoryRef: categoryRecord?._id || null,
         categoryName: categoryRecord
-          ? str(categoryRecord.name, 300)
-          : categoryName,
+          ? cleanString(categoryRecord.name, 300)
+          : "",
       },
 
       heroSection: {
-        propertyStatus: first(
-          hero.propertyStatus,
-          metrics.status,
-          input.propertyStatus
+        propertyStatus: getFirstString(
+          heroInput.propertyStatus,
+          metricsInput.status
         ),
 
         heroDescription,
 
-        brochureButtonText: first(
-          hero.brochureButtonText,
-          input.heroSection?.brochureButtonText
+        brochureButtonText: getFirstString(
+          heroInput.brochureButtonText
         ),
 
-        videoButtonText: first(
-          hero.videoButtonText,
-          input.heroSection?.videoButtonText
+        videoButtonText: getFirstString(
+          heroInput.videoButtonText
         ),
 
-        taglineItems: textArray(
-          hero.taglineItems || input.taglineItems,
-          12,
-          180
+        taglineItems: mapTaglineItems(
+          heroInput.taglineItems || input.taglineItems
         ),
       },
 
       keyMetrics: {
-        landArea: first(metrics.landArea, input.landArea),
-        possession: first(metrics.possession, input.possession),
-        status: first(metrics.status, input.propertyStatus),
+        landArea: getFirstString(metricsInput.landArea),
+        possession: getFirstString(metricsInput.possession),
+        status: getFirstString(metricsInput.status),
 
-        totalUnits,
-        totalTowers,
+        totalUnits: safeNumber(metricsInput.totalUnits),
+        totalTowers: safeNumber(metricsInput.totalTowers),
 
-        floors: first(metrics.floors, input.floors),
+        floors: getFirstString(metricsInput.floors),
+        reraNumber: getFirstString(metricsInput.reraNumber),
 
-        // Keep RERA where Property.js defines it.
-        reraNumber: first(metrics.reraNumber, input.reraNumber),
-
-        customMetrics: mapCustomMetrics(
-          metrics.customMetrics || input.customMetrics
-        ),
+        customMetrics,
       },
 
       overview: {
-        aboutSectionNumber: first(
-          overview.aboutSectionNumber,
-          overviewContent.aboutSectionNumber
-        ),
-
-        aboutLabel: first(
-          overview.aboutLabel,
-          overviewContent.aboutLabel
-        ),
-
-        aboutTitleLine1: first(
-          overview.aboutTitleLine1,
-          overviewContent.aboutTitleLine1
-        ),
-
-        aboutTitleLine2: first(
-          overview.aboutTitleLine2,
-          overviewContent.aboutTitleLine2
-        ),
-
         description: overviewDescription,
 
-        aboutParagraph2: first(
-          overview.aboutParagraph2,
+        aboutTitle: getFirstString(
+          overviewInput.aboutTitle,
+          overviewContent.aboutTitle
+        ),
+
+        aboutParagraph1: getFirstString(
+          overviewInput.aboutParagraph1,
+          overviewContent.aboutParagraph1
+        ),
+
+        aboutParagraph2: getFirstString(
+          overviewInput.aboutParagraph2,
           overviewContent.aboutParagraph2
         ),
 
         aboutImageUrl: "",
 
-        featureBar,
+        featureBar: overviewFeatureBar,
+        highlights: overviewHighlights,
+        amenities: overviewAmenities,
 
-        highlightsHeading: first(
-          overview.highlightsHeading,
-          overviewContent.highlightsHeading
-        ),
-
-        highlightsSubheading: first(
-          overview.highlightsSubheading,
-          overviewContent.highlightsSubheading
-        ),
-
-        highlightQuote: first(
-          overview.highlightQuote,
-          overviewContent.highlightQuote
-        ),
-
-        amenitiesSectionNumber: first(
-          overview.amenitiesSectionNumber,
-          overviewContent.amenitiesSectionNumber
-        ),
-
-        amenitiesSectionLabel: first(
-          overview.amenitiesSectionLabel,
-          overviewContent.amenitiesSectionLabel
-        ),
-
-        amenitiesHeadingLine1: first(
-          overview.amenitiesHeadingLine1,
-          overviewContent.amenitiesHeadingLine1
-        ),
-
-        amenitiesHeadingLine2: first(
-          overview.amenitiesHeadingLine2,
-          overviewContent.amenitiesHeadingLine2
-        ),
-
-        amenitiesHeadingLine3: first(
-          overview.amenitiesHeadingLine3,
-          overviewContent.amenitiesHeadingLine3
-        ),
-
-        amenitiesSubheading: first(
-          overview.amenitiesSubheading,
-          overviewContent.amenitiesSubheading
-        ),
-
-        highlights,
-        amenities,
-
-        bottomStripTitle1: first(
-          overview.bottomStripTitle1,
-          overviewContent.bottomStripTitle1
-        ),
-
-        bottomStripTitle2: first(
-          overview.bottomStripTitle2,
-          overviewContent.bottomStripTitle2
-        ),
-
-        bottomStripFeature1: first(
-          overview.bottomStripFeature1,
-          overviewContent.bottomStripFeature1
-        ),
-
-        bottomStripFeature2: first(
-          overview.bottomStripFeature2,
-          overviewContent.bottomStripFeature2
-        ),
-
-        bottomStripFeature3: first(
-          overview.bottomStripFeature3,
-          overviewContent.bottomStripFeature3
+        bottomStrip: mapBottomStrip(
+          overviewInput.bottomStrip ||
+            overviewContent.bottomStrip
         ),
       },
 
       configurationSection: {
-        sectionNumber: first(
-          configuration.sectionNumber,
-          configurationContent.sectionNumber
+        title: getFirstString(
+          configurationInput.title,
+          configurationContent.title
         ),
 
-        sectionLabel: first(
-          configuration.sectionLabel,
-          configurationContent.sectionLabel
+        description: getFirstString(
+          configurationInput.description,
+          configurationContent.description
         ),
 
-        titleLine1: first(
-          configuration.titleLine1,
-          configurationContent.titleLine1
-        ),
-
-        titleLine2: first(
-          configuration.titleLine2,
-          configurationContent.titleLine2
-        ),
-
-        subheading: first(
-          configuration.subheading,
-          configurationContent.subheading
-        ),
-
-        features: textArray(
-          configuration.features || configurationContent.features,
+        features: safeTextArray(
+          configurationInput.features ||
+            configurationContent.features,
           40,
           1000
-        ),
-
-        buttonText: first(
-          configuration.buttonText,
-          configurationContent.buttonText
         ),
       },
 
       unitConfigurations: allUnitConfigurations,
 
       media: {
+        // AI-generated media URLs are not trusted automatically.
+        // Add reviewed assets through your admin/media workflow.
         heroImageUrl: "",
         gallery: [],
         walkthroughUrl: "",
@@ -3359,152 +3270,41 @@ exports.aiCreateProperty = async (req, res) => {
         locationRef: locationRecord?._id || null,
 
         locationName: locationRecord
-          ? str(locationRecord.name, 300)
+          ? cleanString(locationRecord.name, 300)
+          : "",
+
+        customLocation: locationRecord
+          ? ""
           : locationName,
 
-        customLocation: locationRecord ? "" : locationName,
+        address: locationAddress,
 
-        address,
-
-        // Do not save AI-generated iframe HTML.
-        // Set an approved embed URL through your trusted admin workflow.
+        // Do not accept arbitrary AI iframe/HTML embeds.
         mapEmbedUrl: "",
 
-        sectionNumber: first(
-          location.sectionNumber,
-          locationContent.sectionNumber
+        title: getFirstString(
+          locationInput.title,
+          locationContent.title
         ),
 
-        topLabel: first(
-          location.topLabel,
-          locationContent.topLabel
-        ),
-
-        headingLine1: first(
-          location.headingLine1,
-          locationContent.headingLine1
-        ),
-
-        headingHighlight: first(
-          location.headingHighlight,
-          locationContent.headingHighlight
-        ),
-
-        description: first(
-          location.description,
+        description: getFirstString(
+          locationInput.description,
           locationContent.description
         ),
 
-        leftCardTag: first(
-          location.leftCardTag,
-          locationContent.leftCardTag
-        ),
-
-        leftCardTitleLine1: first(
-          location.leftCardTitleLine1,
-          locationContent.leftCardTitleLine1
-        ),
-
-        leftCardTitleLine2: first(
-          location.leftCardTitleLine2,
-          locationContent.leftCardTitleLine2
-        ),
-
-        leftCardDescription: first(
-          location.leftCardDescription,
-          locationContent.leftCardDescription
-        ),
-
-        mapSectionTag: first(
-          location.mapSectionTag,
-          locationContent.mapSectionTag
-        ),
-
-        mapSectionTitle: first(
-          location.mapSectionTitle,
-          locationContent.mapSectionTitle
-        ),
-
-        badgeTitle: first(
-          location.badgeTitle,
-          locationContent.badgeTitle
-        ),
-
-        badgeSubtitle: first(
-          location.badgeSubtitle,
-          locationContent.badgeSubtitle
-        ),
-
-        floatingCardTag: first(
-          location.floatingCardTag,
-          locationContent.floatingCardTag
-        ),
-
-        floatingCardTitle: first(
-          location.floatingCardTitle,
-          locationContent.floatingCardTitle
-        ),
-
-        floatingCardDescription: first(
-          location.floatingCardDescription,
-          locationContent.floatingCardDescription
-        ),
-
-        landmarks,
-
+        landmarks: locationLandmarks,
         bottomStrip: locationBottomStrip,
       },
 
       masterPlanSection: {
-        sectionNumber: first(
-          masterPlan.sectionNumber,
-          masterPlanContent.sectionNumber
+        title: getFirstString(
+          masterPlanInput.title,
+          masterPlanContent.title
         ),
 
-        topLabel: first(
-          masterPlan.topLabel,
-          masterPlanContent.topLabel
-        ),
-
-        headingLine1: first(
-          masterPlan.headingLine1,
-          masterPlanContent.headingLine1
-        ),
-
-        headingHighlight: first(
-          masterPlan.headingHighlight,
-          masterPlanContent.headingHighlight
-        ),
-
-        description: first(
-          masterPlan.description,
+        description: getFirstString(
+          masterPlanInput.description,
           masterPlanContent.description
-        ),
-
-        enableSideStrips: bool(
-          masterPlan.enableSideStrips ??
-            masterPlanContent.enableSideStrips,
-          false
-        ),
-
-        topFloatingLabel: first(
-          masterPlan.topFloatingLabel,
-          masterPlanContent.topFloatingLabel
-        ),
-
-        centerTitle: first(
-          masterPlan.centerTitle,
-          masterPlanContent.centerTitle
-        ),
-
-        centerDescription: first(
-          masterPlan.centerDescription,
-          masterPlanContent.centerDescription
-        ),
-
-        buttonText: first(
-          masterPlan.buttonText,
-          masterPlanContent.buttonText
         ),
 
         masterPlanImage: "",
@@ -3517,114 +3317,85 @@ exports.aiCreateProperty = async (req, res) => {
 
         configurationType,
 
-        floorPlans,
+        floorPlans: floorPlans,
 
         plotConfigurations,
 
-        requireLogin: bool(gated.requireLogin, true),
+        requireLogin: safeBoolean(
+          gatedInput.requireLogin,
+          false
+        ),
       },
 
       seoEngine: {
-        hasCustomSEO: Boolean(seoTitle || seoDescription),
+        hasCustomSEO: Boolean(
+          getFirstString(
+            seoInput.metaTitle,
+            seoContent.metaTitle
+          ) ||
+            getFirstString(
+              seoInput.metaDescription,
+              seoContent.metaDescription
+            )
+        ),
 
-        metaTitle: seoTitle,
-        metaDescription: seoDescription,
+        metaTitle: getFirstString(
+          seoInput.metaTitle,
+          seoContent.metaTitle
+        ),
+
+        metaDescription: getFirstString(
+          seoInput.metaDescription,
+          seoContent.metaDescription
+        ),
 
         keywords: seoKeywords,
       },
 
       faqSection: {
-        sectionNumber: first(
-          faqSection.sectionNumber,
-          faqContent.sectionNumber
+        title: getFirstString(
+          faqSectionInput.title,
+          faqSectionContent.title
         ),
 
-        topLabel: first(
-          faqSection.topLabel,
-          faqContent.topLabel
+        description: getFirstString(
+          faqSectionInput.description,
+          faqSectionContent.description
         ),
 
-        headingLine1: first(
-          faqSection.headingLine1,
-          faqContent.headingLine1
-        ),
-
-        headingHighlight: first(
-          faqSection.headingHighlight,
-          faqContent.headingHighlight
-        ),
-
-        description: first(
-          faqSection.description,
-          faqContent.description
-        ),
-
-        developerLabel: first(
-          faqSection.developerLabel,
-          faqContent.developerLabel
-        ),
-
-        contactTitle: first(
-          faqSection.contactTitle,
-          faqContent.contactTitle
-        ),
-
-        contactDescription: first(
-          faqSection.contactDescription,
-          faqContent.contactDescription
-        ),
-
-        // Use your site's trusted contact details, not AI-generated
-        // phone numbers. Leave these blank if your model supplies defaults.
         phone: "",
         timing: "",
-
-        ctaTitle: first(faqSection.ctaTitle, faqContent.ctaTitle),
-
-        ctaDescription: first(
-          faqSection.ctaDescription,
-          faqContent.ctaDescription
-        ),
-
-        ctaButtonText: first(
-          faqSection.ctaButtonText,
-          faqContent.ctaButtonText
-        ),
-
-        callLabel: first(faqSection.callLabel, faqContent.callLabel),
-
-        whatsappLabel: first(
-          faqSection.whatsappLabel,
-          faqContent.whatsappLabel
-        ),
       },
 
-      faqs,
+      faqs: faqItems,
 
       cta: {
-        title: first(cta.title, ctaContent.title),
-
-        subtitle: first(
-          cta.subtitle,
-          ctaContent.subtitle
+        title: getFirstString(
+          ctaInput.title,
+          ctaContent.title
         ),
 
-        buttonText: first(
-          cta.buttonText,
+        description: getFirstString(
+          ctaInput.description,
+          ctaContent.description
+        ),
+
+        buttonText: getFirstString(
+          ctaInput.buttonText,
           ctaContent.buttonText
         ),
       },
     };
 
-    // =========================================================
-    // 10. CREATE DRAFT
-    // =========================================================
+    // --------------------------------------------------------
+    // 9. CREATE DRAFT
+    // --------------------------------------------------------
 
     const createdProperty = await Property.create(propertyPayload);
 
-    // =========================================================
-    // 11. REVIEW FLAGS
-    // =========================================================
+    // --------------------------------------------------------
+    // 10. REVIEW FLAGS
+    // --------------------------------------------------------
 
     const unresolvedReferences = [];
 
@@ -3640,64 +3411,25 @@ exports.aiCreateProperty = async (req, res) => {
       unresolvedReferences.push("location");
     }
 
-    const reviewReasons = [];
-
-    if (unresolvedReferences.length) {
-      reviewReasons.push("unresolved_references");
-    }
-
-    if (!marketType) {
-      reviewReasons.push("market_type_missing_or_invalid");
-    }
-
-    if (!overviewDescription) {
-      reviewReasons.push("overview_description_missing");
-    }
-
-    if (!heroDescription) {
-      reviewReasons.push("hero_description_missing");
-    }
-
-    if (!seoTitle) {
-      reviewReasons.push("seo_title_missing");
-    }
-
-    if (!seoDescription) {
-      reviewReasons.push("seo_description_missing");
-    }
-
-    if (!faqs.length) {
-      reviewReasons.push("faqs_missing");
-    }
-
-    if (marketType === "Primary" && !metrics.reraNumber) {
-      reviewReasons.push("rera_number_missing");
-    }
-
-    if (
-      configurationType === "Plots" &&
-      !plotConfigurations.length
-    ) {
-      reviewReasons.push("plot_configurations_missing");
-    }
-
-    if (
-      configurationType === "Apartments" &&
-      !allUnitConfigurations.length
-    ) {
-      reviewReasons.push("unit_configurations_missing");
-    }
+    const reviewRequired =
+      unresolvedReferences.length > 0 ||
+      !overviewDescription ||
+      !heroDescription ||
+      !seoContent.metaTitle && !seoInput.metaTitle ||
+      !seoContent.metaDescription && !seoInput.metaDescription ||
+      faqItems.length === 0 ||
+      (marketType === "Primary" && !metricsInput.reraNumber);
 
     const contentSummary = {
       unitConfigurations: allUnitConfigurations.length,
       floorPlans: floorPlans.length,
       plotConfigurations: plotConfigurations.length,
-      highlights: highlights.length,
-      amenities: amenities.length,
-      landmarks: landmarks.length,
-      faqs: faqs.length,
+      highlights: overviewHighlights.length,
+      amenities: overviewAmenities.length,
+      landmarks: locationLandmarks.length,
+      faqs: faqItems.length,
       customMetrics: customMetrics.length,
-      featureBar: featureBar.length,
+      featureBar: overviewFeatureBar.length,
       seoKeywords: seoKeywords.length,
     };
 
@@ -3705,7 +3437,7 @@ exports.aiCreateProperty = async (req, res) => {
       success: true,
 
       message:
-        "AI property draft created successfully. Review all facts, references, pricing and media before publishing.",
+        "AI property draft created successfully. Verify all facts and references before publishing.",
 
       draftId: createdProperty._id,
 
@@ -3715,9 +3447,7 @@ exports.aiCreateProperty = async (req, res) => {
 
       unresolvedReferences,
 
-      reviewRequired: reviewReasons.length > 0,
-
-      reviewReasons,
+      reviewRequired,
 
       contentSummary,
     });
@@ -3739,7 +3469,7 @@ exports.aiCreateProperty = async (req, res) => {
       return res.status(409).json({
         success: false,
         message:
-          "A unique value conflicts with an existing property. Check the slug and retry.",
+          "A property with a conflicting unique value already exists. Please retry after checking the existing record.",
         fields: error.keyValue || {},
       });
     }
@@ -3750,7 +3480,6 @@ exports.aiCreateProperty = async (req, res) => {
     });
   }
 };
-
 
 exports.getPropertySeoList = async (
   req,
