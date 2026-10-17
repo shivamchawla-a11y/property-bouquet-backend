@@ -3171,23 +3171,56 @@ exports.aiCreateProperty = async (req, res) => {
       configurationType = "Apartments";
     }
 
+ 
     // =========================================================
-    // 6. SLUG
+    // 6. SEO-FRIENDLY SLUG — PROJECT + LOCATION
+    // Examples:
+    // spiti-floors-sector-99a-gurgaon
+    // signature-global-city-37d-sector-37d-gurgaon
     // =========================================================
 
-    const slugBase =
-      title
-        .toLowerCase()
+    const slugify = (value) =>
+      String(value || "")
         .normalize("NFKD")
         .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
         .replace(/&/g, " and ")
         .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "")
-        .slice(0, 170)
-        .replace(/-+$/g, "") || "property";
+        .replace(/^-+|-+$/g, "");
 
-    // Drafts do not reserve the published partial unique index.
-    // Still avoid reusing an existing active document's slug.
+    const locationSegments = locationName
+      .split(">")
+      .map((part) => slugify(part))
+      .filter(Boolean);
+
+    // Use the most specific location and the city/root location.
+    // Example: Gurgaon > Dwarka Expressway > Sector 99A
+    // becomes: sector-99a-gurgaon
+    const locationSlugParts = [];
+
+    if (locationSegments.length > 0) {
+      const leaf = locationSegments[locationSegments.length - 1];
+      locationSlugParts.push(leaf);
+
+      const root = locationSegments[0];
+
+      if (root && root !== leaf) {
+        locationSlugParts.push(root);
+      }
+    }
+
+    const uniqueLocationParts = [...new Set(locationSlugParts)];
+
+    const slugParts = [
+      slugify(title),
+      ...uniqueLocationParts,
+    ].filter(Boolean);
+
+    const slugBase =
+      slugParts.join("-").slice(0, 200).replace(/-+$/g, "") ||
+      "property";
+
+    // Avoid collisions with existing properties.
     let slug = slugBase;
     let suffix = 2;
 
