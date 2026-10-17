@@ -2524,37 +2524,55 @@ exports.getPropertyById = async (
 // NEVER publishes an AI-generated property automatically.
 // ============================================================
 
+
 exports.aiCreateProperty = async (req, res) => {
   try {
     const mongoose = require("mongoose");
 
-    // --------------------------------------------------------
+    // =========================================================
     // 1. AUTHENTICATION
-    // --------------------------------------------------------
+    // =========================================================
 
     const userId = req.user?.id || req.user?._id;
 
-    if (!userId || !mongoose.Types.ObjectId.isValid(String(userId))) {
+    if (
+      !userId ||
+      !mongoose.Types.ObjectId.isValid(String(userId))
+    ) {
       return res.status(401).json({
         success: false,
         message: "Authentication required to create an AI property draft.",
       });
     }
 
-    // --------------------------------------------------------
-    // 2. INPUT VALIDATION
-    // --------------------------------------------------------
-
     const input = req.body?.aiData;
 
-    if (!input || typeof input !== "object" || Array.isArray(input)) {
+    if (
+      !input ||
+      typeof input !== "object" ||
+      Array.isArray(input)
+    ) {
       return res.status(400).json({
         success: false,
         message: "aiData must be a valid JSON object.",
       });
     }
 
-    const cleanString = (value, maxLength = 20000) => {
+    // =========================================================
+    // 2. SAFE INPUT HELPERS
+    // =========================================================
+
+    const obj = (value) =>
+      value &&
+      typeof value === "object" &&
+      !Array.isArray(value)
+        ? value
+        : {};
+
+    const arr = (value) =>
+      Array.isArray(value) ? value : [];
+
+    const str = (value, max = 20000) => {
       if (typeof value !== "string" && typeof value !== "number") {
         return "";
       }
@@ -2562,291 +2580,75 @@ exports.aiCreateProperty = async (req, res) => {
       return String(value)
         .replace(/\u0000/g, "")
         .trim()
-        .slice(0, maxLength);
+        .slice(0, max);
     };
 
-    const safeObject = (value) =>
-      value && typeof value === "object" && !Array.isArray(value)
-        ? value
-        : {};
+    const first = (...values) => {
+      for (const value of values) {
+        const result = str(value);
+        if (result) return result;
+      }
+      return "";
+    };
 
-    const safeArray = (value) => (Array.isArray(value) ? value : []);
-
-    const safeBoolean = (value, fallback = false) =>
+    const bool = (value, fallback = false) =>
       typeof value === "boolean" ? value : fallback;
 
-    const safeNumber = (value) => {
+    const num = (value) => {
       if (typeof value === "number") {
-        return Number.isFinite(value) && value >= 0 ? value : null;
+        return Number.isFinite(value) && value >= 0
+          ? value
+          : null;
       }
 
       if (typeof value !== "string") return null;
 
-      const normalized = value.trim();
+      const valueString = value.trim();
 
-      // Accept plain numbers only.
-      // Do not guess what "₹1.95 Cr", "1,950 sq ft", etc. mean.
-      if (!/^\d+(?:\.\d+)?$/.test(normalized)) return null;
+      // Do not guess conversions from prices such as "₹1.95 Cr".
+      if (!/^\d+(?:\.\d+)?$/.test(valueString)) {
+        return null;
+      }
 
-      const number = Number(normalized);
+      const result = Number(valueString);
 
-      return Number.isFinite(number) && number >= 0 ? number : null;
+      return Number.isFinite(result) && result >= 0
+        ? result
+        : null;
     };
 
-    const safeId = (value) => {
-      const id = cleanString(value, 100);
+    const id = (value) => {
+      const valueString = str(value, 100);
 
-      return mongoose.Types.ObjectId.isValid(id) ? id : null;
+      return mongoose.Types.ObjectId.isValid(valueString)
+        ? valueString
+        : null;
     };
 
-    const safeTextArray = (value, maxItems = 50, maxLength = 1000) =>
-      safeArray(value)
+    const textArray = (value, maxItems = 40, maxLength = 1000) =>
+      arr(value)
         .slice(0, maxItems)
-        .map((item) => cleanString(item, maxLength))
+        .map((item) => str(item, maxLength))
         .filter(Boolean);
 
     const escapeRegex = (value) =>
       value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-    const getFirstString = (...values) => {
-      for (const value of values) {
-        const result = cleanString(value);
-        if (result) return result;
-      }
-
-      return "";
-    };
-
-    // Do not accept an arbitrary object ID supplied by AI as proof
-    // that the corresponding developer/category/location is correct.
-    // Every reference must be verified against the database.
-
-    const resolveReference = async ({
-      Model,
-      suppliedId,
-      suppliedName,
-      nameFields = ["name"],
-    }) => {
-      const id = safeId(suppliedId);
-      const name = cleanString(suppliedName, 300);
-
-      if (id) {
-        const record = await Model.findById(id)
-          .select("_id name slug")
-          .lean();
-
-        if (record) {
-          return {
-            record,
-            resolved: true,
-            method: "id",
-            suppliedName: name,
-          };
-        }
-      }
-
-      if (name) {
-        for (const field of nameFields) {
-          // Only search explicitly allowed schema fields.
-          if (!["name", "slug", "fullPath"].includes(field)) continue;
-
-          const record = await Model.findOne({
-            [field]: {
-              $regex: `^${escapeRegex(name)}$`,
-              $options: "i",
-            },
-          })
-            .select("_id name slug")
-            .lean();
-
-          if (record) {
-            return {
-              record,
-              resolved: true,
-              method: `exact-${field}`,
-              suppliedName: name,
-            };
-          }
-        }
-      }
-
-      return {
-        record: null,
-        resolved: false,
-        method: null,
-        suppliedName: name,
-      };
-    };
-
-    // --------------------------------------------------------
-    // 3. READ INPUT SECTIONS
-    // --------------------------------------------------------
-
-    const core = safeObject(input.coreDetails);
-    const categoryInput = safeObject(input.categoryData);
-    const heroInput = safeObject(input.heroSection);
-    const metricsInput = safeObject(input.keyMetrics);
-    const overviewInput = safeObject(input.overview);
-    const configurationInput = safeObject(input.configurationSection);
-    const locationInput = safeObject(input.locationData);
-    const masterPlanInput = safeObject(input.masterPlanSection);
-    const gatedInput = safeObject(input.gatedContent);
-    const seoInput = safeObject(input.seoEngine);
-    const faqSectionInput = safeObject(input.faqSection);
-    const ctaInput = safeObject(input.cta);
-
-    const overviewContent = safeObject(input.overviewContent);
-    const configurationContent = safeObject(input.configurationContent);
-    const locationContent = safeObject(input.locationContent);
-    const masterPlanContent = safeObject(input.masterPlanContent);
-    const seoContent = safeObject(input.seoContent);
-    const faqSectionContent = safeObject(input.faqSectionContent);
-    const ctaContent = safeObject(input.ctaContent);
-
-    const cleanTitle = getFirstString(
-      core.title,
-      input.title,
-      input.projectName,
-      input.propertyName
-    );
-
-    if (!cleanTitle) {
-      return res.status(400).json({
-        success: false,
-        message: "A property title or project name is required.",
-      });
-    }
-
-    const marketTypeInput = getFirstString(
-      input.marketType,
-      core.marketType
-    );
-
-    const marketType = ["Primary", "Resale"].includes(marketTypeInput)
-      ? marketTypeInput
-      : "Primary";
-
-    const developerName = getFirstString(
-      core.developerName,
-      input.developerName,
-      input.developer
-    );
-
-    const categoryName = getFirstString(
-      categoryInput.categoryName,
-      input.categoryName,
-      input.propertyType
-    );
-
-    const locationName = getFirstString(
-      locationInput.locationName,
-      input.locationName,
-      input.location
-    );
-
-    const locationAddress = getFirstString(
-      locationInput.address,
-      input.address
-    );
-
-    // --------------------------------------------------------
-    // 4. RESOLVE DATABASE REFERENCES
-    // --------------------------------------------------------
-
-    const [developerResolution, categoryResolution, locationResolution] =
-      await Promise.all([
-        resolveReference({
-          Model: Developer,
-          suppliedId: core.developerRef || input.developerRef,
-          suppliedName: developerName,
-          nameFields: ["name"],
-        }),
-
-        resolveReference({
-          Model: Category,
-          suppliedId:
-            categoryInput.categoryRef ||
-            input.categoryRef,
-          suppliedName: categoryName,
-          nameFields: ["name", "slug", "fullPath"],
-        }),
-
-        resolveReference({
-          Model: Location,
-          suppliedId:
-            locationInput.locationRef ||
-            input.locationRef,
-          suppliedName: locationName,
-          nameFields: ["name", "slug"],
-        }),
-      ]);
-
-    const developerRecord = developerResolution.record;
-    const categoryRecord = categoryResolution.record;
-    const locationRecord = locationResolution.record;
-
-    const resolution = {
-      developer: {
-        resolved: Boolean(developerRecord),
-        method: developerResolution.method,
-        suppliedName: developerName,
-        id: developerRecord?._id?.toString() || null,
-      },
-      category: {
-        resolved: Boolean(categoryRecord),
-        method: categoryResolution.method,
-        suppliedName: categoryName,
-        id: categoryRecord?._id?.toString() || null,
-      },
-      location: {
-        resolved: Boolean(locationRecord),
-        method: locationResolution.method,
-        suppliedName: locationName,
-        id: locationRecord?._id?.toString() || null,
-      },
-    };
-
-    // --------------------------------------------------------
-    // 5. SAFE SUBDOCUMENT MAPPERS
-    // --------------------------------------------------------
-
-    const mapTextItems = (
-      items,
-      {
-        titleKeys = ["title", "name", "heading"],
-        descriptionKeys = ["description", "desc", "subtitle"],
-        maxItems = 40,
-      } = {}
-    ) =>
-      safeArray(items)
-        .slice(0, maxItems)
+    // Maps text fields only. Icons are intentionally omitted so
+    // the actual Mongoose schema defaults are applied.
+    const mapFeatureItems = (items, max = 40) =>
+      arr(items)
+        .slice(0, max)
         .map((raw) => {
-          const item = safeObject(raw);
+          const item = obj(raw);
 
           return {
-            title: getFirstString(
-              ...titleKeys.map((key) => item[key])
-            ),
-            description: getFirstString(
-              ...descriptionKeys.map((key) => item[key])
-            ),
-          };
-        })
-        .filter((item) => item.title || item.description);
-
-    const mapFeatureItems = (items, maxItems = 40) =>
-      safeArray(items)
-        .slice(0, maxItems)
-        .map((raw) => {
-          const item = safeObject(raw);
-
-          return {
-            heading: getFirstString(
+            heading: first(
               item.heading,
               item.title,
               item.name
             ),
-            subheading: getFirstString(
+            subheading: first(
               item.subheading,
               item.description,
               item.desc
@@ -2855,15 +2657,32 @@ exports.aiCreateProperty = async (req, res) => {
         })
         .filter((item) => item.heading || item.subheading);
 
-    const mapBottomStrip = (items, maxItems = 12) =>
-      safeArray(items)
-        .slice(0, maxItems)
+    const mapFeatureBar = (items, max = 12) =>
+      arr(items)
+        .slice(0, max)
         .map((raw) => {
-          const item = safeObject(raw);
+          const item = obj(raw);
 
           return {
-            title: getFirstString(item.title, item.heading, item.name),
-            desc: getFirstString(
+            title: first(item.title, item.heading, item.name),
+            desc: first(
+              item.desc,
+              item.description,
+              item.subtitle
+            ),
+          };
+        })
+        .filter((item) => item.title || item.desc);
+
+    const mapStrip = (items, max = 12) =>
+      arr(items)
+        .slice(0, max)
+        .map((raw) => {
+          const item = obj(raw);
+
+          return {
+            title: first(item.title, item.heading, item.name),
+            desc: first(
               item.desc,
               item.description,
               item.subheading
@@ -2872,28 +2691,28 @@ exports.aiCreateProperty = async (req, res) => {
         })
         .filter((item) => item.title || item.desc);
 
-    const mapConfigurations = (items, maxItems = 40) =>
-      safeArray(items)
-        .slice(0, maxItems)
+    const mapConfigurations = (items, max = 40) =>
+      arr(items)
+        .slice(0, max)
         .map((raw) => {
-          const item = safeObject(raw);
+          const item = obj(raw);
 
           return {
-            unitType: getFirstString(
+            unitType: first(
               item.unitType,
               item.configuration,
               item.type,
               item.name
             ),
-            area: getFirstString(item.area, item.size, item.areaRange),
-            price: getFirstString(item.price, item.startingPrice),
-            paymentPlan: getFirstString(
+            area: first(item.area, item.size, item.areaRange),
+            price: first(item.price, item.startingPrice),
+            paymentPlan: first(
               item.paymentPlan,
               item.paymentTerms
             ),
-            bedrooms: getFirstString(item.bedrooms, item.bhk),
-            bathrooms: getFirstString(item.bathrooms),
-            balconies: getFirstString(item.balconies),
+            bedrooms: first(item.bedrooms, item.bhk),
+            bathrooms: first(item.bathrooms),
+            balconies: first(item.balconies),
           };
         })
         .filter(
@@ -2904,39 +2723,84 @@ exports.aiCreateProperty = async (req, res) => {
             item.bedrooms
         );
 
-    const mapPlotConfigurations = (items, maxItems = 40) =>
-      safeArray(items)
-        .slice(0, maxItems)
+    const mapFloorPlans = (items, max = 40) =>
+      arr(items)
+        .slice(0, max)
         .map((raw) => {
-          const item = safeObject(raw);
+          const item = obj(raw);
 
           return {
-            plotType: getFirstString(
+            unitType: first(
+              item.unitType,
+              item.configuration,
+              item.type,
+              item.name
+            ),
+            area: first(item.area, item.size, item.areaRange),
+            price: first(item.price, item.startingPrice),
+            paymentPlan: first(
+              item.paymentPlan,
+              item.paymentTerms
+            ),
+            bedrooms: first(item.bedrooms, item.bhk),
+            bathrooms: first(item.bathrooms),
+            balconies: first(item.balconies),
+            image: safeAssetUrl(item.image || item.imageUrl),
+          };
+        })
+        .filter(
+          (item) =>
+            item.unitType ||
+            item.area ||
+            item.price ||
+            item.image
+        );
+
+    const mapPlots = (items, max = 40) =>
+      arr(items)
+        .slice(0, max)
+        .map((raw) => {
+          const item = obj(raw);
+
+          return {
+            plotType: first(
               item.plotType,
               item.unitType,
               item.type,
               item.name
             ),
-            area: getFirstString(item.area, item.size, item.areaRange),
-            price: getFirstString(item.price, item.startingPrice),
-            paymentPlan: getFirstString(
+            plotArea: first(
+              item.plotArea,
+              item.area,
+              item.size,
+              item.areaRange
+            ),
+            price: first(item.price, item.startingPrice),
+            paymentPlan: first(
               item.paymentPlan,
               item.paymentTerms
             ),
+            image: safeAssetUrl(item.image || item.imageUrl),
           };
         })
-        .filter((item) => item.plotType || item.area || item.price);
+        .filter(
+          (item) =>
+            item.plotType ||
+            item.plotArea ||
+            item.price ||
+            item.image
+        );
 
-    const mapLandmarks = (items, maxItems = 40) =>
-      safeArray(items)
-        .slice(0, maxItems)
+    const mapLandmarks = (items, max = 40) =>
+      arr(items)
+        .slice(0, max)
         .map((raw) => {
-          const item = safeObject(raw);
+          const item = obj(raw);
 
           return {
-            name: getFirstString(item.name, item.title),
-            distance: getFirstString(item.distance, item.distanceText),
-            subtitle: getFirstString(
+            name: first(item.name, item.title),
+            distance: first(item.distance, item.distanceText),
+            subtitle: first(
               item.subtitle,
               item.description,
               item.type
@@ -2945,86 +2809,374 @@ exports.aiCreateProperty = async (req, res) => {
         })
         .filter((item) => item.name);
 
-    const mapFaqs = (items, maxItems = 30) =>
-      safeArray(items)
-        .slice(0, maxItems)
+    const mapFaqs = (items, max = 30) =>
+      arr(items)
+        .slice(0, max)
         .map((raw) => {
-          const item = safeObject(raw);
+          const item = obj(raw);
 
           return {
-            question: getFirstString(item.question, item.title),
-            answer: getFirstString(item.answer, item.content),
+            question: first(item.question, item.title),
+            answer: first(item.answer, item.content),
           };
         })
         .filter((item) => item.question && item.answer);
 
-    const mapCustomMetrics = (items, maxItems = 20) =>
-      safeArray(items)
-        .slice(0, maxItems)
+    const mapMetrics = (items, max = 20) =>
+      arr(items)
+        .slice(0, max)
         .map((raw) => {
-          const item = safeObject(raw);
+          const item = obj(raw);
 
           return {
-            label: getFirstString(item.label, item.title, item.name),
-            value: getFirstString(item.value, item.description),
+            label: first(item.label, item.title, item.name),
+            value: first(item.value, item.description),
           };
         })
         .filter((item) => item.label && item.value);
 
-    const mapTaglineItems = (items) =>
-      safeTextArray(items, 12, 180);
+    // Accept only absolute HTTP(S) URLs from trusted asset hosts.
+    // Extend this list if your actual Cloudinary hostname differs.
+    const safeAssetUrl = (value) => {
+      const raw = str(value, 2000);
 
-    // --------------------------------------------------------
-    // 6. CONFIGURATION TYPE
-    // Existing schema supports only Apartments and Plots.
-    // Do not pass an unsupported enum value into Mongoose.
-    // --------------------------------------------------------
+      if (!raw) return "";
 
-    const rawConfigurationType = getFirstString(
-      gatedInput.configurationType,
-      input.configurationType
+      try {
+        const parsed = new URL(raw);
+
+        if (!["https:", "http:"].includes(parsed.protocol)) {
+          return "";
+        }
+
+        const host = parsed.hostname.toLowerCase();
+
+        const allowed =
+          host === "res.cloudinary.com" ||
+          host.endsWith(".cloudinary.com") ||
+          host === "propertybouquet.com" ||
+          host.endsWith(".propertybouquet.com");
+
+        return allowed ? parsed.toString() : "";
+      } catch {
+        return "";
+      }
+    };
+
+    // Google Maps URL only: never accept iframe markup as a URL.
+    const safeMapUrl = (value) => {
+      const raw = str(value, 3000);
+
+      if (!raw || /<\s*iframe\b/i.test(raw)) return "";
+
+      try {
+        const parsed = new URL(raw);
+
+        if (
+          !["https:", "http:"].includes(parsed.protocol) ||
+          !(
+            parsed.hostname === "google.com" ||
+            parsed.hostname.endsWith(".google.com") ||
+            parsed.hostname === "google.co.in" ||
+            parsed.hostname.endsWith(".google.co.in") ||
+            parsed.hostname === "maps.google.com"
+          ) ||
+          !parsed.pathname.startsWith("/maps")
+        ) {
+          return "";
+        }
+
+        return parsed.toString();
+      } catch {
+        return "";
+      }
+    };
+
+    // =========================================================
+    // 3. READ NESTED AND FLAT INPUT FORMATS
+    // =========================================================
+
+    const core = obj(input.coreDetails);
+    const categoryInput = obj(input.categoryData);
+    const hero = obj(input.heroSection);
+    const metrics = obj(input.keyMetrics);
+    const overview = obj(input.overview);
+    const configuration = obj(input.configurationSection);
+    const location = obj(input.locationData);
+    const master = obj(input.masterPlanSection);
+    const gated = obj(input.gatedContent);
+    const seo = obj(input.seoEngine);
+    const faqSection = obj(input.faqSection);
+    const cta = obj(input.cta);
+
+    const overviewContent = obj(input.overviewContent);
+    const configurationContent = obj(input.configurationContent);
+    const locationContent = obj(input.locationContent);
+    const masterContent = obj(input.masterPlanContent);
+    const seoContent = obj(input.seoContent);
+    const faqContent = obj(input.faqSectionContent);
+    const ctaContent = obj(input.ctaContent);
+
+    const title = first(
+      core.title,
+      input.title,
+      input.projectName,
+      input.propertyName
     );
+
+    if (!title) {
+      return res.status(400).json({
+        success: false,
+        message: "A property title or project name is required.",
+      });
+    }
+
+    const marketTypeInput = first(
+      input.marketType,
+      core.marketType
+    );
+
+    // Unknown values remain null instead of being falsely classified
+    // as Primary.
+    const marketType = ["Primary", "Resale"].includes(marketTypeInput)
+      ? marketTypeInput
+      : null;
+
+    const developerName = first(
+      core.developerName,
+      input.developerName,
+      input.developer
+    );
+
+    const categoryName = first(
+      categoryInput.categoryName,
+      input.categoryName,
+      input.propertyType
+    );
+
+    const locationName = first(
+      location.locationName,
+      input.locationName,
+      input.location
+    );
+
+    const locationAddress = first(
+      location.address,
+      input.address
+    );
+
+    // =========================================================
+    // 4. DATABASE REFERENCE RESOLUTION
+    // =========================================================
+
+    const resolveByName = async ({
+      Model,
+      suppliedId,
+      suppliedName,
+      fields,
+    }) => {
+      const referenceId = id(suppliedId);
+      const name = str(suppliedName, 300);
+
+      // Verify IDs against the correct collection.
+      if (referenceId) {
+        const record = await Model.findById(referenceId).lean();
+
+        if (record) {
+          return {
+            record,
+            method: "verified-id",
+          };
+        }
+      }
+
+      if (!name) {
+        return { record: null, method: null };
+      }
+
+      for (const field of fields) {
+        const exact = await Model.findOne({
+          [field]: {
+            $regex: `^${escapeRegex(name)}$`,
+            $options: "i",
+          },
+        }).lean();
+
+        if (exact) {
+          return {
+            record: exact,
+            method: `exact-${field}`,
+          };
+        }
+      }
+
+      return { record: null, method: null };
+    };
+
+    const [developerResult, categoryResult] = await Promise.all([
+      resolveByName({
+        Model: Developer,
+        suppliedId: core.developerRef || input.developerRef,
+        suppliedName: developerName,
+        fields: ["name", "slug"],
+      }),
+
+      resolveByName({
+        Model: Category,
+        suppliedId:
+          categoryInput.categoryRef || input.categoryRef,
+        suppliedName: categoryName,
+        fields: ["fullPath", "name", "slug"],
+      }),
+    ]);
+
+    const developerRecord = developerResult.record;
+    const categoryRecord = categoryResult.record;
+
+    // Locations have name, slug and parent, but no fullPath.
+    // For a hierarchy such as "Gurgaon > Sector-89", resolve the
+    // leaf and verify the supplied ancestor chain when possible.
+    const locationParts = locationName
+      .split(">")
+      .map((part) => part.trim())
+      .filter(Boolean);
+
+    let locationResult = { record: null, method: null };
+
+    const locationId = id(
+      location.locationRef || input.locationRef
+    );
+
+    if (locationId) {
+      const record = await Location.findById(locationId).lean();
+
+      if (record) {
+        locationResult = {
+          record,
+          method: "verified-id",
+        };
+      }
+    }
+
+    if (!locationResult.record && locationParts.length) {
+      const leafName = locationParts[locationParts.length - 1];
+
+      const candidates = await Location.find({
+        $or: [
+          {
+            name: {
+              $regex: `^${escapeRegex(leafName)}$`,
+              $options: "i",
+            },
+          },
+          {
+            slug: {
+              $regex: `^${escapeRegex(leafName)}$`,
+              $options: "i",
+            },
+          },
+        ],
+      }).limit(20).lean();
+
+      for (const candidate of candidates) {
+        let current = candidate;
+        let matches = true;
+
+        // Verify each supplied parent from nearest to farthest.
+        for (let i = locationParts.length - 2; i >= 0; i--) {
+          if (!current.parent) {
+            matches = false;
+            break;
+          }
+
+          current = await Location.findById(current.parent).lean();
+
+          if (
+            !current ||
+            current.name.toLowerCase() !==
+              locationParts[i].toLowerCase()
+          ) {
+            matches = false;
+            break;
+          }
+        }
+
+        if (matches) {
+          locationResult = {
+            record: candidate,
+            method:
+              locationParts.length > 1
+                ? "verified-hierarchy"
+                : "exact-location-name",
+          };
+          break;
+        }
+      }
+    }
+
+    const locationRecord = locationResult.record;
+
+    const resolution = {
+      developer: {
+        resolved: Boolean(developerRecord),
+        method: developerResult.method,
+        suppliedName: developerName,
+        id: developerRecord?._id?.toString() || null,
+      },
+      category: {
+        resolved: Boolean(categoryRecord),
+        method: categoryResult.method,
+        suppliedName: categoryName,
+        id: categoryRecord?._id?.toString() || null,
+      },
+      location: {
+        resolved: Boolean(locationRecord),
+        method: locationResult.method,
+        suppliedName: locationName,
+        id: locationRecord?._id?.toString() || null,
+      },
+    };
+
+    // =========================================================
+    // 5. CONFIGURATION DATA
+    // =========================================================
 
     const unitConfigurations = mapConfigurations(
       input.unitConfigurations
     );
 
-    const floorPlans = mapConfigurations(
-      gatedInput.floorPlans || input.floorPlans
+    const floorPlans = mapFloorPlans(
+      gated.floorPlans || input.floorPlans
     );
 
-    const plotConfigurations = mapPlotConfigurations(
-      input.plotConfigurations || gatedInput.plotConfigurations
+    const plotConfigurations = mapPlots(
+      gated.plotConfigurations || input.plotConfigurations
     );
 
-    const allUnitConfigurations =
-      unitConfigurations.length > 0
-        ? unitConfigurations
-        : floorPlans;
+    const rawConfigurationType = first(
+      gated.configurationType,
+      input.configurationType
+    );
 
     let configurationType;
 
     if (["Apartments", "Plots"].includes(rawConfigurationType)) {
       configurationType = rawConfigurationType;
     } else if (
-      /plot|land/i.test(categoryName) ||
-      plotConfigurations.length > 0
+      plotConfigurations.length ||
+      /\b(plot|plots|land)\b/i.test(categoryName)
     ) {
       configurationType = "Plots";
     } else {
-      // The existing schema does not support "Independent Floors".
-      // Map to Apartments for compatibility with the existing enum.
       configurationType = "Apartments";
     }
 
-    // --------------------------------------------------------
-    // 7. SLUG GENERATION
-    // Only published, non-deleted properties reserve a slug
-    // under the published partial unique index.
-    // --------------------------------------------------------
+    // =========================================================
+    // 6. SLUG
+    // =========================================================
 
     const slugBase =
-      cleanTitle
+      title
         .toLowerCase()
         .normalize("NFKD")
         .replace(/[\u0300-\u036f]/g, "")
@@ -3034,421 +3186,620 @@ exports.aiCreateProperty = async (req, res) => {
         .slice(0, 170)
         .replace(/-+$/g, "") || "property";
 
+    // Drafts do not reserve the published partial unique index.
+    // Still avoid reusing an existing active document's slug.
     let slug = slugBase;
-    let slugCounter = 2;
+    let suffix = 2;
 
     while (
       await Property.exists({
         slug,
         isDeleted: false,
-        status: "published",
       })
     ) {
-      slug = `${slugBase}-${slugCounter}`;
-      slugCounter += 1;
+      slug = `${slugBase}-${suffix++}`;
     }
 
-    // --------------------------------------------------------
-    // 8. BUILD PROPERTY PAYLOAD
-    // Explicitly create a draft. Never trust AI status fields.
-    // --------------------------------------------------------
+    // =========================================================
+    // 7. CONTENT MAPPINGS
+    // =========================================================
 
-    const priceOnRequest = safeBoolean(
-      core.priceOnRequest ?? input.priceOnRequest,
-      false
-    );
-
-    const startingPrice = safeNumber(
-      core.startingPrice ?? input.startingPrice
-    );
-
-    const maxPrice = safeNumber(
-      core.maxPrice ?? input.maxPrice
-    );
-
-    const heroDescription = getFirstString(
-      heroInput.heroDescription,
-      input.heroDescription,
-      overviewContent.heroDescription
-    );
-
-    const overviewDescription = getFirstString(
-      overviewInput.description,
+    const overviewDescription = first(
+      overview.description,
       overviewContent.description,
       input.overviewDescription,
       input.description
     );
 
-    const overviewFeatureBar = safeArray(
-      overviewInput.featureBar || input.featureBar
-    )
-      .slice(0, 12)
-      .map((raw) => {
-        const item = safeObject(raw);
-
-        return {
-          title: getFirstString(item.title, item.heading, item.name),
-          desc: getFirstString(
-            item.desc,
-            item.description,
-            item.subtitle
-          ),
-        };
-      })
-      .filter((item) => item.title || item.desc);
-
-    const overviewHighlights = mapFeatureItems(
-      overviewInput.highlights || input.highlights
+    const heroDescription = first(
+      hero.heroDescription,
+      input.heroDescription,
+      overviewContent.heroDescription
     );
 
-    const overviewAmenities = mapFeatureItems(
-      overviewInput.amenities || input.amenities,
+    const featureBar = mapFeatureBar(
+      overview.featureBar || input.featureBar
+    );
+
+    const highlights = mapFeatureItems(
+      overview.highlights || input.highlights
+    );
+
+    const amenities = mapFeatureItems(
+      overview.amenities || input.amenities,
       60
     );
 
-    const customMetrics = mapCustomMetrics(
-      metricsInput.customMetrics || input.customMetrics
+    const customMetrics = mapMetrics(
+      metrics.customMetrics || input.customMetrics
     );
 
-    const locationLandmarks = mapLandmarks(
-      locationInput.landmarks || input.landmarks
+    const landmarks = mapLandmarks(
+      location.landmarks || input.landmarks
     );
 
-    const locationBottomStrip = mapBottomStrip(
-      locationInput.bottomStrip ||
+    const locationBottomStrip = mapStrip(
+      location.bottomStrip ||
         input.locationBottomStrip ||
         locationContent.bottomStrip
     );
 
-    const masterPlanBottomStrip = mapBottomStrip(
-      masterPlanInput.bottomStrip ||
-        masterPlanContent.bottomStrip
+    const masterBottomStrip = mapStrip(
+      master.bottomStrip || masterContent.bottomStrip
     );
 
-    const seoKeywords = safeTextArray(
-      seoInput.keywords ||
-        seoContent.keywords ||
-        input.seoKeywords,
+    const faqs = mapFaqs(input.faqs);
+
+    const seoKeywords = textArray(
+      seo.keywords || seoContent.keywords || input.seoKeywords,
       40,
       150
     );
 
-    const faqItems = mapFaqs(input.faqs);
+    const priceOnRequest = bool(
+      core.priceOnRequest ?? input.priceOnRequest,
+      false
+    );
+
+    const startingPrice = num(
+      core.startingPrice ?? input.startingPrice
+    );
+
+    const maxPrice = num(
+      core.maxPrice ?? input.maxPrice
+    );
+
+    // If the project is explicitly price-on-request, ignore numeric
+    // prices supplied alongside it.
+    const actualStartingPrice = priceOnRequest
+      ? null
+      : startingPrice;
+
+    const actualMaxPrice = priceOnRequest ? null : maxPrice;
+
+    // =========================================================
+    // 8. PROPERTY PAYLOAD — EXACT SCHEMA FIELD NAMES
+    // =========================================================
 
     const propertyPayload = {
       slug,
-
       marketType,
 
-      // Always draft, irrespective of AI-provided status.
+      // Never accept AI's requested status.
       status: "draft",
       isActive: true,
       isDeleted: false,
       deletedFromStatus: null,
-      propertyTag: "Normal",
-
+      propertyTag: ["Normal"],
       createdBy: userId,
 
       coreDetails: {
-        title: cleanTitle,
+        title,
 
         developerRef: developerRecord?._id || null,
-        developerName: developerRecord
-          ? cleanString(developerRecord.name, 300)
-          : "",
+        developerName: developerRecord?.name || "",
 
-        developerImage: "",
-        developerLogo: "",
+        developerImage: safeAssetUrl(developerRecord?.image),
+        developerLogo: safeAssetUrl(developerRecord?.logo),
 
-        startingPrice: priceOnRequest ? null : startingPrice,
-        maxPrice: priceOnRequest ? null : maxPrice,
+        startingPrice: actualStartingPrice,
+        maxPrice: actualMaxPrice,
         priceOnRequest,
       },
 
       categoryData: {
         categoryRef: categoryRecord?._id || null,
-        categoryName: categoryRecord
-          ? cleanString(categoryRecord.name, 300)
-          : "",
+        categoryName: categoryRecord?.name || "",
       },
 
       heroSection: {
-        propertyStatus: getFirstString(
-          heroInput.propertyStatus,
-          metricsInput.status
+        propertyStatus: first(
+          hero.propertyStatus,
+          metrics.status
         ),
 
         heroDescription,
 
-        brochureButtonText: getFirstString(
-          heroInput.brochureButtonText
+        brochureButtonText: first(
+          hero.brochureButtonText,
+          overviewContent.brochureButtonText
         ),
 
-        videoButtonText: getFirstString(
-          heroInput.videoButtonText
+        videoButtonText: first(
+          hero.videoButtonText,
+          overviewContent.videoButtonText
         ),
 
-        taglineItems: mapTaglineItems(
-          heroInput.taglineItems || input.taglineItems
+        taglineItems: textArray(
+          hero.taglineItems || input.taglineItems,
+          12,
+          180
         ),
       },
 
       keyMetrics: {
-        landArea: getFirstString(metricsInput.landArea),
-        possession: getFirstString(metricsInput.possession),
-        status: getFirstString(metricsInput.status),
-
-        totalUnits: safeNumber(metricsInput.totalUnits),
-        totalTowers: safeNumber(metricsInput.totalTowers),
-
-        floors: getFirstString(metricsInput.floors),
-        reraNumber: getFirstString(metricsInput.reraNumber),
-
+        landArea: first(metrics.landArea),
+        possession: first(metrics.possession),
+        status: first(metrics.status),
+        totalUnits: num(metrics.totalUnits),
+        totalTowers: num(metrics.totalTowers),
+        floors: first(metrics.floors),
+        reraNumber: first(metrics.reraNumber),
         customMetrics,
       },
 
       overview: {
+        aboutSectionNumber: first(
+          overview.aboutSectionNumber,
+          overviewContent.aboutSectionNumber
+        ),
+        aboutLabel: first(
+          overview.aboutLabel,
+          overviewContent.aboutLabel
+        ),
+        aboutTitleLine1: first(
+          overview.aboutTitleLine1,
+          overviewContent.aboutTitleLine1
+        ),
+        aboutTitleLine2: first(
+          overview.aboutTitleLine2,
+          overviewContent.aboutTitleLine2
+        ),
+
         description: overviewDescription,
 
-        aboutTitle: getFirstString(
-          overviewInput.aboutTitle,
-          overviewContent.aboutTitle
-        ),
-
-        aboutParagraph1: getFirstString(
-          overviewInput.aboutParagraph1,
-          overviewContent.aboutParagraph1
-        ),
-
-        aboutParagraph2: getFirstString(
-          overviewInput.aboutParagraph2,
+        aboutParagraph2: first(
+          overview.aboutParagraph2,
           overviewContent.aboutParagraph2
         ),
 
-        aboutImageUrl: "",
+        aboutImageUrl: safeAssetUrl(
+          overview.aboutImageUrl || overviewContent.aboutImageUrl
+        ),
 
-        featureBar: overviewFeatureBar,
-        highlights: overviewHighlights,
-        amenities: overviewAmenities,
+        featureBar,
 
-        bottomStrip: mapBottomStrip(
-          overviewInput.bottomStrip ||
-            overviewContent.bottomStrip
+        highlightsHeading: first(
+          overview.highlightsHeading,
+          overviewContent.highlightsHeading
+        ),
+        highlightsSubheading: first(
+          overview.highlightsSubheading,
+          overviewContent.highlightsSubheading
+        ),
+        highlightQuote: first(
+          overview.highlightQuote,
+          overviewContent.highlightQuote
+        ),
+
+        amenitiesSectionNumber: first(
+          overview.amenitiesSectionNumber,
+          overviewContent.amenitiesSectionNumber
+        ),
+        amenitiesSectionLabel: first(
+          overview.amenitiesSectionLabel,
+          overviewContent.amenitiesSectionLabel
+        ),
+        amenitiesHeadingLine1: first(
+          overview.amenitiesHeadingLine1,
+          overviewContent.amenitiesHeadingLine1
+        ),
+        amenitiesHeadingLine2: first(
+          overview.amenitiesHeadingLine2,
+          overviewContent.amenitiesHeadingLine2
+        ),
+        amenitiesHeadingLine3: first(
+          overview.amenitiesHeadingLine3,
+          overviewContent.amenitiesHeadingLine3
+        ),
+        amenitiesSubheading: first(
+          overview.amenitiesSubheading,
+          overviewContent.amenitiesSubheading
+        ),
+
+        highlights,
+        amenities,
+
+        bottomStripTitle1: first(
+          overview.bottomStripTitle1,
+          overviewContent.bottomStripTitle1
+        ),
+        bottomStripTitle2: first(
+          overview.bottomStripTitle2,
+          overviewContent.bottomStripTitle2
+        ),
+        bottomStripFeature1: first(
+          overview.bottomStripFeature1,
+          overviewContent.bottomStripFeature1
+        ),
+        bottomStripFeature2: first(
+          overview.bottomStripFeature2,
+          overviewContent.bottomStripFeature2
+        ),
+        bottomStripFeature3: first(
+          overview.bottomStripFeature3,
+          overviewContent.bottomStripFeature3
         ),
       },
 
       configurationSection: {
-        title: getFirstString(
-          configurationInput.title,
-          configurationContent.title
+        sectionNumber: first(
+          configuration.sectionNumber,
+          configurationContent.sectionNumber
         ),
-
-        description: getFirstString(
-          configurationInput.description,
-          configurationContent.description
+        sectionLabel: first(
+          configuration.sectionLabel,
+          configurationContent.sectionLabel
         ),
-
-        features: safeTextArray(
-          configurationInput.features ||
-            configurationContent.features,
+        titleLine1: first(
+          configuration.titleLine1,
+          configurationContent.titleLine1
+        ),
+        titleLine2: first(
+          configuration.titleLine2,
+          configurationContent.titleLine2
+        ),
+        subheading: first(
+          configuration.subheading,
+          configurationContent.subheading
+        ),
+        features: textArray(
+          configuration.features || configurationContent.features,
           40,
           1000
         ),
+        buttonText: first(
+          configuration.buttonText,
+          configurationContent.buttonText
+        ),
       },
 
-      unitConfigurations: allUnitConfigurations,
+      unitConfigurations,
 
       media: {
-        // AI-generated media URLs are not trusted automatically.
-        // Add reviewed assets through your admin/media workflow.
-        heroImageUrl: "",
-        gallery: [],
-        walkthroughUrl: "",
+        heroImageUrl: safeAssetUrl(
+          obj(input.media).heroImageUrl || input.heroImageUrl
+        ),
+        gallery: arr(
+          obj(input.media).gallery || input.gallery
+        )
+          .slice(0, 30)
+          .map(safeAssetUrl)
+          .filter(Boolean),
+        walkthroughUrl: safeAssetUrl(
+          obj(input.media).walkthroughUrl || input.walkthroughUrl
+        ),
       },
 
       locationData: {
         locationRef: locationRecord?._id || null,
-
         locationName: locationRecord
-          ? cleanString(locationRecord.name, 300)
-          : "",
-
-        customLocation: locationRecord
-          ? ""
+          ? locationRecord.name
           : locationName,
-
+        customLocation: locationRecord ? "" : locationName,
         address: locationAddress,
 
-        // Do not accept arbitrary AI iframe/HTML embeds.
-        mapEmbedUrl: "",
-
-        title: getFirstString(
-          locationInput.title,
-          locationContent.title
+        mapEmbedUrl: safeMapUrl(
+          location.mapEmbedUrl || input.mapEmbedUrl
         ),
 
-        description: getFirstString(
-          locationInput.description,
+        sectionNumber: first(
+          location.sectionNumber,
+          locationContent.sectionNumber
+        ),
+        topLabel: first(
+          location.topLabel,
+          locationContent.topLabel
+        ),
+        headingLine1: first(
+          location.headingLine1,
+          locationContent.headingLine1
+        ),
+        headingHighlight: first(
+          location.headingHighlight,
+          locationContent.headingHighlight
+        ),
+        description: first(
+          location.description,
           locationContent.description
         ),
 
-        landmarks: locationLandmarks,
+        leftCardTag: first(
+          location.leftCardTag,
+          locationContent.leftCardTag
+        ),
+        leftCardTitleLine1: first(
+          location.leftCardTitleLine1,
+          locationContent.leftCardTitleLine1
+        ),
+        leftCardTitleLine2: first(
+          location.leftCardTitleLine2,
+          locationContent.leftCardTitleLine2
+        ),
+        leftCardDescription: first(
+          location.leftCardDescription,
+          locationContent.leftCardDescription
+        ),
+
+        mapSectionTag: first(
+          location.mapSectionTag,
+          locationContent.mapSectionTag
+        ),
+        mapSectionTitle: first(
+          location.mapSectionTitle,
+          locationContent.mapSectionTitle
+        ),
+
+        badgeTitle: first(
+          location.badgeTitle,
+          locationContent.badgeTitle
+        ),
+        badgeSubtitle: first(
+          location.badgeSubtitle,
+          locationContent.badgeSubtitle
+        ),
+
+        floatingCardTag: first(
+          location.floatingCardTag,
+          locationContent.floatingCardTag
+        ),
+        floatingCardTitle: first(
+          location.floatingCardTitle,
+          locationContent.floatingCardTitle
+        ),
+        floatingCardDescription: first(
+          location.floatingCardDescription,
+          locationContent.floatingCardDescription
+        ),
+
+        landmarks,
         bottomStrip: locationBottomStrip,
       },
 
       masterPlanSection: {
-        title: getFirstString(
-          masterPlanInput.title,
-          masterPlanContent.title
+        sectionNumber: first(
+          master.sectionNumber,
+          masterContent.sectionNumber
         ),
-
-        description: getFirstString(
-          masterPlanInput.description,
-          masterPlanContent.description
+        topLabel: first(
+          master.topLabel,
+          masterContent.topLabel
         ),
-
-        masterPlanImage: "",
-
-        bottomStrip: masterPlanBottomStrip,
+        headingLine1: first(
+          master.headingLine1,
+          masterContent.headingLine1
+        ),
+        headingHighlight: first(
+          master.headingHighlight,
+          masterContent.headingHighlight
+        ),
+        description: first(
+          master.description,
+          masterContent.description
+        ),
+        enableSideStrips: bool(
+          master.enableSideStrips ?? masterContent.enableSideStrips,
+          true
+        ),
+        topFloatingLabel: first(
+          master.topFloatingLabel,
+          masterContent.topFloatingLabel
+        ),
+        centerTitle: first(
+          master.centerTitle,
+          masterContent.centerTitle
+        ),
+        centerDescription: first(
+          master.centerDescription,
+          masterContent.centerDescription
+        ),
+        buttonText: first(
+          master.buttonText,
+          masterContent.buttonText
+        ),
+        masterPlanImage: safeAssetUrl(
+          master.masterPlanImage ||
+            masterContent.masterPlanImage
+        ),
+        bottomStrip: masterBottomStrip,
       },
 
       gatedContent: {
-        brochurePdfUrl: "",
-
-        configurationType,
-
-        floorPlans: floorPlans,
-
-        plotConfigurations,
-
-        requireLogin: safeBoolean(
-          gatedInput.requireLogin,
-          false
+        brochurePdfUrl: safeAssetUrl(
+          gated.brochurePdfUrl || input.brochurePdfUrl
         ),
+        configurationType,
+        floorPlans,
+        plotConfigurations,
+        requireLogin: bool(gated.requireLogin, true),
       },
 
       seoEngine: {
         hasCustomSEO: Boolean(
-          getFirstString(
-            seoInput.metaTitle,
-            seoContent.metaTitle
-          ) ||
-            getFirstString(
-              seoInput.metaDescription,
-              seoContent.metaDescription
-            )
+          first(seo.metaTitle, seoContent.metaTitle) ||
+          first(seo.metaDescription, seoContent.metaDescription)
         ),
-
-        metaTitle: getFirstString(
-          seoInput.metaTitle,
+        metaTitle: first(
+          seo.metaTitle,
           seoContent.metaTitle
         ),
-
-        metaDescription: getFirstString(
-          seoInput.metaDescription,
+        metaDescription: first(
+          seo.metaDescription,
           seoContent.metaDescription
         ),
-
         keywords: seoKeywords,
       },
 
       faqSection: {
-        title: getFirstString(
-          faqSectionInput.title,
-          faqSectionContent.title
+        sectionNumber: first(
+          faqSection.sectionNumber,
+          faqContent.sectionNumber
         ),
-
-        description: getFirstString(
-          faqSectionInput.description,
-          faqSectionContent.description
+        topLabel: first(
+          faqSection.topLabel,
+          faqContent.topLabel
         ),
-
-        phone: "",
-        timing: "",
+        headingLine1: first(
+          faqSection.headingLine1,
+          faqContent.headingLine1
+        ),
+        headingHighlight: first(
+          faqSection.headingHighlight,
+          faqContent.headingHighlight
+        ),
+        description: first(
+          faqSection.description,
+          faqContent.description
+        ),
+        developerLabel: first(
+          faqSection.developerLabel,
+          faqContent.developerLabel
+        ),
+        contactTitle: first(
+          faqSection.contactTitle,
+          faqContent.contactTitle
+        ),
+        contactDescription: first(
+          faqSection.contactDescription,
+          faqContent.contactDescription
+        ),
+        phone: first(
+          faqSection.phone,
+          faqContent.phone
+        ),
+        timing: first(
+          faqSection.timing,
+          faqContent.timing
+        ),
+        ctaTitle: first(
+          faqSection.ctaTitle,
+          faqContent.ctaTitle
+        ),
+        ctaDescription: first(
+          faqSection.ctaDescription,
+          faqContent.ctaDescription
+        ),
+        ctaButtonText: first(
+          faqSection.ctaButtonText,
+          faqContent.ctaButtonText
+        ),
+        callLabel: first(
+          faqSection.callLabel,
+          faqContent.callLabel
+        ),
+        whatsappLabel: first(
+          faqSection.whatsappLabel,
+          faqContent.whatsappLabel
+        ),
       },
 
-      faqs: faqItems,
+      faqs,
 
       cta: {
-        title: getFirstString(
-          ctaInput.title,
-          ctaContent.title
-        ),
-
-        description: getFirstString(
-          ctaInput.description,
+        title: first(cta.title, ctaContent.title),
+        subtitle: first(
+          cta.subtitle,
+          cta.description,
+          ctaContent.subtitle,
           ctaContent.description
         ),
-
-        buttonText: getFirstString(
-          ctaInput.buttonText,
+        buttonText: first(
+          cta.buttonText,
           ctaContent.buttonText
         ),
       },
     };
 
-    // --------------------------------------------------------
+    // =========================================================
     // 9. CREATE DRAFT
-    // --------------------------------------------------------
+    // =========================================================
 
     const createdProperty = await Property.create(propertyPayload);
 
-    // --------------------------------------------------------
+    // =========================================================
     // 10. REVIEW FLAGS
-    // --------------------------------------------------------
+    // =========================================================
 
     const unresolvedReferences = [];
 
-    if (!developerRecord && developerName) {
+    if (developerName && !developerRecord) {
       unresolvedReferences.push("developer");
     }
 
-    if (!categoryRecord && categoryName) {
+    if (categoryName && !categoryRecord) {
       unresolvedReferences.push("category");
     }
 
-    if (!locationRecord && locationName) {
+    if (locationName && !locationRecord) {
       unresolvedReferences.push("location");
+    }
+
+    const missingFields = [];
+
+    if (!overviewDescription) missingFields.push("overview.description");
+    if (!heroDescription) missingFields.push("heroSection.heroDescription");
+
+    if (!propertyPayload.seoEngine.metaTitle) {
+      missingFields.push("seoEngine.metaTitle");
+    }
+
+    if (!propertyPayload.seoEngine.metaDescription) {
+      missingFields.push("seoEngine.metaDescription");
+    }
+
+    if (!faqs.length) missingFields.push("faqs");
+
+    if (marketType === "Primary" && !metrics.reraNumber) {
+      missingFields.push("keyMetrics.reraNumber");
     }
 
     const reviewRequired =
       unresolvedReferences.length > 0 ||
-      !overviewDescription ||
-      !heroDescription ||
-      !seoContent.metaTitle && !seoInput.metaTitle ||
-      !seoContent.metaDescription && !seoInput.metaDescription ||
-      faqItems.length === 0 ||
-      (marketType === "Primary" && !metricsInput.reraNumber);
+      missingFields.length > 0;
 
     const contentSummary = {
-      unitConfigurations: allUnitConfigurations.length,
+      unitConfigurations: unitConfigurations.length,
       floorPlans: floorPlans.length,
       plotConfigurations: plotConfigurations.length,
-      highlights: overviewHighlights.length,
-      amenities: overviewAmenities.length,
-      landmarks: locationLandmarks.length,
-      faqs: faqItems.length,
+      highlights: highlights.length,
+      amenities: amenities.length,
+      landmarks: landmarks.length,
+      faqs: faqs.length,
       customMetrics: customMetrics.length,
-      featureBar: overviewFeatureBar.length,
+      featureBar: featureBar.length,
       seoKeywords: seoKeywords.length,
     };
 
     return res.status(201).json({
       success: true,
-
       message:
-        "AI property draft created successfully. Verify all facts and references before publishing.",
-
+        "AI property draft created. Verify facts, references, assets and SEO before publishing.",
       draftId: createdProperty._id,
-
       data: createdProperty,
-
       resolution,
-
       unresolvedReferences,
-
+      missingFields,
       reviewRequired,
-
       contentSummary,
     });
   } catch (error) {
@@ -3469,7 +3820,7 @@ exports.aiCreateProperty = async (req, res) => {
       return res.status(409).json({
         success: false,
         message:
-          "A property with a conflicting unique value already exists. Please retry after checking the existing record.",
+          "A conflicting unique value already exists. Check the existing property or retry.",
         fields: error.keyValue || {},
       });
     }
@@ -3477,9 +3828,14 @@ exports.aiCreateProperty = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to create the AI property draft.",
+      error:
+        process.env.NODE_ENV === "production"
+          ? undefined
+          : error.message,
     });
   }
 };
+
 
 exports.getPropertySeoList = async (
   req,
