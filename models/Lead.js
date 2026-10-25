@@ -51,19 +51,23 @@ const leadSchema = new mongoose.Schema(
     ========================================================
     */
 
-    source: {
-      type: String,
-      enum: [
-        "Website",
-        "Website - 4 Second Popup",
-        "Facebook",
-        "Google",
-        "Referral",
-        "Private Consultation",
-        "ROI Calculator",
-      ],
-      default: "Website",
-    },
+    
+source: {
+  type: String,
+  enum: [
+    "Website",
+    "Website - 4 Second Popup",
+    "Website - Floating Contact Widget",
+    "Property Preview",
+    "Facebook",
+    "Google",
+    "Referral",
+    "Private Consultation",
+    "ROI Calculator",
+  ],
+  default: "Website",
+},
+
 
     /*
     ========================================================
