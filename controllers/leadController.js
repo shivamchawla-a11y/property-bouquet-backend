@@ -1005,6 +1005,144 @@ Luxury Properties • Gurgaon • Delhi NCR
       );
     }
 
+    
+    /* =======================================================
+       CUSTOMER CONFIRMATION EMAIL
+       Does not affect lead creation if email delivery fails.
+    ======================================================= */
+
+    if (cleanEmail) {
+      try {
+        const escapeHtml = (value) =>
+          String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+
+        const customerName = escapeHtml(cleanName);
+        const customerProperty = escapeHtml(
+          cleanProperty || "General Enquiry"
+        );
+        const customerLeadType = escapeHtml(cleanLeadType);
+        const customerPhone = escapeHtml(cleanPhone);
+
+        const customerEmailResult = await resend.emails.send({
+          from: "Property Bouquet <info@propertybouquet.com>",
+          to: cleanEmail,
+          subject: "We've received your enquiry | Property Bouquet",
+          html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Enquiry Received | Property Bouquet</title>
+</head>
+<body style="margin:0;padding:30px 15px;background:#f5f5f0;font-family:Arial,Helvetica,sans-serif;color:#17251f;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" border="0"
+          style="width:100%;max-width:600px;background:#ffffff;border-radius:14px;overflow:hidden;">
+
+          <tr>
+            <td style="background:#0f3b2e;padding:30px;text-align:center;">
+              <div style="color:#D4AF6A;font-size:26px;font-weight:bold;letter-spacing:1px;">
+                PROPERTY BOUQUET
+              </div>
+              <p style="margin:8px 0 0;color:#ffffff;font-size:13px;">
+                Luxury Real Estate Advisory
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:30px;">
+              <h2 style="margin:0 0 16px;color:#17342d;font-size:24px;">
+                Thank you, ${customerName}!
+              </h2>
+
+              <p style="font-size:15px;line-height:1.8;color:#555555;">
+                We've successfully received your enquiry. Thank you for your
+                interest in Property Bouquet. Our team will review your
+                requirements and get in touch with you.
+              </p>
+
+              <table width="100%" cellpadding="12" cellspacing="0"
+                style="margin:24px 0;border-collapse:collapse;background:#f7f3ee;font-size:14px;">
+                <tr>
+                  <td style="color:#555555;"><strong>Enquiry Type</strong></td>
+                  <td style="color:#17342d;">${customerLeadType}</td>
+                </tr>
+                <tr>
+                  <td style="color:#555555;"><strong>Property</strong></td>
+                  <td style="color:#17342d;">${customerProperty}</td>
+                </tr>
+                <tr>
+                  <td style="color:#555555;"><strong>Phone</strong></td>
+                  <td style="color:#17342d;">${customerPhone}</td>
+                </tr>
+              </table>
+
+              <p style="font-size:14px;line-height:1.8;color:#555555;">
+                Need assistance in the meantime? Contact our team directly.
+              </p>
+
+              <div style="margin:25px 0;text-align:center;">
+                <a href="tel:+919090106101"
+                  style="display:inline-block;background:#0f3b2e;color:#ffffff;text-decoration:none;padding:13px 20px;border-radius:7px;font-weight:bold;margin:5px;">
+                  Call Our Team
+                </a>
+
+                <a href="https://wa.me/919090106101?text=Hello%20Property%20Bouquet%2C%20I%20would%20like%20to%20know%20more%20about%20your%20properties."
+                  style="display:inline-block;background:#25D366;color:#ffffff;text-decoration:none;padding:13px 20px;border-radius:7px;font-weight:bold;margin:5px;">
+                  WhatsApp Us
+                </a>
+              </div>
+
+              <p style="font-size:14px;line-height:1.8;color:#555555;">
+                Warm regards,<br />
+                <strong style="color:#17342d;">Team Property Bouquet</strong><br />
+                <a href="https://propertybouquet.com" style="color:#8b6b35;">
+                  propertybouquet.com
+                </a>
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="background:#111111;padding:20px;text-align:center;color:#aaaaaa;font-size:12px;line-height:1.8;">
+              Thank you for choosing Property Bouquet.<br />
+              Luxury Properties · Gurgaon · Delhi NCR
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+          `,
+        });
+
+        if (customerEmailResult?.error) {
+          console.error(
+            "Customer confirmation email failed:",
+            customerEmailResult.error
+          );
+        }
+      } catch (customerEmailErr) {
+        console.error(
+          "Customer confirmation email failed:",
+          customerEmailErr.message
+        );
+      }
+    }
+
+
     /* =======================================================
        RESPONSE
     ======================================================= */
