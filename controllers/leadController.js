@@ -3,6 +3,10 @@ const { Resend } = require("resend");
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+// =========================================================
+// PROPERTY BOUQUET BRAND CONFIGURATION
+// =========================================================
+
 const BRAND = {
   name: "Property Bouquet",
   logo: "https://propertybouquet.com/logowhole.webp",
@@ -11,14 +15,20 @@ const BRAND = {
   displayPhone: "+91 90901 06101",
   email: "info@propertybouquet.com",
   notificationEmail: "kushank.pal@amethystlandbase.com",
+
   green: "#0f3b2e",
   darkGreen: "#081f19",
   gold: "#c89d58",
   ivory: "#f7f3ee",
+  white: "#ffffff",
+  text: "#26342d",
+  muted: "#73786f",
+  border: "#e9e2d7",
+  whatsapp: "#25D366",
 };
 
 // =========================================================
-// SHARED EMAIL HELPERS
+// SHARED HELPERS
 // =========================================================
 
 const escapeHtml = (value) =>
@@ -29,6 +39,11 @@ const escapeHtml = (value) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
+const cleanString = (value, maxLength = 500) =>
+  typeof value === "string"
+    ? value.trim().slice(0, maxLength)
+    : "";
+
 const formatCurrency = (value) => {
   if (value === undefined || value === null || value === "") {
     return "—";
@@ -37,7 +52,7 @@ const formatCurrency = (value) => {
   const number = Number(value);
 
   if (!Number.isFinite(number)) {
-    return escapeHtml(value);
+    return "—";
   }
 
   return `₹${number.toLocaleString("en-IN", {
@@ -50,82 +65,409 @@ const formatPercent = (value) => {
     return "—";
   }
 
-  return `${escapeHtml(value)}%`;
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return "—";
+  }
+
+  return `${number.toLocaleString("en-IN", {
+    maximumFractionDigits: 2,
+  })}%`;
 };
 
-const formatDate = (date = new Date()) =>
-  new Intl.DateTimeFormat("en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Asia/Kolkata",
-  }).format(date) + " IST";
+const formatDate = (date = new Date()) => {
+  const validDate = new Date(date);
 
-const emailShell = ({ title, preheader, content, footer = true }) => `
+  if (Number.isNaN(validDate.getTime())) {
+    return "Not available";
+  }
+
+  return (
+    new Intl.DateTimeFormat("en-IN", {
+      dateStyle: "medium",
+      timeStyle: "short",
+      timeZone: "Asia/Kolkata",
+    }).format(validDate) + " IST"
+  );
+};
+
+// Only allow HTTP and HTTPS links in emails.
+const safeExternalUrl = (value) => {
+  const raw = String(value ?? "").trim();
+
+  try {
+    const url = new URL(raw);
+
+    if (url.protocol === "https:" || url.protocol === "http:") {
+      return url.href;
+    }
+  } catch {
+    // Invalid URLs are intentionally omitted.
+  }
+
+  return "";
+};
+
+// Normalize Indian phone numbers before using them in contact links.
+const normalizeIndianPhone = (value) => {
+  const digits = String(value ?? "").replace(/\D/g, "");
+
+  if (/^[6-9]\d{9}$/.test(digits)) {
+    return digits;
+  }
+
+  if (/^91[6-9]\d{9}$/.test(digits)) {
+    return digits.slice(2);
+  }
+
+  if (/^0[6-9]\d{9}$/.test(digits)) {
+    return digits.slice(1);
+  }
+
+  return "";
+};
+
+const createWhatsAppUrl = (phone, message) => {
+  const mobile = normalizeIndianPhone(phone);
+
+  if (!mobile) {
+    return "";
+  }
+
+  return `https://wa.me/91${mobile}?text=${encodeURIComponent(message)}`;
+};
+
+const createMailtoUrl = (email) => {
+  const value = cleanString(email, 254);
+
+  if (!value || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+    return "";
+  }
+
+  return `mailto:${value}`;
+};
+
+const emailLink = (url, label, color = BRAND.gold) => {
+  const safeUrl = safeExternalUrl(url);
+
+  if (!safeUrl) {
+    return escapeHtml(label);
+  }
+
+  return `
+    <a
+      href="${escapeHtml(safeUrl)}"
+      target="_blank"
+      style="color:${color};text-decoration:underline;overflow-wrap:anywhere;"
+    >${escapeHtml(label)}</a>
+  `;
+};
+
+// =========================================================
+// REUSABLE EMAIL COMPONENTS
+// =========================================================
+
+const actionButton = (
+  url,
+  label,
+  background = BRAND.green,
+  color = BRAND.white
+) => {
+  const rawUrl = String(url ?? "").trim();
+
+  // Permit only the URL schemes required by these email buttons.
+  const validUrl =
+    /^(https?:\/\/|tel:)/i.test(rawUrl) &&
+    (rawUrl.startsWith("https://") ||
+      rawUrl.startsWith("http://") ||
+      /^tel:\+?[0-9]+$/i.test(rawUrl));
+
+  if (!validUrl) {
+    return "";
+  }
+
+  return `
+    <a
+      href="${escapeHtml(rawUrl)}"
+      target="_blank"
+      style="
+        display:inline-block;
+        margin:5px 3px;
+        padding:13px 19px;
+        background:${background};
+        color:${color};
+        font-family:Arial,Helvetica,sans-serif;
+        font-size:12px;
+        font-weight:bold;
+        line-height:18px;
+        text-align:center;
+        text-decoration:none;
+        border-radius:5px;
+      "
+    >${escapeHtml(label)}</a>
+  `;
+};
+
+const emailRow = (label, value, alternate = false) => `
+  <tr style="background:${alternate ? "#f8f6f1" : "#ffffff"};">
+    <td
+      width="38%"
+      valign="top"
+      style="
+        padding:12px 10px;
+        color:#72766f;
+        font-size:12px;
+        line-height:19px;
+        border-bottom:1px solid #eeeae2;
+      "
+    >
+      ${escapeHtml(label)}
+    </td>
+
+    <td
+      valign="top"
+      style="
+        padding:12px 10px;
+        color:#24372d;
+        font-size:12px;
+        line-height:19px;
+        overflow-wrap:anywhere;
+        word-break:break-word;
+        border-bottom:1px solid #eeeae2;
+      "
+    >
+      ${value}
+    </td>
+  </tr>
+`;
+
+const emailSectionTitle = (title) => `
+  <tr>
+    <td
+      colspan="2"
+      style="
+        padding:23px 0 10px;
+        color:${BRAND.green};
+        font-size:12px;
+        font-weight:bold;
+        letter-spacing:1.4px;
+      "
+    >
+      ${escapeHtml(title)}
+    </td>
+  </tr>
+`;
+
+// =========================================================
+// MASTER EMAIL LAYOUT
+// =========================================================
+
+const emailShell = ({
+  title,
+  preheader,
+  content,
+  footer = true,
+}) => `
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
   <meta name="color-scheme" content="light">
   <meta name="supported-color-schemes" content="light">
+
   <title>${escapeHtml(title)}</title>
 </head>
 
-<body style="margin:0;padding:0;background:#f3f2ed;font-family:Arial,Helvetica,sans-serif;color:#26342d;">
+<body
+  style="
+    margin:0;
+    padding:0;
+    background:#f0eee8;
+    font-family:Arial,Helvetica,sans-serif;
+    color:${BRAND.text};
+    -webkit-text-size-adjust:100%;
+  "
+>
 
-  <div style="display:none!important;visibility:hidden;opacity:0;color:transparent;height:0;width:0;overflow:hidden;mso-hide:all;">
-    ${escapeHtml(preheader)}
-  </div>
+  <div
+    style="
+      display:none!important;
+      visibility:hidden;
+      opacity:0;
+      color:transparent;
+      height:0;
+      width:0;
+      overflow:hidden;
+      mso-hide:all;
+    "
+  >${escapeHtml(preheader)}</div>
 
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f3f2ed;width:100%;">
+  <table
+    role="presentation"
+    width="100%"
+    cellpadding="0"
+    cellspacing="0"
+    border="0"
+    style="width:100%;background:#f0eee8;"
+  >
     <tr>
-      <td align="center" style="padding:30px 12px;">
+      <td align="center" style="padding:24px 10px;">
 
-        <table role="presentation" width="640" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:640px;background:#ffffff;border-radius:12px;overflow:hidden;">
+        <table
+          role="presentation"
+          width="640"
+          cellpadding="0"
+          cellspacing="0"
+          border="0"
+          style="
+            width:100%;
+            max-width:640px;
+            background:#ffffff;
+            border-radius:10px;
+            overflow:hidden;
+          "
+        >
+
+          <!-- BRAND HEADER -->
 
           <tr>
-            <td align="center" style="padding:27px 22px;background:${BRAND.darkGreen};border-bottom:3px solid ${BRAND.gold};">
-              <a href="${BRAND.website}" target="_blank" style="text-decoration:none;">
+            <td
+              align="center"
+              style="
+                padding:24px 20px 20px;
+                background:${BRAND.ivory};
+                border-bottom:3px solid ${BRAND.gold};
+              "
+            >
+
+              <a
+                href="${BRAND.website}"
+                target="_blank"
+                style="text-decoration:none;"
+              >
                 <img
                   src="${BRAND.logo}"
-                  width="250"
-                  alt="Property Bouquet"
-                  style="display:block;width:250px;max-width:85%;height:auto;margin:0 auto;border:0;outline:none;"
+                  width="280"
+                  alt="Property Bouquet — Luxury Real Estate Advisory"
+                  style="
+                    display:block;
+                    width:280px;
+                    max-width:100%;
+                    height:auto;
+                    margin:0 auto;
+                    border:0;
+                    outline:none;
+                    text-decoration:none;
+                  "
                 >
               </a>
 
-              <p style="margin:13px 0 0;color:#e7dfd0;font-size:11px;line-height:18px;letter-spacing:2px;text-transform:uppercase;">
+              <p
+                style="
+                  margin:12px 0 0;
+                  color:${BRAND.green};
+                  font-size:10px;
+                  line-height:17px;
+                  letter-spacing:2px;
+                  text-transform:uppercase;
+                "
+              >
                 Luxury Real Estate Advisory
               </p>
+
             </td>
           </tr>
+
+          <!-- EMAIL CONTENT -->
 
           ${content}
 
           ${
             footer
               ? `
+          <!-- FOOTER -->
+
           <tr>
-            <td align="center" style="padding:23px 20px;background:#f7f3ee;border-top:1px solid #e9e2d7;">
-              <p style="margin:0 0 8px;color:#17342d;font-size:12px;font-weight:bold;letter-spacing:1px;">
+            <td
+              align="center"
+              style="
+                padding:24px 18px;
+                background:${BRAND.ivory};
+                border-top:1px solid ${BRAND.border};
+              "
+            >
+
+              <p
+                style="
+                  margin:0 0 8px;
+                  color:${BRAND.green};
+                  font-size:12px;
+                  font-weight:bold;
+                  letter-spacing:2px;
+                "
+              >
                 PROPERTY BOUQUET
               </p>
 
-              <p style="margin:0 0 9px;color:#777d76;font-size:11px;line-height:19px;">
+              <p
+                style="
+                  margin:0 0 10px;
+                  color:#777d76;
+                  font-size:11px;
+                  line-height:19px;
+                "
+              >
                 Luxury Properties &bull; Gurgaon &bull; Delhi NCR
               </p>
 
-              <p style="margin:0;font-size:11px;line-height:19px;">
-                <a href="${BRAND.website}" style="color:#84642f;text-decoration:none;">propertybouquet.com</a>
+              <p
+                style="
+                  margin:0;
+                  font-size:11px;
+                  line-height:21px;
+                "
+              >
+                <a
+                  href="${BRAND.website}"
+                  target="_blank"
+                  style="
+                    color:#84642f;
+                    text-decoration:none;
+                  "
+                >propertybouquet.com</a>
+
                 &nbsp;&bull;&nbsp;
-                <a href="mailto:${BRAND.email}" style="color:#84642f;text-decoration:none;">${BRAND.email}</a>
+
+                <a
+                  href="mailto:${BRAND.email}"
+                  style="
+                    color:#84642f;
+                    text-decoration:none;
+                  "
+                >${BRAND.email}</a>
               </p>
 
-              <p style="margin:14px 0 0;color:#9a9b95;font-size:10px;line-height:16px;">
-                This email was generated in connection with a Property Bouquet enquiry.
+              <p
+                style="
+                  margin:14px 0 0;
+                  color:#92938d;
+                  font-size:10px;
+                  line-height:17px;
+                "
+              >
+                This email relates to a Property Bouquet enquiry.
               </p>
+
             </td>
-          </tr>`
+          </tr>
+          `
               : ""
           }
 
@@ -138,49 +480,6 @@ const emailShell = ({ title, preheader, content, footer = true }) => `
 </body>
 </html>
 `;
-
-const emailSectionTitle = (title) => `
-  <tr>
-    <td colspan="2" style="padding:23px 0 10px;color:#17342d;font-size:14px;font-weight:bold;letter-spacing:.5px;">
-      ${title}
-    </td>
-  </tr>
-`;
-
-const emailRow = (label, value, alternate = false) => `
-  <tr style="background:${alternate ? "#f8f6f1" : "#ffffff"};">
-    <td width="38%" valign="top" style="padding:12px 10px;color:#72766f;font-size:12px;line-height:19px;border-bottom:1px solid #eeeae2;">
-      ${label}
-    </td>
-    <td valign="top" style="padding:12px 10px;color:#24372d;font-size:12px;line-height:19px;overflow-wrap:anywhere;word-break:break-word;border-bottom:1px solid #eeeae2;">
-      ${value}
-    </td>
-  </tr>
-`;
-
-const actionButton = (url, label, background, color = "#ffffff") => `
-  <a
-    href="${url}"
-    target="_blank"
-    style="display:inline-block;padding:13px 18px;margin:5px 3px;background:${background};color:${color};font-size:12px;font-weight:bold;text-decoration:none;border-radius:5px;"
-  >${label}</a>
-`;
-
-const safeExternalUrl = (value) => {
-  const raw = String(value ?? "").trim();
-
-  try {
-    const url = new URL(raw);
-
-    if (url.protocol === "https:" || url.protocol === "http:") {
-      return url.href;
-    }
-  } catch {
-    // Invalid URLs are omitted from the email.
-  }
-
-  return "";
-};
 
 // =========================================================
 // ADMIN LEAD NOTIFICATION EMAIL
@@ -202,21 +501,34 @@ const buildAdminEmail = ({
   const isROI = leadType === "ROI Calculator";
   const roi = roiDetails || {};
 
+  const safeName = escapeHtml(name);
+  const safePhone = escapeHtml(phone);
+  const safeProperty = escapeHtml(property || "General Enquiry");
+  const safeSource = escapeHtml(source);
+  const safeLeadType = escapeHtml(leadType);
+
+  const normalizedPhone = normalizeIndianPhone(phone);
+
   const leadInformation = [
-    ["Name", escapeHtml(name)],
+    ["Customer Name", safeName],
+
     [
-      "Phone",
-      `<a href="tel:${encodeURIComponent(phone)}" style="color:#17342d;font-weight:bold;text-decoration:none;">${escapeHtml(phone)}</a>`,
+      "Phone Number",
+      normalizedPhone
+        ? `<a href="tel:+91${normalizedPhone}" style="color:${BRAND.green};font-weight:bold;text-decoration:none;">${safePhone}</a>`
+        : safePhone,
     ],
+
     [
-      "Email",
+      "Email Address",
       email
-        ? `<a href="mailto:${encodeURIComponent(email)}" style="color:#84642f;text-decoration:none;">${escapeHtml(email)}</a>`
+        ? emailLink(createMailtoUrl(email), email)
         : "Not provided",
     ],
-    ["Enquiry Type", escapeHtml(leadType)],
-    ["Property", escapeHtml(property || "General Enquiry")],
-    ["Lead Source", escapeHtml(source)],
+
+    ["Enquiry Type", safeLeadType],
+    ["Property / Requirement", safeProperty],
+    ["Lead Source", safeSource],
     ["Lead Priority", "Warm"],
     ["Lead Status", "New"],
     ["Received On", escapeHtml(formatDate(createdAt))],
@@ -228,56 +540,83 @@ const buildAdminEmail = ({
     leadInformation.push([
       "Page URL",
       safeUrl
-        ? `<a href="${escapeHtml(safeUrl)}" style="color:#84642f;overflow-wrap:anywhere;">${escapeHtml(pageUrl)}</a>`
+        ? emailLink(safeUrl, pageUrl)
         : escapeHtml(pageUrl),
     ]);
   }
 
   if (pagePath) {
-    leadInformation.push(["Page Path", escapeHtml(pagePath)]);
+    leadInformation.push([
+      "Page Path",
+      escapeHtml(pagePath),
+    ]);
   }
 
   if (pageTitle) {
-    leadInformation.push(["Page Title", escapeHtml(pageTitle)]);
+    leadInformation.push([
+      "Page Title",
+      escapeHtml(pageTitle),
+    ]);
   }
 
   const leadRows = leadInformation
-    .map(([label, value], index) => emailRow(escapeHtml(label), value, index % 2 === 0))
+    .map(([label, value], index) =>
+      emailRow(label, value, index % 2 === 0)
+    )
     .join("");
+
+  // -------------------------------------------------------
+  // ROI CALCULATOR DETAILS
+  // -------------------------------------------------------
 
   let roiSection = "";
 
   if (isROI) {
     const investmentRows = [
       ["Property Value", formatCurrency(roi.propertyValue)],
+
       [
         "Down Payment",
         `${formatCurrency(roi.downPayment)}${
-          roi.downPaymentPercent !== undefined && roi.downPaymentPercent !== null
+          roi.downPaymentPercent !== undefined &&
+          roi.downPaymentPercent !== null &&
+          roi.downPaymentPercent !== ""
             ? ` (${formatPercent(roi.downPaymentPercent)})`
             : ""
         }`,
       ],
+
       [
         "Loan Amount",
         `${formatCurrency(roi.loanAmount)}${
-          roi.loanPercent !== undefined && roi.loanPercent !== null
+          roi.loanPercent !== undefined &&
+          roi.loanPercent !== null &&
+          roi.loanPercent !== ""
             ? ` (${formatPercent(roi.loanPercent)})`
             : ""
         }`,
       ],
+
       ["Interest Rate", formatPercent(roi.interestRate)],
+
       [
         "Loan Tenure",
-        roi.loanTenure !== undefined && roi.loanTenure !== null && roi.loanTenure !== ""
+        roi.loanTenure !== undefined &&
+        roi.loanTenure !== null &&
+        roi.loanTenure !== ""
           ? `${escapeHtml(roi.loanTenure)} Years`
           : "—",
       ],
+
       ["Monthly Rent", formatCurrency(roi.monthlyRent)],
+
       ["Rent Escalation", formatPercent(roi.rentEscalation)],
+
       [
         "Holding Period",
-        roi.holdingPeriod !== undefined && roi.holdingPeriod !== null && roi.holdingPeriod !== ""
+        roi.holdingPeriod !== undefined &&
+        roi.holdingPeriod !== null &&
+        roi.holdingPeriod !== ""
           ? `${escapeHtml(roi.holdingPeriod)} Years`
           : "—",
       ],
@@ -292,37 +631,94 @@ const buildAdminEmail = ({
 
     roiSection = `
       <tr>
-        <td style="padding:0 30px 25px;">
+        <td style="padding:0 25px 25px;">
 
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+          <table
+            role="presentation"
+            width="100%"
+            cellpadding="0"
+            cellspacing="0"
+            border="0"
+          >
             ${emailSectionTitle("INVESTMENT ASSUMPTIONS")}
+
             ${investmentRows
-              .map(([label, value], index) => emailRow(escapeHtml(label), value, index % 2 === 0))
+              .map(([label, value], index) =>
+                emailRow(label, value, index % 2 === 0)
+              )
               .join("")}
           </table>
 
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-            ${emailSectionTitle("ESTIMATED RETURNS")}
+          <table
+            role="presentation"
+            width="100%"
+            cellpadding="0"
+            cellspacing="0"
+            border="0"
+          >
+            ${emailSectionTitle("ESTIMATED INVESTMENT RETURNS")}
+
             ${returnRows
               .map(([label, value], index) => {
-                const isProfit = label === "Total Profit";
-                const isReturn = label === "Return on Investment";
+                const highlighted =
+                  label === "Total Profit" ||
+                  label === "Return on Investment";
 
                 return `
-                  <tr style="background:${isProfit || isReturn ? "#eef4ef" : index % 2 === 0 ? "#f8f6f1" : "#ffffff"};">
-                    <td width="55%" style="padding:14px 10px;color:#59665d;font-size:12px;line-height:19px;border-bottom:1px solid #e4e9e2;">
+                  <tr
+                    style="
+                      background:${
+                        highlighted
+                          ? "#eef4ef"
+                          : index % 2 === 0
+                            ? "#f8f6f1"
+                            : "#ffffff"
+                      };
+                    "
+                  >
+                    <td
+                      width="55%"
+                      style="
+                        padding:13px 10px;
+                        color:#59665d;
+                        font-size:12px;
+                        line-height:19px;
+                        border-bottom:1px solid #e4e9e2;
+                      "
+                    >
                       ${escapeHtml(label)}
                     </td>
-                    <td align="right" style="padding:14px 10px;color:${isProfit || isReturn ? "#0f3b2e" : "#24372d"};font-size:${isProfit || isReturn ? "16px" : "12px"};font-weight:${isProfit || isReturn ? "bold" : "normal"};line-height:19px;border-bottom:1px solid #e4e9e2;">
+
+                    <td
+                      align="right"
+                      style="
+                        padding:13px 10px;
+                        color:${highlighted ? BRAND.green : BRAND.text};
+                        font-size:${highlighted ? "15px" : "12px"};
+                        font-weight:${highlighted ? "bold" : "normal"};
+                        line-height:19px;
+                        overflow-wrap:anywhere;
+                        border-bottom:1px solid #e4e9e2;
+                      "
+                    >
                       ${value}
                     </td>
-                  </tr>`;
+                  </tr>
+                `;
               })
               .join("")}
           </table>
 
-          <p style="margin:12px 0 0;color:#888b84;font-size:10px;line-height:17px;">
-            These figures are estimates supplied by the calculator and are not a guarantee of investment performance.
+          <p
+            style="
+              margin:12px 0 0;
+              color:#888b84;
+              font-size:10px;
+              line-height:17px;
+            "
+          >
+            Figures are estimates supplied by the calculator and do not
+            guarantee investment performance or future returns.
           </p>
 
         </td>
@@ -330,52 +726,132 @@ const buildAdminEmail = ({
     `;
   }
 
-  const heading = isROI ? "New Investment Enquiry" : "You've Received a New Lead";
+  const heading = isROI
+    ? "New Investment Enquiry"
+    : "You've Received a New Lead";
 
   const description = isROI
     ? "A visitor has completed the Property Bouquet investment ROI calculator and submitted their contact details."
     : "A new enquiry has been received through the Property Bouquet website. Review the details below and follow up with the customer.";
 
-  const content = `
-    <tr>
-      <td style="padding:30px 30px 12px;">
+  const whatsappUrl = createWhatsAppUrl(
+    phone,
+    `Hello ${name}, thank you for your enquiry with Property Bouquet.`
+  );
 
-        <p style="margin:0 0 12px;color:#a07a3d;font-size:10px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;">
+  const content = `
+    <!-- INTRODUCTION -->
+
+    <tr>
+      <td style="padding:30px 25px 15px;">
+
+        <p
+          style="
+            margin:0 0 10px;
+            color:#a07a3d;
+            font-size:10px;
+            font-weight:bold;
+            letter-spacing:2px;
+            text-transform:uppercase;
+          "
+        >
           ${isROI ? "INVESTMENT ENQUIRY" : "NEW WEBSITE ENQUIRY"}
         </p>
 
-        <h1 style="margin:0;color:#17342d;font-size:25px;line-height:34px;font-weight:bold;">
+        <h1
+          style="
+            margin:0;
+            color:${BRAND.green};
+            font-size:24px;
+            line-height:33px;
+            font-weight:bold;
+          "
+        >
           ${heading}
         </h1>
 
-        <p style="margin:13px 0 0;color:#6e756f;font-size:13px;line-height:23px;">
+        <p
+          style="
+            margin:13px 0 0;
+            color:#6e756f;
+            font-size:13px;
+            line-height:23px;
+          "
+        >
           ${description}
         </p>
 
       </td>
     </tr>
 
-    <tr>
-      <td style="padding:15px 30px 0;">
+    <!-- CUSTOMER SUMMARY -->
 
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #e9e5dc;border-radius:6px;overflow:hidden;">
+    <tr>
+      <td style="padding:10px 25px 25px;">
+
+        <table
+          role="presentation"
+          width="100%"
+          cellpadding="0"
+          cellspacing="0"
+          border="0"
+          style="
+            border:1px solid ${BRAND.border};
+            border-radius:6px;
+            overflow:hidden;
+          "
+        >
 
           <tr>
-            <td style="padding:14px;background:#f7f3ee;border-bottom:1px solid #e9e5dc;">
-              <p style="margin:0 0 5px;color:#88877e;font-size:10px;letter-spacing:1px;text-transform:uppercase;">
-                Customer
+            <td
+              style="
+                padding:16px;
+                background:${BRAND.ivory};
+                border-bottom:1px solid ${BRAND.border};
+              "
+            >
+
+              <p
+                style="
+                  margin:0 0 6px;
+                  color:#88877e;
+                  font-size:10px;
+                  letter-spacing:1.5px;
+                  text-transform:uppercase;
+                "
+              >
+                CUSTOMER
               </p>
-              <p style="margin:0;color:#17342d;font-size:18px;font-weight:bold;line-height:25px;">
-                ${escapeHtml(name)}
+
+              <p
+                style="
+                  margin:0;
+                  color:${BRAND.green};
+                  font-size:19px;
+                  font-weight:bold;
+                  line-height:27px;
+                  overflow-wrap:anywhere;
+                "
+              >
+                ${safeName}
               </p>
+
             </td>
           </tr>
 
           <tr>
             <td style="padding:5px 10px;">
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+
+              <table
+                role="presentation"
+                width="100%"
+                cellpadding="0"
+                cellspacing="0"
+                border="0"
+              >
                 ${leadRows}
               </table>
+
             </td>
           </tr>
 
@@ -386,22 +862,46 @@ const buildAdminEmail = ({
 
     ${roiSection}
 
-    <tr>
-      <td align="center" style="padding:10px 22px 32px;">
+    <!-- FOLLOW-UP ACTIONS -->
 
-        <p style="margin:0 0 12px;color:#59665d;font-size:12px;line-height:20px;">
+    <tr>
+      <td
+        align="center"
+        style="padding:0 20px 30px;"
+      >
+
+        <p
+          style="
+            margin:0 0 12px;
+            color:#59665d;
+            font-size:12px;
+            line-height:20px;
+          "
+        >
           Ready to follow up? Contact the customer directly.
         </p>
 
-        ${actionButton(`tel:${phone}`, "CALL CUSTOMER", BRAND.gold, "#17251f")}
+        ${
+          normalizedPhone
+            ? actionButton(
+                `tel:+91${normalizedPhone}`,
+                "CALL CUSTOMER",
+                BRAND.gold,
+                "#17251f"
+              )
+            : ""
+        }
 
-        ${actionButton(
-          `https://wa.me/91${phone}?text=${encodeURIComponent(
-            `Hello ${name}, thank you for your enquiry with Property Bouquet.`
-          )}`,
-          "WHATSAPP CUSTOMER",
-          "#25D366"
-        )}
+        ${
+          whatsappUrl
+            ? actionButton(
+                whatsappUrl,
+                "WHATSAPP CUSTOMER",
+                BRAND.whatsapp,
+                "#ffffff"
+              )
+            : ""
+        }
 
       </td>
     </tr>
@@ -429,60 +929,195 @@ const buildCustomerEmail = ({
   const safeProperty = escapeHtml(property || "General Enquiry");
   const safeLeadType = escapeHtml(leadType);
 
-  const content = `
-    <tr>
-      <td style="padding:38px 30px 15px;">
+  const whatsappUrl = createWhatsAppUrl(
+    BRAND.phone,
+    "Hello Property Bouquet, I would like to know more about your properties."
+  );
 
-        <p style="margin:0 0 12px;color:#a07a3d;font-size:10px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;">
+  const content = `
+    <!-- THANK YOU MESSAGE -->
+
+    <tr>
+      <td style="padding:35px 25px 15px;">
+
+        <p
+          style="
+            margin:0 0 12px;
+            color:#a07a3d;
+            font-size:10px;
+            font-weight:bold;
+            letter-spacing:2px;
+            text-transform:uppercase;
+          "
+        >
           THANK YOU FOR CONNECTING WITH US
         </p>
 
-        <h1 style="margin:0;color:#17342d;font-size:27px;line-height:36px;">
+        <h1
+          style="
+            margin:0;
+            color:${BRAND.green};
+            font-size:26px;
+            line-height:36px;
+            font-weight:bold;
+          "
+        >
           Thank you, ${safeName}.
         </h1>
 
-        <p style="margin:17px 0 0;color:#616b63;font-size:14px;line-height:25px;">
-          We've successfully received your enquiry. Thank you for considering Property Bouquet for your real estate requirements.
+        <p
+          style="
+            margin:17px 0 0;
+            color:#616b63;
+            font-size:14px;
+            line-height:25px;
+          "
+        >
+          We've successfully received your enquiry. Thank you for
+          considering Property Bouquet for your real estate requirements.
         </p>
 
-        <p style="margin:10px 0 0;color:#616b63;font-size:14px;line-height:25px;">
-          Our team will review your enquiry and get in touch with you to understand your requirements and assist you with the next steps.
+        <p
+          style="
+            margin:10px 0 0;
+            color:#616b63;
+            font-size:14px;
+            line-height:25px;
+          "
+        >
+          Our team will review your requirements and get in touch with you
+          to assist you with the next steps.
         </p>
 
       </td>
     </tr>
 
-    <tr>
-      <td style="padding:15px 30px 25px;">
+    <!-- ENQUIRY SUMMARY -->
 
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f7f3ee;border:1px solid #e9e2d7;border-radius:7px;">
+    <tr>
+      <td style="padding:15px 25px 25px;">
+
+        <table
+          role="presentation"
+          width="100%"
+          cellpadding="0"
+          cellspacing="0"
+          border="0"
+          style="
+            background:${BRAND.ivory};
+            border:1px solid ${BRAND.border};
+            border-radius:7px;
+          "
+        >
 
           <tr>
-            <td style="padding:18px 18px 8px;">
-              <p style="margin:0;color:#9b7944;font-size:10px;font-weight:bold;letter-spacing:1.5px;">
+            <td style="padding:19px 18px 12px;">
+
+              <p
+                style="
+                  margin:0;
+                  color:#9b7944;
+                  font-size:10px;
+                  font-weight:bold;
+                  letter-spacing:1.5px;
+                "
+              >
                 YOUR ENQUIRY SUMMARY
               </p>
+
             </td>
           </tr>
 
           <tr>
-            <td style="padding:8px 18px;border-bottom:1px solid #e5ded2;">
-              <p style="margin:0 0 5px;color:#85857b;font-size:11px;">Enquiry Type</p>
-              <p style="margin:0;color:#17342d;font-size:13px;line-height:20px;font-weight:bold;">${safeLeadType}</p>
+            <td
+              style="
+                padding:10px 18px;
+                border-bottom:1px solid #e5ded2;
+              "
+            >
+
+              <p
+                style="
+                  margin:0 0 5px;
+                  color:#85857b;
+                  font-size:11px;
+                "
+              >
+                Enquiry Type
+              </p>
+
+              <p
+                style="
+                  margin:0;
+                  color:${BRAND.green};
+                  font-size:13px;
+                  line-height:20px;
+                  font-weight:bold;
+                "
+              >
+                ${safeLeadType}
+              </p>
+
             </td>
           </tr>
 
           <tr>
-            <td style="padding:12px 18px;border-bottom:1px solid #e5ded2;">
-              <p style="margin:0 0 5px;color:#85857b;font-size:11px;">Property / Requirement</p>
-              <p style="margin:0;color:#17342d;font-size:13px;line-height:20px;">${safeProperty}</p>
+            <td
+              style="
+                padding:12px 18px;
+                border-bottom:1px solid #e5ded2;
+              "
+            >
+
+              <p
+                style="
+                  margin:0 0 5px;
+                  color:#85857b;
+                  font-size:11px;
+                "
+              >
+                Property / Requirement
+              </p>
+
+              <p
+                style="
+                  margin:0;
+                  color:${BRAND.green};
+                  font-size:13px;
+                  line-height:21px;
+                  overflow-wrap:anywhere;
+                "
+              >
+                ${safeProperty}
+              </p>
+
             </td>
           </tr>
 
           <tr>
             <td style="padding:12px 18px 17px;">
-              <p style="margin:0 0 5px;color:#85857b;font-size:11px;">Contact Number</p>
-              <p style="margin:0;color:#17342d;font-size:13px;line-height:20px;">${safePhone}</p>
+
+              <p
+                style="
+                  margin:0 0 5px;
+                  color:#85857b;
+                  font-size:11px;
+                "
+              >
+                Contact Number
+              </p>
+
+              <p
+                style="
+                  margin:0;
+                  color:${BRAND.green};
+                  font-size:13px;
+                  line-height:20px;
+                "
+              >
+                ${safePhone}
+              </p>
+
             </td>
           </tr>
 
@@ -491,26 +1126,53 @@ const buildCustomerEmail = ({
       </td>
     </tr>
 
-    <tr>
-      <td align="center" style="padding:0 22px 30px;">
+    <!-- CONTACT BUTTONS -->
 
-        <p style="margin:0 0 14px;color:#616b63;font-size:13px;line-height:22px;">
-          Need assistance before we get in touch? Our team is just a call or message away.
+    <tr>
+      <td
+        align="center"
+        style="padding:0 20px 30px;"
+      >
+
+        <p
+          style="
+            margin:0 0 13px;
+            color:#616b63;
+            font-size:13px;
+            line-height:22px;
+          "
+        >
+          Need assistance? Our team is just a call or message away.
         </p>
 
-        ${actionButton(`tel:${BRAND.phone}`, "CALL OUR TEAM", BRAND.green)}
-
         ${actionButton(
-          `https://wa.me/919090106101?text=${encodeURIComponent(
-            "Hello Property Bouquet, I would like to know more about your properties."
-          )}`,
-          "WHATSAPP US",
-          "#25D366"
+          `tel:${BRAND.phone}`,
+          "CALL OUR TEAM",
+          BRAND.green
         )}
 
-        <p style="margin:20px 0 0;color:#616b63;font-size:13px;line-height:23px;">
+        ${
+          whatsappUrl
+            ? actionButton(
+                whatsappUrl,
+                "WHATSAPP US",
+                BRAND.whatsapp
+              )
+            : ""
+        }
+
+        <p
+          style="
+            margin:20px 0 0;
+            color:#616b63;
+            font-size:13px;
+            line-height:23px;
+          "
+        >
           Warm regards,<br>
-          <strong style="color:#17342d;">Team Property Bouquet</strong>
+          <strong style="color:${BRAND.green};">
+            Team Property Bouquet
+          </strong>
         </p>
 
       </td>
@@ -519,9 +1181,52 @@ const buildCustomerEmail = ({
 
   return emailShell({
     title: "We've Received Your Enquiry | Property Bouquet",
-    preheader: "Thank you for contacting Property Bouquet. Your enquiry has been received.",
+    preheader:
+      "Thank you for contacting Property Bouquet. Your enquiry has been received.",
     content,
   });
+};
+
+// =========================================================
+// EMAIL DELIVERY HELPER
+// =========================================================
+
+const sendEmailSafely = async ({
+  to,
+  subject,
+  html,
+  label,
+}) => {
+  if (!process.env.RESEND_API_KEY) {
+    console.error(
+      `${label}: RESEND_API_KEY is not configured.`
+    );
+
+    return false;
+  }
+
+  try {
+    const result = await resend.emails.send({
+      from: `Property Bouquet <${BRAND.email}>`,
+      to,
+      subject,
+      html,
+    });
+
+    if (result?.error) {
+      console.error(`${label}:`, result.error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error(
+      `${label}:`,
+      error?.message || error
+    );
+
+    return false;
+  }
 };
 
 // =========================================================
@@ -541,9 +1246,11 @@ exports.createLead = async (req, res) => {
       pageUrl,
       pagePath,
       pageTitle,
-    } = req.body;
+    } = req.body || {};
 
+    // -----------------------------------------------------
     // BASIC VALIDATION
+    // -----------------------------------------------------
 
     if (typeof name !== "string" || !name.trim()) {
       return res.status(400).json({
@@ -560,7 +1267,6 @@ exports.createLead = async (req, res) => {
     }
 
     const cleanName = name.trim();
-    const cleanPhone = phone.trim();
 
     if (cleanName.length > 150) {
       return res.status(400).json({
@@ -569,19 +1275,24 @@ exports.createLead = async (req, res) => {
       });
     }
 
-    // Indian mobile number validation
+    // Accept an Indian mobile number with an optional +91 or 91 prefix.
+    const cleanPhone = normalizeIndianPhone(phone);
 
-    if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+    if (!cleanPhone) {
       return res.status(400).json({
         success: false,
-        message: "Invalid phone number",
+        message: "Invalid Indian mobile number",
       });
     }
 
+    // -----------------------------------------------------
     // EMAIL VALIDATION
+    // -----------------------------------------------------
 
     const cleanEmail =
-      typeof email === "string" ? email.trim().toLowerCase() : "";
+      typeof email === "string"
+        ? email.trim().toLowerCase()
+        : "";
 
     if (cleanEmail.length > 254) {
       return res.status(400).json({
@@ -590,36 +1301,31 @@ exports.createLead = async (req, res) => {
       });
     }
 
-    if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+    if (
+      cleanEmail &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)
+    ) {
       return res.status(400).json({
         success: false,
         message: "Invalid email address",
       });
     }
 
-    // NORMALIZE VALUES
+    // -----------------------------------------------------
+    // NORMALIZE INPUT VALUES
+    // -----------------------------------------------------
 
-    const cleanProperty =
-      typeof property === "string" ? property.trim().slice(0, 500) : "";
+    const cleanProperty = cleanString(property, 500);
 
     const cleanSource =
-      typeof source === "string" && source.trim()
-        ? source.trim().slice(0, 200)
-        : "Website";
+      cleanString(source, 200) || "Website";
 
     const cleanLeadType =
-      typeof leadType === "string" && leadType.trim()
-        ? leadType.trim().slice(0, 100)
-        : "General";
+      cleanString(leadType, 100) || "General";
 
-    const cleanPageUrl =
-      typeof pageUrl === "string" ? pageUrl.trim().slice(0, 2000) : "";
-
-    const cleanPagePath =
-      typeof pagePath === "string" ? pagePath.trim().slice(0, 1000) : "";
-
-    const cleanPageTitle =
-      typeof pageTitle === "string" ? pageTitle.trim().slice(0, 500) : "";
+    const cleanPageUrl = cleanString(pageUrl, 2000);
+    const cleanPagePath = cleanString(pagePath, 1000);
+    const cleanPageTitle = cleanString(pageTitle, 500);
 
     const cleanRoiDetails =
       roiDetails &&
@@ -628,7 +1334,10 @@ exports.createLead = async (req, res) => {
         ? roiDetails
         : {};
 
-    // DUPLICATE CHECK: SAME ENQUIRY WITHIN 10 MINUTES
+    // -----------------------------------------------------
+    // DUPLICATE CHECK
+    // Same phone, property and lead type within 10 minutes.
+    // -----------------------------------------------------
 
     const existing = await Lead.findOne({
       phone: cleanPhone,
@@ -647,7 +1356,9 @@ exports.createLead = async (req, res) => {
       });
     }
 
-    // CREATE LEAD BEFORE SENDING EMAILS
+    // -----------------------------------------------------
+    // SAVE LEAD BEFORE ATTEMPTING EMAIL DELIVERY
+    // -----------------------------------------------------
 
     const lead = await Lead.create({
       name: cleanName,
@@ -663,81 +1374,71 @@ exports.createLead = async (req, res) => {
       roiDetails: cleanRoiDetails,
     });
 
+    // -----------------------------------------------------
     // ADMIN NOTIFICATION EMAIL
-    // Email errors must not undo lead creation.
+    // -----------------------------------------------------
 
-    try {
-      const adminEmailResult = await resend.emails.send({
-        from: `Property Bouquet <${BRAND.email}>`,
-        to: BRAND.notificationEmail,
+    const isROI = cleanLeadType === "ROI Calculator";
 
-        subject:
-          cleanLeadType === "ROI Calculator"
-            ? `New Investment Enquiry | ${cleanName}`
-            : `New Website Lead | ${cleanProperty || "General Enquiry"}`,
+    await sendEmailSafely({
+      to: BRAND.notificationEmail,
 
-        html: buildAdminEmail({
-          name: cleanName,
-          phone: cleanPhone,
-          email: cleanEmail,
-          property: cleanProperty,
-          source: cleanSource,
-          leadType: cleanLeadType,
-          pageUrl: cleanPageUrl,
-          pagePath: cleanPagePath,
-          pageTitle: cleanPageTitle,
-          roiDetails: cleanRoiDetails,
-          createdAt: lead.createdAt || new Date(),
-        }),
-      });
+      subject: isROI
+        ? `New Investment Enquiry | ${cleanName}`
+        : `New Website Lead | ${cleanProperty || "General Enquiry"}`,
 
-      if (adminEmailResult?.error) {
-        console.error(
-          "Admin notification email failed:",
-          adminEmailResult.error
-        );
-      }
-    } catch (emailErr) {
-      console.error("Admin notification email failed:", emailErr.message);
-    }
+      html: buildAdminEmail({
+        name: cleanName,
+        phone: cleanPhone,
+        email: cleanEmail,
+        property: cleanProperty,
+        source: cleanSource,
+        leadType: cleanLeadType,
+        pageUrl: cleanPageUrl,
+        pagePath: cleanPagePath,
+        pageTitle: cleanPageTitle,
+        roiDetails: cleanRoiDetails,
+        createdAt: lead.createdAt || new Date(),
+      }),
 
+      label: "Admin notification email failed",
+    });
+
+    // -----------------------------------------------------
     // CUSTOMER CONFIRMATION EMAIL
+    // Sent only when a valid email address is supplied.
+    // -----------------------------------------------------
 
     if (cleanEmail) {
-      try {
-        const customerEmailResult = await resend.emails.send({
-          from: `Property Bouquet <${BRAND.email}>`,
-          to: cleanEmail,
-          subject: "We've Received Your Enquiry | Property Bouquet",
+      await sendEmailSafely({
+        to: cleanEmail,
 
-          html: buildCustomerEmail({
-            name: cleanName,
-            phone: cleanPhone,
-            property: cleanProperty,
-            leadType: cleanLeadType,
-          }),
-        });
+        subject: "We've Received Your Enquiry | Property Bouquet",
 
-        if (customerEmailResult?.error) {
-          console.error(
-            "Customer confirmation email failed:",
-            customerEmailResult.error
-          );
-        }
-      } catch (customerEmailErr) {
-        console.error(
-          "Customer confirmation email failed:",
-          customerEmailErr.message
-        );
-      }
+        html: buildCustomerEmail({
+          name: cleanName,
+          phone: cleanPhone,
+          property: cleanProperty,
+          leadType: cleanLeadType,
+        }),
+
+        label: "Customer confirmation email failed",
+      });
     }
+
+    // -----------------------------------------------------
+    // SUCCESS RESPONSE
+    // -----------------------------------------------------
 
     return res.status(201).json({
       success: true,
       data: lead,
     });
-  } catch (err) {
-    console.error("CREATE LEAD ERROR:", err);
+  } catch (error) {
+    console.error(
+      "CREATE LEAD ERROR:",
+      error?.message || error
+    );
 
     return res.status(500).json({
       success: false,
@@ -760,8 +1461,11 @@ exports.getLeads = async (req, res) => {
       success: true,
       data: leads,
     });
-  } catch (err) {
-    console.error("GET LEADS ERROR:", err);
+  } catch (error) {
+    console.error(
+      "GET LEADS ERROR:",
+      error?.message || error
+    );
 
     return res.status(500).json({
       success: false,
@@ -776,7 +1480,8 @@ exports.getLeads = async (req, res) => {
 
 exports.updateLead = async (req, res) => {
   try {
-    const { notes, ...rest } = req.body;
+    const body = req.body || {};
+    const { notes } = body;
 
     const lead = await Lead.findById(req.params.id);
 
@@ -787,37 +1492,173 @@ exports.updateLead = async (req, res) => {
       });
     }
 
-    // AUTO PRIORITY
+    // Only allow intended, editable lead fields.
+    // Do not allow the request to overwrite arbitrary
+    // internal fields such as _id or createdAt.
 
-    if (rest.status) {
-      switch (rest.status) {
+    const allowedFields = [
+      "name",
+      "phone",
+      "email",
+      "property",
+      "source",
+      "leadType",
+      "status",
+      "priority",
+      "assignedTo",
+      "pageUrl",
+      "pagePath",
+      "pageTitle",
+      "roiDetails",
+    ];
+
+    const updates = {};
+
+    for (const field of allowedFields) {
+      if (Object.prototype.hasOwnProperty.call(body, field)) {
+        updates[field] = body[field];
+      }
+    }
+
+    // -----------------------------------------------------
+    // NORMALIZE BASIC EDITABLE FIELDS
+    // -----------------------------------------------------
+
+    if (Object.prototype.hasOwnProperty.call(updates, "name")) {
+      if (
+        typeof updates.name !== "string" ||
+        !updates.name.trim() ||
+        updates.name.trim().length > 150
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid name",
+        });
+      }
+
+      updates.name = updates.name.trim();
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, "phone")) {
+      const normalizedPhone = normalizeIndianPhone(
+        updates.phone
+      );
+
+      if (!normalizedPhone) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid Indian mobile number",
+        });
+      }
+
+      updates.phone = normalizedPhone;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, "email")) {
+      const updatedEmail =
+        typeof updates.email === "string"
+          ? updates.email.trim().toLowerCase()
+          : "";
+
+      if (
+        updatedEmail.length > 254 ||
+        (updatedEmail &&
+          !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(updatedEmail))
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid email address",
+        });
+      }
+
+      updates.email = updatedEmail;
+    }
+
+    for (const field of [
+      "property",
+      "source",
+      "leadType",
+      "pageUrl",
+      "pagePath",
+      "pageTitle",
+    ]) {
+      if (Object.prototype.hasOwnProperty.call(updates, field)) {
+        if (typeof updates[field] !== "string") {
+          return res.status(400).json({
+            success: false,
+            message: `Invalid ${field}`,
+          });
+        }
+
+        const limits = {
+          property: 500,
+          source: 200,
+          leadType: 100,
+          pageUrl: 2000,
+          pagePath: 1000,
+          pageTitle: 500,
+        };
+
+        updates[field] = updates[field]
+          .trim()
+          .slice(0, limits[field]);
+      }
+    }
+
+    // -----------------------------------------------------
+    // AUTOMATIC PRIORITY
+    // -----------------------------------------------------
+
+    if (updates.status) {
+      switch (updates.status) {
         case "Interested":
         case "Visit":
         case "Closed":
-          rest.priority = "Hot";
+          updates.priority = "Hot";
           break;
 
         case "Not Interested":
-          rest.priority = "Cold";
+          updates.priority = "Cold";
           break;
 
         case "New":
+          updates.priority = "Warm";
+          break;
+
         default:
-          rest.priority = "Warm";
+          // Do not infer a priority for an unknown status.
           break;
       }
     }
 
-    Object.assign(lead, rest);
+    Object.assign(lead, updates);
 
+    // -----------------------------------------------------
     // NOTES
+    // -----------------------------------------------------
 
     if (notes !== undefined) {
-      if (typeof notes === "string" && notes.trim() === "") {
+      if (typeof notes !== "string") {
+        return res.status(400).json({
+          success: false,
+          message: "Notes must be text",
+        });
+      }
+
+      const cleanNotes = notes.trim();
+
+      if (cleanNotes.length > 5000) {
+        return res.status(400).json({
+          success: false,
+          message: "Notes must not exceed 5000 characters",
+        });
+      }
+
+      if (!cleanNotes) {
         lead.notes = [];
-      } else if (typeof notes === "string") {
+      } else {
         lead.notes.push({
-          text: notes.trim(),
+          text: cleanNotes,
           addedBy: req.user?._id || null,
         });
       }
@@ -829,12 +1670,15 @@ exports.updateLead = async (req, res) => {
       success: true,
       data: lead,
     });
-  } catch (err) {
-    console.error("UPDATE LEAD ERROR:", err);
+  } catch (error) {
+    console.error(
+      "UPDATE LEAD ERROR:",
+      error?.message || error
+    );
 
     return res.status(500).json({
       success: false,
-      message: err.message,
+      message: "Failed to update lead",
     });
   }
 };
@@ -858,8 +1702,11 @@ exports.deleteLead = async (req, res) => {
       success: true,
       message: "Lead deleted",
     });
-  } catch (err) {
-    console.error("DELETE LEAD ERROR:", err);
+  } catch (error) {
+    console.error(
+      "DELETE LEAD ERROR:",
+      error?.message || error
+    );
 
     return res.status(500).json({
       success: false,
