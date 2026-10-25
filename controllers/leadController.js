@@ -1025,6 +1025,7 @@ Luxury Properties • Gurgaon • Delhi NCR
         const customerProperty = escapeHtml(
           cleanProperty || "General Enquiry"
         );
+        
         const customerLeadType = escapeHtml(cleanLeadType);
         const customerPhone = escapeHtml(cleanPhone);
 
