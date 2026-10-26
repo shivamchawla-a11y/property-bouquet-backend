@@ -3870,6 +3870,76 @@ exports.aiCreateProperty = async (req, res) => {
 };
 
 
+/* ============================================================
+   GET FEATURED PROPERTIES — LIGHTWEIGHT HOMEPAGE API
+   Public: published, active, non-deleted featured properties
+============================================================ */
+
+exports.getFeaturedProperties = async (req, res) => {
+  try {
+    const properties = await Property.find({
+      status: "published",
+      isDeleted: { $ne: true },
+      isActive: { $ne: false },
+      deletedFromStatus: { $nin: ["trash", "inactive"] },
+      propertyTag: "Featured",
+      slug: { $type: "string", $ne: "" },
+    })
+      .select({
+        _id: 1,
+        slug: 1,
+        status: 1,
+        isDeleted: 1,
+        isActive: 1,
+        deletedFromStatus: 1,
+        propertyTag: 1,
+
+        "coreDetails.title": 1,
+        "coreDetails.startingPrice": 1,
+        "coreDetails.priceOnRequest": 1,
+
+        "unitConfigurations.unitType": 1,
+        "unitConfigurations.bedrooms": 1,
+
+        "media.heroImageUrl": 1,
+        "media.gallery": 1,
+
+        "locationData.locationName": 1,
+        "locationData.customLocation": 1,
+        "locationData.locationRef": 1,
+      })
+      .populate({
+        path: "locationData.locationRef",
+        select: "name parent",
+        populate: {
+          path: "parent",
+          select: "name parent",
+          populate: {
+            path: "parent",
+            select: "name",
+          },
+        },
+      })
+      .lean()
+      .maxTimeMS(8000);
+
+    res.set("Cache-Control", "public, max-age=60, s-maxage=60");
+
+    return res.status(200).json({
+      success: true,
+      data: properties,
+    });
+  } catch (error) {
+    console.error("GET FEATURED PROPERTIES ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to load featured properties",
+    });
+  }
+};
+
+
 exports.getPropertySeoList = async (
   req,
   res

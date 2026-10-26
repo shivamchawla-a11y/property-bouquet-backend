@@ -16,6 +16,7 @@ const {
   publishDraft,
   getProperties,
   getPropertySeoList,
+  getFeaturedProperties,
   deleteProperty,
   restoreProperty,
   moveToTrash,
@@ -43,6 +44,10 @@ router.get(
   getProperties
 );
 
+router.get(
+  "/featured",
+  getFeaturedProperties
+);
 
 // Lightweight SEO property list
 // Used by sitemap / LLM discovery.
