@@ -2,6 +2,7 @@ const express = require("express");
 
 const {
   getAllNews,
+  getLatestNews,
   getNewsById,
   getNewsForEdit,
   getNewsBySlug,
@@ -19,6 +20,8 @@ express.Router();
 // ================= PUBLIC =================
 
 router.get("/", getAllNews);
+
+router.get("/latest", getLatestNews);
 
 router.get(
 "/slug/:slug",

@@ -84,6 +84,51 @@ if (req.query.all === "true") {
   }
 };
 
+
+/*
+|--------------------------------------------------------------------------
+| GET LATEST PUBLISHED NEWS — HOMEPAGE
+|--------------------------------------------------------------------------
+| GET /api/news/latest
+| Returns only the three newest published news articles.
+|--------------------------------------------------------------------------
+*/
+
+exports.getLatestNews = async (req, res) => {
+  try {
+    const news = await News.find({
+      status: "published",
+      isDeleted: false,
+    })
+      .select(
+        "title slug category publishDate createdAt readTime"
+      )
+      .sort({
+        publishDate: -1,
+        createdAt: -1,
+      })
+      .limit(3)
+      .lean()
+      .maxTimeMS(5000);
+
+    res.set("Cache-Control", "public, max-age=60, s-maxage=300");
+
+    return res.json({
+      success: true,
+      count: news.length,
+      data: news,
+    });
+  } catch (err) {
+    console.error("GET LATEST NEWS ERROR:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch latest news.",
+    });
+  }
+};
+
+
 // ================= GET SINGLE =================
 exports.getNewsById = async (
 req,

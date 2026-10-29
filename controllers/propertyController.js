@@ -3940,6 +3940,69 @@ exports.getFeaturedProperties = async (req, res) => {
 };
 
 
+/* =========================================================
+   GET PROPERTY CATEGORIES
+   Returns category names only — not full property documents.
+========================================================= */
+
+exports.getPropertyCategories = async (req, res) => {
+  try {
+    const categories = await Property.distinct(
+      "categoryData.categoryName",
+      {
+        status: "published",
+        isDeleted: { $ne: true },
+        isActive: { $ne: false },
+        deletedFromStatus: {
+          $nin: ["trash", "inactive"],
+        },
+        "categoryData.categoryName": {
+          $type: "string",
+          $nin: ["", null],
+        },
+      }
+    ).maxTimeMS(5000);
+
+    const cleanedCategories = [
+      ...new Set(
+        categories
+          .filter(
+            (name) =>
+              typeof name === "string" &&
+              name.trim().length > 0
+          )
+          .map((name) => name.trim())
+      ),
+    ];
+
+    cleanedCategories.sort((a, b) =>
+      a.localeCompare(b)
+    );
+
+    res.set(
+      "Cache-Control",
+      "public, max-age=300, s-maxage=300"
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: cleanedCategories,
+    });
+  } catch (error) {
+    console.error(
+      "GET PROPERTY CATEGORIES ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to load property categories",
+    });
+  }
+};
+
+
+
 exports.getPropertySeoList = async (
   req,
   res

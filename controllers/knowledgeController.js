@@ -191,6 +191,52 @@ exports.getAllKnowledge = async (req, res) => {
   }
 };
 
+
+/*
+|--------------------------------------------------------------------------
+| GET LATEST PUBLISHED KNOWLEDGE ARTICLES — HOMEPAGE
+|--------------------------------------------------------------------------
+| GET /api/knowledge/latest
+| Returns only the five newest published articles.
+| Full article HTML is excluded.
+|--------------------------------------------------------------------------
+*/
+
+exports.getLatestKnowledge = async (req, res) => {
+  try {
+    const articles = await Knowledge.find({
+      status: "published",
+      isDeleted: false,
+    })
+      .select(
+        "title slug shortDescription featuredImage category author readTime featured publishDate createdAt updatedAt"
+      )
+      .sort({
+        publishDate: -1,
+        createdAt: -1,
+      })
+      .limit(5)
+      .lean()
+      .maxTimeMS(5000);
+
+    res.set("Cache-Control", "public, max-age=60, s-maxage=300");
+
+    return res.json({
+      success: true,
+      count: articles.length,
+      data: articles,
+    });
+  } catch (err) {
+    console.error("GET LATEST KNOWLEDGE ERROR:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch latest knowledge articles.",
+    });
+  }
+};
+
+
 /*
 |--------------------------------------------------------------------------
 | GET SINGLE ARTICLE

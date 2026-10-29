@@ -3,6 +3,7 @@ const multer = require("multer");
 
 const {
   getAllKnowledge,
+  getLatestKnowledge,
   getKnowledgeById,
   getKnowledgeBySlug,
   createKnowledge,
@@ -68,6 +69,8 @@ const upload = multer({
  * Public users therefore never receive trashed articles.
  */
 router.get("/", getAllKnowledge);
+
+router.get("/latest", getLatestKnowledge);
 
 /*
  * Public article by slug.

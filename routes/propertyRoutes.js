@@ -17,6 +17,7 @@ const {
   getProperties,
   getPropertySeoList,
   getFeaturedProperties,
+  getPropertyCategories,
   deleteProperty,
   restoreProperty,
   moveToTrash,
@@ -47,6 +48,11 @@ router.get(
 router.get(
   "/featured",
   getFeaturedProperties
+);
+
+router.get
+("/categories", 
+  getPropertyCategories
 );
 
 // Lightweight SEO property list
