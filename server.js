@@ -6,6 +6,7 @@ const cookieParser = require("cookie-parser");
 
 // Routes
 const propertyRoutes = require("./routes/propertyRoutes");
+const navigationRoutes = require("./routes/navigationRoutes");
 const authRoutes = require("./routes/authRoutes");
 const locationRoutes = require("./routes/locationRoutes");
 const builderRoutes = require("./routes/builderRoutes");
@@ -67,6 +68,7 @@ app.use(redirectMiddleware);
 
 // ✅ 3. ROUTES
 app.use("/api/properties", propertyRoutes);
+app.use("/api/navigation", navigationRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/locations", locationRoutes);
 app.use("/api/builders", builderRoutes);
