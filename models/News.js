@@ -1,3 +1,4 @@
+
 const mongoose = require("mongoose");
 
 const newsSchema = new mongoose.Schema(
@@ -50,14 +51,14 @@ const newsSchema = new mongoose.Schema(
     },
 
     authorQuote: {
-  type: String,
-  default: "",
-},
+      type: String,
+      default: "",
+    },
 
-authorDesignation: {
-    type: String,
-    default: "Property Bouquet Research Team"
-},
+    authorDesignation: {
+      type: String,
+      default: "Property Bouquet Research Team",
+    },
 
     readTime: {
       type: Number,
@@ -98,6 +99,27 @@ authorDesignation: {
   },
   {
     timestamps: true,
+  }
+);
+
+// ============================================================
+// PERFORMANCE INDEXES
+// ============================================================
+
+// Supports homepage latest published news query:
+// status = published
+// isDeleted = false
+// sort by publishDate DESC, createdAt DESC
+
+newsSchema.index(
+  {
+    status: 1,
+    isDeleted: 1,
+    publishDate: -1,
+    createdAt: -1,
+  },
+  {
+    name: "news_homepage_latest_index",
   }
 );
 

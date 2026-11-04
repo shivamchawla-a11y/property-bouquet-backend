@@ -1,3 +1,4 @@
+
 const express = require("express");
 
 const router = express.Router();
@@ -17,6 +18,7 @@ const {
   getProperties,
   getPropertySeoList,
   getFeaturedProperties,
+  getRecommendedProperties,
   getPropertyCategories,
   deleteProperty,
   restoreProperty,
@@ -27,10 +29,6 @@ const {
   getPropertyPreview,
   updateProperty,
   getPropertyById,
-
-  // ============================================================
-  // AI CREATE PROPERTY
-  // ============================================================
   aiCreateProperty,
 } = require("../controllers/propertyController");
 
@@ -38,26 +36,32 @@ const {
 // PUBLIC
 // ============================================================
 
-// Public property listing
+// General public property listing
 router.get(
   "/",
   optionalProtect,
   getProperties
 );
 
+// Lightweight Featured properties
 router.get(
   "/featured",
   getFeaturedProperties
 );
 
-router.get
-("/categories", 
+// Lightweight Recommended properties
+router.get(
+  "/recommended",
+  getRecommendedProperties
+);
+
+// Property categories
+router.get(
+  "/categories",
   getPropertyCategories
 );
 
 // Lightweight SEO property list
-// Used by sitemap / LLM discovery.
-// Returns only published, active, non-deleted SEO fields.
 router.get(
   "/seo-list",
   getPropertySeoList
@@ -79,7 +83,7 @@ router.get(
 
 // ============================================================
 // DUPLICATE PROPERTY CHECK
-// IMPORTANT: THIS MUST BE BEFORE /:id
+// IMPORTANT: KEEP BEFORE /:id
 // ============================================================
 
 router.get(
@@ -93,10 +97,7 @@ router.get(
 // AGENT + SUPERADMIN
 // ============================================================
 
-// ------------------------------------------------------------
-// ADD PROPERTY
-// ------------------------------------------------------------
-
+// Add property
 router.post(
   "/",
   protect,
@@ -104,13 +105,7 @@ router.post(
   createProperty
 );
 
-// ------------------------------------------------------------
-// AI CREATE PROPERTY
-// IMPORTANT:
-// This route must be BEFORE /:id routes.
-// n8n will eventually call this endpoint.
-// ------------------------------------------------------------
-
+// AI create property
 router.post(
   "/ai-create",
   aiAutomationAuth,
@@ -118,10 +113,7 @@ router.post(
   aiCreateProperty
 );
 
-// ------------------------------------------------------------
-// SAVE DRAFT
-// ------------------------------------------------------------
-
+// Save draft
 router.post(
   "/draft",
   protect,
@@ -129,10 +121,7 @@ router.post(
   saveDraft
 );
 
-// ------------------------------------------------------------
-// DRAFT → LIVE
-// ------------------------------------------------------------
-
+// Draft → Live
 router.patch(
   "/publish/:id",
   protect,
@@ -140,10 +129,7 @@ router.patch(
   publishDraft
 );
 
-// ------------------------------------------------------------
-// LIVE → DRAFT
-// ------------------------------------------------------------
-
+// Delete property
 router.delete(
   "/:id",
   protect,
@@ -151,10 +137,7 @@ router.delete(
   deleteProperty
 );
 
-// ------------------------------------------------------------
-// DRAFT → LIVE
-// ------------------------------------------------------------
-
+// Restore property
 router.patch(
   "/:id/restore",
   protect,
@@ -162,12 +145,7 @@ router.patch(
   restoreProperty
 );
 
-// ------------------------------------------------------------
-// GET SINGLE PROPERTY
-// IMPORTANT: KEEP THIS AFTER /check-duplicate
-// AND AFTER ALL SPECIFIC /:id SUB-ROUTES
-// ------------------------------------------------------------
-
+// Get single property
 router.get(
   "/:id",
   protect,
@@ -175,10 +153,7 @@ router.get(
   getPropertyById
 );
 
-// ------------------------------------------------------------
-// UPDATE PROPERTY
-// ------------------------------------------------------------
-
+// Update property
 router.patch(
   "/:id",
   protect,
@@ -186,10 +161,7 @@ router.patch(
   updateProperty
 );
 
-// ------------------------------------------------------------
-// MOVE TO TRASH
-// ------------------------------------------------------------
-
+// Move to trash
 router.patch(
   "/:id/trash",
   protect,
@@ -201,10 +173,7 @@ router.patch(
 // SUPERADMIN ONLY
 // ============================================================
 
-// ------------------------------------------------------------
-// RESTORE FROM TRASH
-// ------------------------------------------------------------
-
+// Restore from trash
 router.patch(
   "/:id/restore-trash",
   protect,
@@ -212,10 +181,7 @@ router.patch(
   restoreTrash
 );
 
-// ------------------------------------------------------------
-// DELETE FOREVER
-// ------------------------------------------------------------
-
+// Permanently delete property
 router.delete(
   "/:id/permanent-delete",
   protect,
