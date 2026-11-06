@@ -2401,10 +2401,18 @@ exports.getPropertyBySlug = async (
           "categoryData.categoryRef",
           "name"
         )
-        .populate(
-          "locationData.locationRef",
-          "name"
-        );
+        .populate({
+  path: "locationData.locationRef",
+  select: "name parent",
+  populate: {
+    path: "parent",
+    select: "name parent",
+    populate: {
+      path: "parent",
+      select: "name",
+    },
+  },
+});
 
     if (!property) {
       return res.status(404).json({
