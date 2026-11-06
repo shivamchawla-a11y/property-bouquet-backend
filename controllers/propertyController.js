@@ -1871,6 +1871,67 @@ exports.getProperties = async (
   }
 };
 
+// ============================================================
+// LIGHTWEIGHT PROPERTY SEARCH INDEX
+// Used by the public SearchPanel autocomplete.
+// ============================================================
+
+exports.getPropertySearchIndex = async (req, res) => {
+  try {
+    const filter = {
+      isActive: true,
+      isDeleted: false,
+
+      // Preserve the existing public visibility rules,
+      // including legacy records with missing/empty status.
+      $or: [
+        { status: "published" },
+        { status: { $exists: false } },
+        { status: null },
+        { status: "" },
+      ],
+    };
+
+    const properties = await Property.find(filter)
+      .select(
+        [
+          "slug",
+          "coreDetails.title",
+          "coreDetails.developerName",
+          "coreDetails.developerRef",
+          "locationData.locationName",
+          "categoryData.categoryName",
+        ].join(" ")
+      )
+      .populate(
+        "coreDetails.developerRef",
+        "name logo image"
+      )
+      .lean()
+      .maxTimeMS(8000);
+
+    res.set(
+      "Cache-Control",
+      "public, max-age=60, s-maxage=60"
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: properties,
+    });
+  } catch (error) {
+    console.error(
+      "GET PROPERTY SEARCH INDEX ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load property search data.",
+    });
+  }
+};
+
 
 // ============================================================
 // LIVE → DRAFT

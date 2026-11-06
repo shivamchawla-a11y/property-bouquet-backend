@@ -20,6 +20,7 @@ const {
   getRecommendedProperties,
   getTrendingProperties,
   getPropertyCategories,
+  getPropertySearchIndex,
   deleteProperty,
   restoreProperty,
   moveToTrash,
@@ -66,6 +67,12 @@ router.get(
 router.get(
   "/categories",
   getPropertyCategories
+);
+
+// Lightweight SearchPanel autocomplete index
+router.get(
+  "/search-index",
+  getPropertySearchIndex
 );
 
 // Lightweight SEO property list
