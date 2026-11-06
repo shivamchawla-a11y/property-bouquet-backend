@@ -4032,6 +4032,107 @@ exports.getRecommendedProperties = async (req, res) => {
 };
 
 
+// ============================================================
+// GET TRENDING PROPERTIES
+// Lightweight homepage endpoint.
+//
+// Returns only the fields required by:
+// - TrendingProjects.jsx
+// - TrendingProjectsMobile.jsx
+//
+// Does not change the general /api/properties endpoint.
+// ============================================================
+
+exports.getTrendingProperties = async (req, res) => {
+  try {
+    const properties = await Property.find({
+      status: "published",
+
+      isDeleted: {
+        $ne: true,
+      },
+
+      isActive: {
+        $ne: false,
+      },
+
+      deletedFromStatus: {
+        $nin: ["trash", "inactive"],
+      },
+
+      propertyTag: "Trending",
+
+      slug: {
+        $type: "string",
+        $ne: "",
+      },
+    })
+      .select({
+        _id: 1,
+        slug: 1,
+
+        // Property title and price
+        "coreDetails.title": 1,
+        "coreDetails.startingPrice": 1,
+        "coreDetails.priceOnRequest": 1,
+
+        // First configuration is used by the homepage cards
+        "unitConfigurations.unitType": 1,
+        "unitConfigurations.bedrooms": 1,
+        "unitConfigurations.bathrooms": 1,
+        "unitConfigurations.area": 1,
+        "unitConfigurations.price": 1,
+
+        // Main property image
+        "media.heroImageUrl": 1,
+
+        // Location information
+        "locationData.locationName": 1,
+        "locationData.customLocation": 1,
+        "locationData.locationRef": 1,
+      })
+      .populate({
+        path: "locationData.locationRef",
+        select: "name parent",
+        populate: {
+          path: "parent",
+          select: "name parent",
+          populate: {
+            path: "parent",
+            select: "name",
+          },
+        },
+      })
+      .sort({
+        updatedAt: -1,
+        _id: -1,
+      })
+      .limit(12)
+      .lean()
+      .maxTimeMS(8000);
+
+    res.set({
+      "Cache-Control": "public, max-age=60, s-maxage=60",
+    });
+
+    return res.status(200).json({
+      success: true,
+      count: properties.length,
+      data: properties,
+    });
+  } catch (error) {
+    console.error(
+      "Get trending properties error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to fetch trending properties",
+    });
+  }
+};
+
 
 /* =========================================================
    GET PROPERTY CATEGORIES

@@ -1,4 +1,3 @@
-
 const express = require("express");
 
 const router = express.Router();
@@ -19,6 +18,7 @@ const {
   getPropertySeoList,
   getFeaturedProperties,
   getRecommendedProperties,
+  getTrendingProperties,
   getPropertyCategories,
   deleteProperty,
   restoreProperty,
@@ -37,6 +37,7 @@ const {
 // ============================================================
 
 // General public property listing
+// KEEP THIS ENDPOINT UNCHANGED
 router.get(
   "/",
   optionalProtect,
@@ -53,6 +54,12 @@ router.get(
 router.get(
   "/recommended",
   getRecommendedProperties
+);
+
+// Lightweight Trending properties
+router.get(
+  "/trending",
+  getTrendingProperties
 );
 
 // Property categories
