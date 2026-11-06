@@ -1,21 +1,16 @@
+
 const mongoose = require("mongoose");
 
 const knowledgeSchema = new mongoose.Schema(
   {
-    // ==========================================================
     // TITLE
-    // ==========================================================
-
     title: {
       type: String,
       required: true,
       trim: true,
     },
 
-    // ==========================================================
     // SLUG
-    // ==========================================================
-
     slug: {
       type: String,
       required: true,
@@ -24,41 +19,28 @@ const knowledgeSchema = new mongoose.Schema(
       trim: true,
     },
 
-    // ==========================================================
     // SHORT DESCRIPTION
-    // ==========================================================
-
     shortDescription: {
       type: String,
       required: true,
       maxlength: 250,
     },
 
-    // ==========================================================
-    // CONTENT
-    // ==========================================================
-
+    // FULL ARTICLE CONTENT
     content: {
       type: String,
       required: true,
     },
 
-    // ==========================================================
     // FEATURED IMAGE
-    // ==========================================================
-
     featuredImage: {
       type: String,
       default: "",
     },
 
-    // ==========================================================
     // CATEGORY
-    // ==========================================================
-
     category: {
       type: String,
-
       enum: [
         "Buying Guide",
         "Selling Guide",
@@ -74,75 +56,51 @@ const knowledgeSchema = new mongoose.Schema(
         "Project's Review",
         "General",
       ],
-
       default: "General",
     },
 
-    // ==========================================================
     // AUTHOR
-    // ==========================================================
-
     author: {
       type: String,
       default: "Property Bouquet Research Team",
     },
 
-    // ==========================================================
     // READ TIME
-    // ==========================================================
-
     readTime: {
       type: Number,
       default: 5,
       min: 1,
     },
 
-    // ==========================================================
     // FEATURED
-    // ==========================================================
-
     featured: {
       type: Boolean,
       default: false,
     },
 
-    // ==========================================================
     // VIEWS
-    // ==========================================================
-
     views: {
       type: Number,
       default: 0,
     },
 
-    // ==========================================================
     // PUBLISH DATE
-    // ==========================================================
-
     publishDate: {
       type: Date,
       default: Date.now,
     },
 
-    // ==========================================================
     // STATUS
-    // ==========================================================
-
     status: {
       type: String,
-
       enum: [
         "draft",
         "published",
       ],
-
       default: "draft",
     },
 
-    // ==========================================================
     // SEO
-    // ==========================================================
-
     seo: {
       metaTitle: {
         type: String,
@@ -160,36 +118,41 @@ const knowledgeSchema = new mongoose.Schema(
       },
     },
 
-    // ==========================================================
     // SOFT DELETE
-    //
-    // false = normal article
-    // true  = article is in Trash
-    //
-    // IMPORTANT:
-    // This does NOT delete the MongoDB document.
-    // ==========================================================
-
     isDeleted: {
       type: Boolean,
       default: false,
       index: true,
     },
 
-    // ==========================================================
-    // WHEN WAS IT MOVED TO TRASH?
-    // ==========================================================
-
+    // DELETION DATE
     deletedAt: {
       type: Date,
       default: null,
     },
   },
-
   {
     timestamps: true,
   }
 );
+
+
+// ============================================================
+// HOMEPAGE LATEST ARTICLES COMPOUND INDEX
+// ============================================================
+
+knowledgeSchema.index(
+  {
+    status: 1,
+    isDeleted: 1,
+    publishDate: -1,
+    createdAt: -1,
+  },
+  {
+    name: "knowledge_latest_published",
+  }
+);
+
 
 // ============================================================
 // MODEL

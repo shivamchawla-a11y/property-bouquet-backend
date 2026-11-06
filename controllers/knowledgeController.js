@@ -1,3 +1,4 @@
+
 const Knowledge = require("../models/Knowledge");
 const cloudinary = require("../config/cloudinary");
 const streamifier = require("streamifier");
@@ -14,45 +15,17 @@ const isValidObjectId = (id) => {
 
 /*
 |--------------------------------------------------------------------------
-| GET ALL ACTIVE ARTICLES
+| GET ALL KNOWLEDGE ARTICLES
 |--------------------------------------------------------------------------
+| GET /api/knowledge
 |
-| Public:
-|   GET /api/knowledge
-|
-| Admin can also use:
-|   GET /api/knowledge?trash=true
-|
-| Normal request:
+| Default:
 |   isDeleted = false
 |
-| Trash request:
+| Trash:
 |   isDeleted = true
 |
-|--------------------------------------------------------------------------
-*/
-
-/*
-|--------------------------------------------------------------------------
-| GET ALL ACTIVE ARTICLES
-|--------------------------------------------------------------------------
-|
-| Public:
-|   GET /api/knowledge
-|
-| Admin can also use:
-|   GET /api/knowledge?trash=true
-|
-| IMPORTANT PERFORMANCE FIX:
-|
-| This endpoint is a LISTING endpoint.
-|
-| It must NOT send the full article HTML/content for every article.
-| Individual article content is still available through:
-|
-|   GET /api/knowledge/:id
-|   GET /api/knowledge/slug/:slug
-|
+| Listing endpoint excludes full article content.
 |--------------------------------------------------------------------------
 */
 
@@ -68,54 +41,29 @@ exports.getAllKnowledge = async (req, res) => {
 
     const query = {};
 
-    /*
-     * ------------------------------------------------------------
-     * SOFT DELETE FILTER
-     * ------------------------------------------------------------
-     */
-
+    // SOFT DELETE FILTER
     if (trash === "true") {
       query.isDeleted = true;
     } else {
       query.isDeleted = false;
     }
 
-    /*
-     * ------------------------------------------------------------
-     * STATUS
-     * ------------------------------------------------------------
-     */
-
+    // STATUS
     if (status) {
       query.status = status;
     }
 
-    /*
-     * ------------------------------------------------------------
-     * CATEGORY
-     * ------------------------------------------------------------
-     */
-
+    // CATEGORY
     if (category) {
       query.category = category;
     }
 
-    /*
-     * ------------------------------------------------------------
-     * FEATURED
-     * ------------------------------------------------------------
-     */
-
+    // FEATURED
     if (featured !== undefined) {
       query.featured = featured === "true";
     }
 
-    /*
-     * ------------------------------------------------------------
-     * SEARCH
-     * ------------------------------------------------------------
-     */
-
+    // SEARCH
     if (search && search.trim()) {
       const searchValue = search.trim();
 
@@ -142,22 +90,9 @@ exports.getAllKnowledge = async (req, res) => {
     }
 
     /*
-     * ------------------------------------------------------------
-     * PERFORMANCE FIX
-     * ------------------------------------------------------------
-     *
-     * The Knowledge document contains the full rich-text article.
-     *
-     * Public listing pages do NOT need that large HTML field.
-     *
-     * Exclude content/body/htmlContent if present.
-     *
-     * lean() also avoids the overhead of creating full Mongoose
-     * document instances for a simple listing response.
-     *
-     * NOTE:
-     * If your Knowledge model uses only one of these fields,
-     * MongoDB simply ignores the fields that don't exist.
+     * Listing pages do not need full article HTML.
+     * Exclude content to reduce database transfer
+     * and response size.
      */
 
     const articles = await Knowledge.find(query)
@@ -169,18 +104,16 @@ exports.getAllKnowledge = async (req, res) => {
         updatedAt: -1,
         createdAt: -1,
       })
-      .lean();
+      .lean()
+      .maxTimeMS(5000);
 
-    return res.json({
+    return res.status(200).json({
       success: true,
       count: articles.length,
       data: articles,
     });
   } catch (err) {
-    console.error(
-      "GET KNOWLEDGE ERROR:",
-      err
-    );
+    console.error("GET KNOWLEDGE ERROR:", err);
 
     return res.status(500).json({
       success: false,
@@ -197,8 +130,16 @@ exports.getAllKnowledge = async (req, res) => {
 | GET LATEST PUBLISHED KNOWLEDGE ARTICLES — HOMEPAGE
 |--------------------------------------------------------------------------
 | GET /api/knowledge/latest
+|
 | Returns only the five newest published articles.
-| Full article HTML is excluded.
+|
+| Performance:
+| - MongoDB filters before retrieving results.
+| - Only 5 records are returned.
+| - Full article content is excluded.
+| - Only homepage-required fields are selected.
+| - lean() avoids unnecessary Mongoose document overhead.
+| - maxTimeMS prevents an indefinitely long query.
 |--------------------------------------------------------------------------
 */
 
@@ -209,7 +150,7 @@ exports.getLatestKnowledge = async (req, res) => {
       isDeleted: false,
     })
       .select(
-        "title slug shortDescription featuredImage category author readTime featured publishDate createdAt updatedAt"
+        "_id title slug shortDescription featuredImage category author readTime featured publishDate createdAt updatedAt"
       )
       .sort({
         publishDate: -1,
@@ -219,15 +160,20 @@ exports.getLatestKnowledge = async (req, res) => {
       .lean()
       .maxTimeMS(5000);
 
-    res.set("Cache-Control", "public, max-age=60, s-maxage=300");
+    res.set({
+      "Cache-Control": "public, max-age=60, s-maxage=300",
+    });
 
-    return res.json({
+    return res.status(200).json({
       success: true,
       count: articles.length,
       data: articles,
     });
   } catch (err) {
-    console.error("GET LATEST KNOWLEDGE ERROR:", err);
+    console.error(
+      "GET LATEST KNOWLEDGE ERROR:",
+      err
+    );
 
     return res.status(500).json({
       success: false,
@@ -239,11 +185,9 @@ exports.getLatestKnowledge = async (req, res) => {
 
 /*
 |--------------------------------------------------------------------------
-| GET SINGLE ARTICLE
+| GET SINGLE ARTICLE BY ID
 |--------------------------------------------------------------------------
-|
-| ADMIN ONLY
-|
+| ADMIN
 |--------------------------------------------------------------------------
 */
 
@@ -267,15 +211,12 @@ exports.getKnowledgeById = async (req, res) => {
       });
     }
 
-    return res.json({
+    return res.status(200).json({
       success: true,
       data: article,
     });
   } catch (err) {
-    console.error(
-      "GET KNOWLEDGE BY ID ERROR:",
-      err
-    );
+    console.error("GET KNOWLEDGE BY ID ERROR:", err);
 
     return res.status(500).json({
       success: false,
@@ -286,17 +227,14 @@ exports.getKnowledgeById = async (req, res) => {
   }
 };
 
+
 /*
 |--------------------------------------------------------------------------
 | GET ARTICLE BY SLUG
 |--------------------------------------------------------------------------
-|
 | PUBLIC
 |
-| Only:
-|   published
-|   isDeleted = false
-|
+| Only published, non-deleted articles.
 |--------------------------------------------------------------------------
 */
 
@@ -319,10 +257,7 @@ exports.getKnowledgeBySlug = async (req, res) => {
       });
     }
 
-    /*
-     * Increment views without changing
-     * the article returned to the browser.
-     */
+    // Increment views without changing the returned article.
     await Knowledge.findByIdAndUpdate(
       article._id,
       {
@@ -332,15 +267,12 @@ exports.getKnowledgeBySlug = async (req, res) => {
       }
     );
 
-    return res.json({
+    return res.status(200).json({
       success: true,
       data: article,
     });
   } catch (err) {
-    console.error(
-      "GET KNOWLEDGE BY SLUG ERROR:",
-      err
-    );
+    console.error("GET KNOWLEDGE BY SLUG ERROR:", err);
 
     return res.status(500).json({
       success: false,
@@ -351,9 +283,10 @@ exports.getKnowledgeBySlug = async (req, res) => {
   }
 };
 
+
 /*
 |--------------------------------------------------------------------------
-| CREATE
+| CREATE KNOWLEDGE ARTICLE
 |--------------------------------------------------------------------------
 */
 
@@ -361,11 +294,6 @@ exports.createKnowledge = async (req, res) => {
   try {
     const body = {
       ...req.body,
-
-      /*
-       * Every newly-created article must start
-       * outside the Trash.
-       */
       isDeleted: false,
     };
 
@@ -377,14 +305,8 @@ exports.createKnowledge = async (req, res) => {
       data: article,
     });
   } catch (err) {
-    console.error(
-      "CREATE KNOWLEDGE ERROR:",
-      err
-    );
+    console.error("CREATE KNOWLEDGE ERROR:", err);
 
-    /*
-     * Duplicate slug
-     */
     if (err.code === 11000) {
       return res.status(400).json({
         success: false,
@@ -393,9 +315,6 @@ exports.createKnowledge = async (req, res) => {
       });
     }
 
-    /*
-     * Mongoose validation
-     */
     if (err.name === "ValidationError") {
       return res.status(400).json({
         success: false,
@@ -416,17 +335,14 @@ exports.createKnowledge = async (req, res) => {
   }
 };
 
+
 /*
 |--------------------------------------------------------------------------
-| UPDATE
+| UPDATE KNOWLEDGE ARTICLE
 |--------------------------------------------------------------------------
 |
-| IMPORTANT:
-| isDeleted is intentionally removed from req.body.
-|
-| This prevents the normal Edit/Update endpoint from
-| accidentally bypassing Trash/Restore logic.
-|
+| Normal update cannot change isDeleted.
+| Articles in Trash must be restored first.
 |--------------------------------------------------------------------------
 */
 
@@ -441,19 +357,13 @@ exports.updateKnowledge = async (req, res) => {
       });
     }
 
-    /*
-     * Do not allow normal update requests to
-     * change the deletion state.
-     */
     const updateData = {
       ...req.body,
     };
 
     delete updateData.isDeleted;
+    delete updateData.deletedAt;
 
-    /*
-     * Find article first.
-     */
     const existingArticle =
       await Knowledge.findById(id);
 
@@ -464,10 +374,6 @@ exports.updateKnowledge = async (req, res) => {
       });
     }
 
-    /*
-     * Don't edit an article that is in Trash
-     * through the normal Update endpoint.
-     */
     if (existingArticle.isDeleted === true) {
       return res.status(400).json({
         success: false,
@@ -495,16 +401,13 @@ exports.updateKnowledge = async (req, res) => {
       });
     }
 
-    return res.json({
+    return res.status(200).json({
       success: true,
       message: "Knowledge article updated successfully.",
       data: article,
     });
   } catch (err) {
-    console.error(
-      "UPDATE KNOWLEDGE ERROR:",
-      err
-    );
+    console.error("UPDATE KNOWLEDGE ERROR:", err);
 
     if (err.code === 11000) {
       return res.status(400).json({
@@ -534,17 +437,10 @@ exports.updateKnowledge = async (req, res) => {
   }
 };
 
+
 /*
 |--------------------------------------------------------------------------
-| MOVE TO TRASH — SOFT DELETE
-|--------------------------------------------------------------------------
-|
-| THIS DOES NOT DELETE THE MONGODB DOCUMENT.
-|
-| It only changes:
-|
-|     isDeleted = true
-|
+| MOVE KNOWLEDGE ARTICLE TO TRASH
 |--------------------------------------------------------------------------
 */
 
@@ -569,9 +465,6 @@ exports.trashKnowledge = async (req, res) => {
       });
     }
 
-    /*
-     * Already in Trash.
-     */
     if (article.isDeleted === true) {
       return res.status(400).json({
         success: false,
@@ -579,28 +472,19 @@ exports.trashKnowledge = async (req, res) => {
       });
     }
 
-    /*
-     * SOFT DELETE ONLY.
-     *
-     * No findByIdAndDelete here.
-     */
     article.isDeleted = true;
-article.deletedAt = new Date();
-article.status = "draft";
+    article.deletedAt = new Date();
+    article.status = "draft";
 
-await article.save();
+    await article.save();
 
-    return res.json({
+    return res.status(200).json({
       success: true,
-      message:
-        "Article moved to Trash successfully.",
+      message: "Article moved to Trash successfully.",
       data: article,
     });
   } catch (err) {
-    console.error(
-      "TRASH KNOWLEDGE ERROR:",
-      err
-    );
+    console.error("TRASH KNOWLEDGE ERROR:", err);
 
     return res.status(500).json({
       success: false,
@@ -611,9 +495,10 @@ await article.save();
   }
 };
 
+
 /*
 |--------------------------------------------------------------------------
-| RESTORE FROM TRASH
+| RESTORE KNOWLEDGE ARTICLE
 |--------------------------------------------------------------------------
 */
 
@@ -638,35 +523,26 @@ exports.restoreKnowledge = async (req, res) => {
       });
     }
 
-    /*
-     * Only restore something that is actually
-     * in Trash.
-     */
     if (article.isDeleted !== true) {
       return res.status(400).json({
         success: false,
-        message:
-          "Article is not currently in Trash.",
+        message: "Article is not currently in Trash.",
       });
     }
 
     article.isDeleted = false;
-article.deletedAt = null;
-article.status = "draft";
+    article.deletedAt = null;
+    article.status = "draft";
 
-await article.save();
+    await article.save();
 
-    return res.json({
+    return res.status(200).json({
       success: true,
-      message:
-        "Article restored successfully.",
+      message: "Article restored successfully.",
       data: article,
     });
   } catch (err) {
-    console.error(
-      "RESTORE KNOWLEDGE ERROR:",
-      err
-    );
+    console.error("RESTORE KNOWLEDGE ERROR:", err);
 
     return res.status(500).json({
       success: false,
@@ -677,13 +553,12 @@ await article.save();
   }
 };
 
+
 /*
 |--------------------------------------------------------------------------
-| GET TRASH
+| GET KNOWLEDGE TRASH
 |--------------------------------------------------------------------------
-|
 | ADMIN ONLY
-|
 |--------------------------------------------------------------------------
 */
 
@@ -692,21 +567,19 @@ exports.getTrashKnowledge = async (req, res) => {
     const articles =
       await Knowledge.find({
         isDeleted: true,
-      }).sort({
-        updatedAt: -1,
-        createdAt: -1,
-      });
+      })
+        .sort({
+          updatedAt: -1,
+          createdAt: -1,
+        });
 
-    return res.json({
+    return res.status(200).json({
       success: true,
       count: articles.length,
       data: articles,
     });
   } catch (err) {
-    console.error(
-      "GET KNOWLEDGE TRASH ERROR:",
-      err
-    );
+    console.error("GET KNOWLEDGE TRASH ERROR:", err);
 
     return res.status(500).json({
       success: false,
@@ -717,17 +590,13 @@ exports.getTrashKnowledge = async (req, res) => {
   }
 };
 
+
 /*
 |--------------------------------------------------------------------------
-| DELETE FOREVER
+| PERMANENTLY DELETE KNOWLEDGE ARTICLE
 |--------------------------------------------------------------------------
 |
-| THIS IS THE ONLY FUNCTION THAT ACTUALLY REMOVES
-| THE MONGODB DOCUMENT.
-|
-| It is also protected so that an active article
-| cannot accidentally be permanently deleted.
-|
+| Only articles already in Trash can be permanently deleted.
 |--------------------------------------------------------------------------
 */
 
@@ -752,12 +621,6 @@ exports.deleteKnowledge = async (req, res) => {
       });
     }
 
-    /*
-     * SAFETY CHECK:
-     *
-     * Permanent deletion is allowed ONLY
-     * when the article is already in Trash.
-     */
     if (article.isDeleted !== true) {
       return res.status(400).json({
         success: false,
@@ -766,12 +629,9 @@ exports.deleteKnowledge = async (req, res) => {
       });
     }
 
-    /*
-     * THIS is the actual permanent deletion.
-     */
     await Knowledge.findByIdAndDelete(id);
 
-    return res.json({
+    return res.status(200).json({
       success: true,
       message:
         "Article permanently deleted from the database.",
@@ -791,26 +651,13 @@ exports.deleteKnowledge = async (req, res) => {
   }
 };
 
+
 /*
 |--------------------------------------------------------------------------
-| UPLOAD ARTICLE CONTENT IMAGE
+| UPLOAD KNOWLEDGE ARTICLE IMAGE
 |--------------------------------------------------------------------------
 |
-| Used by the Knowledge Centre Rich Text Editor.
-|
-| Flow:
-|   Browser
-|      ↓
-|   Express / Multer
-|      ↓
-|   Cloudinary
-|      ↓
-|   secure_url
-|      ↓
-|   Quill
-|
-| Images are NOT stored as base64 inside article HTML.
-|
+| Uploads image buffer directly to Cloudinary.
 |--------------------------------------------------------------------------
 */
 
@@ -823,9 +670,6 @@ exports.uploadKnowledgeImage = async (req, res) => {
       });
     }
 
-    /*
-     * Basic image validation.
-     */
     if (!req.file.mimetype.startsWith("image/")) {
       return res.status(400).json({
         success: false,
@@ -833,16 +677,12 @@ exports.uploadKnowledgeImage = async (req, res) => {
       });
     }
 
-    /*
-     * Upload buffer directly to Cloudinary.
-     */
     const result = await new Promise(
       (resolve, reject) => {
         const uploadStream =
           cloudinary.uploader.upload_stream(
             {
-              folder:
-                "property-bouquet/knowledge",
+              folder: "property-bouquet/knowledge",
 
               transformation: [
                 {

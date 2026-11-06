@@ -1,3 +1,4 @@
+
 const express = require("express");
 const multer = require("multer");
 
@@ -22,22 +23,16 @@ const {
 
 const router = express.Router();
 
-/*
-|--------------------------------------------------------------------------
-| MULTER
-|--------------------------------------------------------------------------
-|
-| Keep the uploaded image in memory temporarily.
-| Cloudinary receives the buffer directly.
-|
-|--------------------------------------------------------------------------
-*/
+
+// ============================================================
+// MULTER
+// ============================================================
 
 const upload = multer({
   storage: multer.memoryStorage(),
 
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10 MB
+    fileSize: 10 * 1024 * 1024,
   },
 
   fileFilter: (req, file, cb) => {
@@ -45,60 +40,34 @@ const upload = multer({
       cb(null, true);
     } else {
       cb(
-        new Error(
-          "Only image files are allowed."
-        )
+        new Error("Only image files are allowed.")
       );
     }
   },
 });
 
-/*
-|--------------------------------------------------------------------------
-| PUBLIC ROUTES
-|--------------------------------------------------------------------------
-*/
 
-/*
- * Public Knowledge Centre listing.
- *
- * IMPORTANT:
- * getAllKnowledge always returns isDeleted:false unless
- * trash=true is explicitly requested.
- *
- * Public users therefore never receive trashed articles.
- */
+// ============================================================
+// PUBLIC ROUTES
+// ============================================================
+
+// Knowledge Centre listing
 router.get("/", getAllKnowledge);
 
+// Homepage: latest five published articles
 router.get("/latest", getLatestKnowledge);
 
-/*
- * Public article by slug.
- *
- * Controller additionally requires:
- * status = published
- * isDeleted = false
- */
+// Public article by slug
 router.get("/slug/:slug", getKnowledgeBySlug);
 
-/*
-|--------------------------------------------------------------------------
-| ADMIN ROUTES
-|--------------------------------------------------------------------------
-*/
 
-/*
- * Everything below this point requires authentication.
- */
+// ============================================================
+// ADMIN ROUTES
+// ============================================================
+
 router.use(protect);
 
-/*
- * Upload image used inside Knowledge Centre
- * article content.
- *
- * POST:
- * /api/knowledge/upload-image
- */
+// Upload article image
 router.post(
   "/upload-image",
   authorize("Agent", "SuperAdmin"),
@@ -106,70 +75,45 @@ router.post(
   uploadKnowledgeImage
 );
 
-/*
- * Get a single article for admin/editing.
- */
+// Get single article for editing
 router.get("/:id", getKnowledgeById);
 
-/*
- * Trash listing.
- *
- * This is NOT public.
- */
+// Get Trash
 router.get(
   "/trash/all",
   authorize("Agent", "SuperAdmin"),
   getTrashKnowledge
 );
 
-/*
- * Create article.
- */
+// Create
 router.post(
   "/create",
   authorize("Agent", "SuperAdmin"),
   createKnowledge
 );
 
-/*
- * Update article.
- */
+// Update
 router.put(
   "/update/:id",
   authorize("Agent", "SuperAdmin"),
   updateKnowledge
 );
 
-/*
- * SOFT DELETE
- *
- * Article remains in MongoDB.
- * Only isDeleted becomes true.
- */
+// Move to Trash
 router.put(
   "/trash/:id",
   authorize("Agent", "SuperAdmin"),
   trashKnowledge
 );
 
-/*
- * RESTORE FROM TRASH
- *
- * Article remains in MongoDB.
- * isDeleted becomes false.
- */
+// Restore
 router.put(
   "/restore/:id",
   authorize("Agent", "SuperAdmin"),
   restoreKnowledge
 );
 
-/*
- * PERMANENT DELETE
- *
- * Only SuperAdmin can permanently remove
- * an article from MongoDB.
- */
+// Permanently delete — SuperAdmin only
 router.delete(
   "/delete/:id",
   authorize("SuperAdmin"),
