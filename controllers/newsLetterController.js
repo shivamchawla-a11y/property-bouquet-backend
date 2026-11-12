@@ -26,6 +26,67 @@ const escapeHtml = (value) => {
     .replace(/'/g, "&#039;");
 };
 
+// =========================================================
+// CLOUDFLARE TURNSTILE VERIFICATION
+// =========================================================
+
+const verifyNewsletterTurnstile = async (token) => {
+  const secret = process.env.TURNSTILE_SECRET_KEY;
+
+  if (!secret) {
+    throw new Error("TURNSTILE_SECRET_KEY is not configured");
+  }
+
+  if (
+    typeof token !== "string" ||
+    !token.trim() ||
+    token.length > 2048
+  ) {
+    return false;
+  }
+
+  const allowedHostnames = new Set(
+    (process.env.TURNSTILE_ALLOWED_HOSTNAMES || "")
+      .split(",")
+      .map((hostname) => hostname.trim().toLowerCase())
+      .filter(Boolean)
+  );
+
+  if (allowedHostnames.size === 0) {
+    throw new Error("Turnstile allowed hostnames are not configured");
+  }
+
+  const response = await fetch(
+    "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        secret,
+        response: token,
+      }),
+      signal: AbortSignal.timeout(10000),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Cloudflare verification failed: HTTP ${response.status}`
+    );
+  }
+
+  const result = await response.json();
+
+  return (
+    result.success === true &&
+    allowedHostnames.has(
+      String(result.hostname || "").toLowerCase()
+    ) &&
+    result.action === "newsletter_subscribe"
+  );
+};
 
 /* =========================================================
    ADMIN / CRM EMAIL
@@ -955,9 +1016,10 @@ All rights reserved.
 exports.subscribeNewsletter = async (req, res) => {
   try {
     const {
-      email,
-      source,
-    } = req.body;
+  email,
+  source,
+  turnstileToken,
+} = req.body || {};
 
 
     /* =======================================================
@@ -1004,6 +1066,37 @@ exports.subscribeNewsletter = async (req, res) => {
       source.trim()
         ? source.trim()
         : "Website Footer";
+
+      /* =======================================================
+   CLOUDFLARE TURNSTILE VERIFICATION
+======================================================= */
+
+let captchaVerified = false;
+
+try {
+  captchaVerified = await verifyNewsletterTurnstile(
+    turnstileToken
+  );
+} catch (captchaError) {
+  console.error(
+    "Newsletter CAPTCHA verification error:",
+    captchaError.message
+  );
+
+  return res.status(503).json({
+    success: false,
+    message:
+      "Verification service temporarily unavailable. Please try again.",
+  });
+}
+
+if (!captchaVerified) {
+  return res.status(403).json({
+    success: false,
+    message:
+      "CAPTCHA verification failed. Please try again.",
+  });
+}
 
 
     /* =======================================================
