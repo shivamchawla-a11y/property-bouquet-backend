@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const User = require("../models/User");
+const mongoose = require("mongoose");
 
 // ============================================================
 // 🔐 PROTECT
@@ -169,146 +170,138 @@ exports.optionalProtect = (req, res, next) => {
 // This avoids storing a personal JWT inside n8n.
 // ============================================================
 
+
 exports.aiAutomationAuth = async (req, res, next) => {
   console.log("🤖 AI AUTOMATION AUTH MIDDLEWARE HIT");
 
   try {
-    // ----------------------------------------------------------
-    // Get automation key from request header
-    // ----------------------------------------------------------
+    // ==========================================================
+    // 1. VERIFY N8N AUTOMATION KEY
+    // ==========================================================
 
-    const providedKey = req.headers["x-ai-automation-key"];
-
-    if (!providedKey) {
-      console.warn(
-        "⛔ AI AUTOMATION KEY MISSING"
-      );
-
-      return res.status(401).json({
-        message: "AI automation authentication required",
-      });
-    }
-
-    // ----------------------------------------------------------
-    // Get configured backend key
-    // ----------------------------------------------------------
+    const providedKey =
+      req.headers["x-ai-automation-key"];
 
     const configuredKey =
       process.env.AI_AUTOMATION_KEY;
 
-    if (!configuredKey) {
-      console.error(
-        "❌ AI_AUTOMATION_KEY IS NOT CONFIGURED"
-      );
-
-      return res.status(500).json({
-        message:
-          "AI automation authentication is not configured",
+    if (!providedKey || !configuredKey) {
+      return res.status(401).json({
+        success: false,
+        message: "AI automation authentication required",
       });
     }
 
-    // ----------------------------------------------------------
-    // Secure timing-safe comparison
-    // ----------------------------------------------------------
-
-    const providedBuffer = Buffer.from(
-      String(providedKey)
-    );
-
-    const configuredBuffer = Buffer.from(
-      String(configuredKey)
-    );
+    const providedBuffer = Buffer.from(String(providedKey));
+    const configuredBuffer = Buffer.from(String(configuredKey));
 
     if (
-      providedBuffer.length !==
-        configuredBuffer.length ||
+      providedBuffer.length !== configuredBuffer.length ||
       !crypto.timingSafeEqual(
         providedBuffer,
         configuredBuffer
       )
     ) {
-      console.warn(
-        "⛔ INVALID AI AUTOMATION KEY"
-      );
-
       return res.status(401).json({
+        success: false,
         message: "Invalid AI automation key",
       });
     }
 
-    // ----------------------------------------------------------
-    // Get automation user email
-    // ----------------------------------------------------------
+    // ==========================================================
+    // 2. GET THE INITIATING USER'S JWT
+    // ==========================================================
 
-    const automationEmail =
-      process.env.AI_AUTOMATION_USER_EMAIL
-        ?.trim()
-        .toLowerCase();
+    const authorization =
+      req.headers.authorization || "";
 
-    if (!automationEmail) {
-      console.error(
-        "❌ AI_AUTOMATION_USER_EMAIL IS NOT CONFIGURED"
-      );
+    const tokenMatch = authorization.match(
+      /^Bearer\s+(.+)$/i
+    );
 
-      return res.status(500).json({
-        message:
-          "AI automation user is not configured",
+    if (!tokenMatch) {
+      return res.status(401).json({
+        success: false,
+        message: "Agent authentication token missing",
       });
     }
 
-    // ----------------------------------------------------------
-    // Find active user
-    // ----------------------------------------------------------
+    // ==========================================================
+    // 3. VERIFY JWT
+    // ==========================================================
+
+    let decoded;
+
+    try {
+      decoded = jwt.verify(
+        tokenMatch[1],
+        process.env.JWT_SECRET
+      );
+    } catch (error) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid or expired agent token",
+      });
+    }
+
+    const userId =
+      decoded.id || decoded._id || decoded.userId;
+
+    if (
+      !userId ||
+      !mongoose.Types.ObjectId.isValid(String(userId))
+    ) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid agent identity",
+      });
+    }
+
+    // ==========================================================
+    // 4. FETCH ACTUAL ACTIVE USER FROM DATABASE
+    // ==========================================================
 
     const user = await User.findOne({
-      email: automationEmail,
+      _id: userId,
       isActive: true,
-    });
+    }).select("_id name email role");
 
     if (!user) {
-      console.warn(
-        "⛔ AI AUTOMATION USER NOT FOUND OR INACTIVE"
-      );
-
       return res.status(401).json({
-        message:
-          "AI automation user not found or inactive",
+        success: false,
+        message: "User not found or inactive",
       });
     }
 
-    // ----------------------------------------------------------
-    // Create req.user in the same shape authorize() expects
-    // ----------------------------------------------------------
+    // ==========================================================
+    // 5. SET THE REAL LOGGED-IN USER
+    // ==========================================================
 
     req.user = {
       id: user._id.toString(),
-      role: user.role,
-      email: user.email,
+      _id: user._id,
       name: user.name,
+      email: user.email,
+      role: user.role,
     };
 
-    console.log(
-      "✅ AI AUTOMATION AUTHENTICATED USER:",
-      {
-        role: user.role,
-        email: user.email,
-      }
-    );
+    console.log("✅ AI PROPERTY CREATOR AUTHENTICATED:", {
+      id: req.user.id,
+      role: req.user.role,
+    });
 
     next();
 
   } catch (error) {
-    console.error(
-      "❌ AI AUTOMATION AUTH ERROR:",
-      error
-    );
+    console.error("❌ AI AUTOMATION AUTH ERROR:", error);
 
     return res.status(500).json({
-      message:
-        "AI automation authentication failed",
+      success: false,
+      message: "AI automation authentication failed",
     });
   }
 };
+
 
 
 // ============================================================
