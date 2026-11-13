@@ -76,7 +76,11 @@ router.post(
 );
 
 // Get single article for editing
-router.get("/:id", getKnowledgeById);
+router.get(
+  "/:id",
+  authorize("Agent", "SuperAdmin"),
+  getKnowledgeById
+);
 
 // Get Trash
 router.get(

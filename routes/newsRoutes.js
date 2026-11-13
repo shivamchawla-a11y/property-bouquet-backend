@@ -1,3 +1,4 @@
+
 const express = require("express");
 
 const {
@@ -14,58 +15,85 @@ const {
   deleteNews,
 } = require("../controllers/newsController");
 
-const router =
-express.Router();
+const {
+  protect,
+  authorize,
+} = require("../middleware/authMiddleware");
 
-// ================= PUBLIC =================
+const router = express.Router();
+
+// ================= PUBLIC ROUTES =================
 
 router.get("/", getAllNews);
 
 router.get("/latest", getLatestNews);
 
+router.get("/slug/:slug", getNewsBySlug);
+
+// ================= ADMIN ROUTES =================
+
+// GET TRASH
 router.get(
-"/slug/:slug",
-getNewsBySlug
+  "/trash/all",
+  protect,
+  authorize("Agent", "SuperAdmin"),
+  getTrashNews
 );
 
+// GET FOR EDIT
 router.get(
-"/trash/all",
-getTrashNews
+  "/edit/:id",
+  protect,
+  authorize("Agent", "SuperAdmin"),
+  getNewsForEdit
 );
 
-router.get("/edit/:id", getNewsForEdit);
-
+// GET SINGLE NEWS BY ID
 router.get(
-"/:id",
-getNewsById
+  "/:id",
+  protect,
+  authorize("Agent", "SuperAdmin"),
+  getNewsById
 );
 
-// ================= ADMIN =================
-
+// CREATE
 router.post(
-"/create",
-createNews
+  "/create",
+  protect,
+  authorize("Agent", "SuperAdmin"),
+  createNews
 );
 
+// UPDATE
 router.put(
-"/update/:id",
-updateNews
+  "/update/:id",
+  protect,
+  authorize("Agent", "SuperAdmin"),
+  updateNews
 );
 
+// MOVE TO TRASH
 router.put(
-"/trash/:id",
-trashNews
+  "/trash/:id",
+  protect,
+  authorize("Agent", "SuperAdmin"),
+  trashNews
 );
 
+// RESTORE
 router.put(
-"/restore/:id",
-restoreNews
+  "/restore/:id",
+  protect,
+  authorize("Agent", "SuperAdmin"),
+  restoreNews
 );
 
-
+// PERMANENT DELETE — SUPER ADMIN ONLY
 router.delete(
-"/delete/:id",
-deleteNews
+  "/delete/:id",
+  protect,
+  authorize("SuperAdmin"),
+  deleteNews
 );
 
 module.exports = router;

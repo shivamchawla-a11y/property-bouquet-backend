@@ -125,6 +125,14 @@ const knowledgeSchema = new mongoose.Schema(
       index: true,
     },
 
+    // ================= CREATED BY =================
+createdBy: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "User",
+  default: null,
+  index: true,
+},
+
     // DELETION DATE
     deletedAt: {
       type: Date,

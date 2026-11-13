@@ -292,9 +292,22 @@ exports.getKnowledgeBySlug = async (req, res) => {
 
 exports.createKnowledge = async (req, res) => {
   try {
+    // GET LOGGED-IN USER ID
+    const creatorId =
+      req.user?._id || req.user?.id;
+
+    if (!creatorId) {
+      return res.status(401).json({
+        success: false,
+        message: "Creator authentication required.",
+      });
+    }
+
+    // CREATE ARTICLE WITH SERVER-CONTROLLED CREATOR
     const body = {
       ...req.body,
       isDeleted: false,
+      createdBy: creatorId,
     };
 
     const article = await Knowledge.create(body);
@@ -363,6 +376,9 @@ exports.updateKnowledge = async (req, res) => {
 
     delete updateData.isDeleted;
     delete updateData.deletedAt;
+
+    delete updateData.createdBy;
+    delete updateData.createdAt;  
 
     const existingArticle =
       await Knowledge.findById(id);

@@ -257,45 +257,53 @@ res.status(500).json({
 }
 };
 
-// ================= CREATE =================
-exports.createNews = async (
-req,
-res
-) => {
-try {
-const news = await News.create(
-req.body
-);
+// ================= CREATE NEWS =================
 
+exports.createNews = async (req, res) => {
+  try {
+    // GET LOGGED-IN USER ID
+    const creatorId =
+      req.user?._id || req.user?.id;
 
-res.status(201).json({
-  success: true,
-  data: news,
-});
+    if (!creatorId) {
+      return res.status(401).json({
+        success: false,
+        message: "Creator authentication required.",
+      });
+    }
 
+    // CREATE NEWS WITH SERVER-CONTROLLED CREATOR
+    const news = await News.create({
+      ...req.body,
+      isDeleted: false,
+      createdBy: creatorId,
+    });
 
-} catch (err) {
-console.error(err);
+    return res.status(201).json({
+      success: true,
+      data: news,
+    });
 
+  } catch (err) {
+    console.error(err);
 
-if (err.code === 11000) {
-  return res.status(400).json({
-    success: false,
-    message:
-      "Slug already exists ❌",
-  });
-}
+    if (err.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: "Slug already exists ❌",
+      });
+    }
 
-res.status(500).json({
-  success: false,
-  message: err.message,
-});
-
-
-}
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
 };
 
-// ================= UPDATE =================
+
+// ================= UPDATE NEWS =================
+
 exports.updateNews = async (req, res) => {
   try {
     const existing = await News.findById(req.params.id);
@@ -307,41 +315,77 @@ exports.updateNews = async (req, res) => {
       });
     }
 
-    const duplicate = await News.findOne({
-      slug: req.body.slug,
-      _id: { $ne: req.params.id },
-    });
+    // ============================================
+    // PREPARE UPDATE DATA
+    // ============================================
 
-    if (duplicate) {
-      return res.status(400).json({
-        success: false,
-        message: "Slug already exists",
+    const updateData = {
+      ...req.body,
+    };
+
+    // NEVER ALLOW FRONTEND TO CHANGE DATABASE IDENTITY
+    delete updateData._id;
+    delete updateData.__v;
+    delete updateData.createdBy;
+    delete updateData.createdAt;
+    delete updateData.updatedAt;
+
+    // ============================================
+    // CHECK DUPLICATE SLUG
+    // ============================================
+
+    if (updateData.slug) {
+      const duplicate = await News.findOne({
+        slug: updateData.slug,
+        _id: { $ne: req.params.id },
       });
+
+      if (duplicate) {
+        return res.status(400).json({
+          success: false,
+          message: "Slug already exists",
+        });
+      }
     }
+
+    // ============================================
+    // UPDATE NEWS
+    // ============================================
 
     const updated = await News.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      {
+        $set: updateData,
+      },
       {
         new: true,
         runValidators: true,
       }
     );
 
-    res.json({
+    if (!updated) {
+      return res.status(404).json({
+        success: false,
+        message: "Insight not found",
+      });
+    }
+
+    return res.json({
       success: true,
       data: updated,
       message: "Insight updated successfully",
     });
-  } catch (err) {
-    console.error(err);
 
-    res.status(500).json({
+  } catch (err) {
+    console.error("UPDATE NEWS ERROR:", err);
+
+    return res.status(500).json({
       success: false,
       message: err.message,
     });
   }
 };
+
 
 // ================= TRASH =================
 exports.trashNews = async (

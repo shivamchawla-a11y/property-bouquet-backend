@@ -96,6 +96,14 @@ const newsSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+
+    // ================= CREATED BY =================
+createdBy: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "User",
+  default: null,
+  index: true,
+},
   },
   {
     timestamps: true,
