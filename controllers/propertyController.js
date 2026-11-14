@@ -1213,6 +1213,23 @@ exports.updateProperty = async (
       configurationSection,
     } = req.body;
 
+    // Convert optional numeric fields safely
+const toOptionalNumber = (value, fallback = null) => {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  if (value === null || String(value).trim() === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+
+  return Number.isFinite(parsed) && parsed >= 0
+    ? parsed
+    : null;
+};
+
     // ========================================================
     // CONFIGURATIONS
     // ========================================================
@@ -1575,24 +1592,25 @@ exports.updateProperty = async (
           unitConfigurations:
             validConfigurations,
 
-          keyMetrics:
-            req.body.keyMetrics
-              ? {
-                  ...req.body.keyMetrics,
+         keyMetrics: req.body.keyMetrics
+  ? {
+      ...(property.keyMetrics?.toObject?.() ||
+        property.keyMetrics ||
+        {}),
 
-                  totalUnits:
-                    Number(
-                      req.body.keyMetrics
-                        ?.totalUnits
-                    ) || 0,
+      ...req.body.keyMetrics,
 
-                  totalTowers:
-                    Number(
-                      req.body.keyMetrics
-                        ?.totalTowers
-                    ) || 0,
-                }
-              : property.keyMetrics,
+      totalUnits: toOptionalNumber(
+        req.body.keyMetrics.totalUnits,
+        property.keyMetrics?.totalUnits ?? null
+      ),
+
+      totalTowers: toOptionalNumber(
+        req.body.keyMetrics.totalTowers,
+        property.keyMetrics?.totalTowers ?? null
+      ),
+    }
+  : property.keyMetrics,
 
           media:
             req.body.media ||
